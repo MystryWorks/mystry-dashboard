@@ -6,7 +6,7 @@
 
 ## 面板是做什么的？
 
-Mystery Dashboard 运行在你**本机**上：用网页管理多个 Minecraft **服务端**（不是启动游戏客户端）。你可以下载/导入服务端、启动 Java 进程、看日志、改配置、管文件——相当于轻量版 MCSManager。
+Mystery Dashboard 运行在你**本机**上：用网页管理多个 Minecraft **服务端**（不是启动游戏客户端）。你可以下载/导入服务端、启动 Java 进程、看日志、改配置、管文件。
 
 每个实例唯一托管在 `DATA_DIR/instances/<id>`。`DATA_DIR` 可为相对项目根目录的路径或绝对路径，但实例始终位于其 `instances/<id>` 下。面板不支持自定义实例目录，不提供全盘目录浏览；所有实例进程固定使用 PATH 中的 `java`。
 

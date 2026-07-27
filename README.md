@@ -1,6 +1,6 @@
 # Minecraft Mystery Dashboard
 
-单机一体的 Minecraft **服务端** Web 管理面板（类似 MCSManager 的精简版）。
+单机一体的 Minecraft **服务端** Web 管理面板。
 
 用浏览器管理本机上的多个 Java 版服务端：启停、实时控制台、文件与配置、一键部署核心、导入现有 zip 安装包。
 

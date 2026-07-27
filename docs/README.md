@@ -1,6 +1,6 @@
 # 项目文档
 
-Minecraft Mystery Dashboard 是一套单机一体的 Minecraft **服务端**管理面板（类似 MCSManager 的精简版），通过 Web 界面管理本机上的多个服务端实例。
+Minecraft Mystery Dashboard 是一套单机一体的 Minecraft **服务端**管理面板，通过 Web 界面管理本机上的多个服务端实例。
 
 > 本项目**不是**客户端模组；它是独立的 Node.js 面板程序。
 
