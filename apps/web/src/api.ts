@@ -65,6 +65,35 @@ export async function apiForm<T>(path: string, form: FormData): Promise<T> {
   return data as T;
 }
 
+/** 带 JWT 下载二进制文件并触发浏览器保存。 */
+export async function downloadAuthenticated(path: string, filename: string): Promise<void> {
+  const headers = new Headers();
+  const token = getToken();
+  if (token) headers.set('Authorization', `Bearer ${token}`);
+
+  const res = await fetch(path, { headers });
+  if (!res.ok) {
+    let message = `下载失败 (${res.status})`;
+    try {
+      const data = (await res.json()) as { error?: string };
+      if (data?.error) message = String(data.error);
+    } catch {
+      // 非 JSON 错误体时使用默认文案
+    }
+    throw new ApiError(res.status, message);
+  }
+
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = filename || 'download';
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(url);
+}
+
 export function createConsoleTicket(
   instanceId: string,
   signal?: AbortSignal,
@@ -106,8 +135,6 @@ export async function pollTask(
         result?: { instanceId?: string };
       }>(`/api/tasks/${taskId}`);
     } catch (error) {
-      // 任务可能仍在排队，服务端限流不代表任务失败。继续使用单一
-      // 的等待链轮询，避免每次重试都创建一个新的并发定时器。
       if (error instanceof ApiError && error.status === 429) {
         await new Promise((resolve) => setTimeout(resolve, rateLimitBackoffMs));
         continue;

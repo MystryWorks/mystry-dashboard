@@ -31,10 +31,14 @@ export function DashboardPage() {
     return () => clearInterval(timer);
   }, [load]);
 
-  async function act(id: string, action: 'start' | 'stop' | 'restart') {
+  async function act(id: string, action: 'start' | 'stop' | 'restart' | 'force-stop') {
     setBusyId(id);
     try {
-      await api(`/api/instances/${id}/${action}`, { method: 'POST' });
+      if (action === 'force-stop') {
+        await api(`/api/instances/${id}/stop?force=1`, { method: 'POST' });
+      } else {
+        await api(`/api/instances/${id}/${action}`, { method: 'POST' });
+      }
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -43,8 +47,26 @@ export function DashboardPage() {
     }
   }
 
+  function confirmForceStop(id: string) {
+    if (
+      !confirm(
+        '确定强制停止该实例？将发送 SIGKILL，可能导致世界或配置未正常保存。',
+      )
+    ) {
+      return;
+    }
+    void act(id, 'force-stop');
+  }
+
   async function remove(id: string) {
-    if (!confirm(instances.find((item) => item.id === id)?.requiresMigration ? '确定移除该实例记录？不会删除旧目录。' : '确定删除该实例及其全部文件？')) return;
+    if (
+      !confirm(
+        instances.find((item) => item.id === id)?.requiresMigration
+          ? '确定移除该实例记录？不会删除旧目录。'
+          : '确定删除该实例及其全部文件？',
+      )
+    )
+      return;
     setBusyId(id);
     try {
       await api(`/api/instances/${id}`, { method: 'DELETE' });
@@ -90,54 +112,86 @@ export function DashboardPage() {
               </tr>
             </thead>
             <tbody>
-              {instances.map((inst) => (
-                <tr key={inst.id}>
-                  <td>
-                    <Link to={`/instances/${inst.id}`}>{inst.name}</Link>
-                  </td>
-                  <td>{inst.coreType}</td>
-                  <td>{inst.mcVersion || '-'}</td>
-                  <td>
-                    <span className={`badge ${inst.requiresMigration ? 'migration' : inst.status}`}>{inst.requiresMigration ? '待迁移' : statusLabel[inst.status] || inst.status}</span>
-                  </td>
-                  <td>
-                    <div className="btn-row">
-                      <button
-                        className="btn"
-                        type="button"
-                        disabled={busyId === inst.id || inst.requiresMigration || inst.status === 'running'}
-                        onClick={() => void act(inst.id, 'start')}
+              {instances.map((inst) => {
+                const canForceStop =
+                  !inst.requiresMigration &&
+                  (inst.status === 'running' ||
+                    inst.status === 'starting' ||
+                    inst.status === 'stopping');
+                return (
+                  <tr key={inst.id}>
+                    <td>
+                      <Link to={`/instances/${inst.id}`}>{inst.name}</Link>
+                    </td>
+                    <td>{inst.coreType}</td>
+                    <td>{inst.mcVersion || '-'}</td>
+                    <td>
+                      <span
+                        className={`badge ${inst.requiresMigration ? 'migration' : inst.status}`}
                       >
-                        启动
-                      </button>
-                      <button
-                        className="btn btn-ghost"
-                        type="button"
-                        disabled={busyId === inst.id || inst.requiresMigration || inst.status === 'stopped'}
-                        onClick={() => void act(inst.id, 'stop')}
-                      >
-                        停止
-                      </button>
-                      <button
-                        className="btn btn-ghost"
-                        type="button"
-                        disabled={busyId === inst.id || inst.requiresMigration}
-                        onClick={() => void act(inst.id, 'restart')}
-                      >
-                        重启
-                      </button>
-                      <button
-                        className="btn btn-danger"
-                        type="button"
-                        disabled={busyId === inst.id}
-                        onClick={() => void remove(inst.id)}
-                      >
-                        删除
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
+                        {inst.requiresMigration
+                          ? '待迁移'
+                          : statusLabel[inst.status] || inst.status}
+                      </span>
+                    </td>
+                    <td>
+                      <div className="btn-row">
+                        <button
+                          className="btn"
+                          type="button"
+                          disabled={
+                            busyId === inst.id ||
+                            inst.requiresMigration ||
+                            inst.status === 'running'
+                          }
+                          onClick={() => void act(inst.id, 'start')}
+                        >
+                          启动
+                        </button>
+                        <button
+                          className="btn btn-ghost"
+                          type="button"
+                          disabled={
+                            busyId === inst.id ||
+                            inst.requiresMigration ||
+                            inst.status === 'stopped'
+                          }
+                          onClick={() => void act(inst.id, 'stop')}
+                        >
+                          停止
+                        </button>
+                        {canForceStop && (
+                          <button
+                            className="btn btn-danger"
+                            type="button"
+                            disabled={busyId === inst.id}
+                            onClick={() => confirmForceStop(inst.id)}
+                            title="强制结束进程（SIGKILL）"
+                          >
+                            强杀
+                          </button>
+                        )}
+                        <button
+                          className="btn btn-ghost"
+                          type="button"
+                          disabled={busyId === inst.id || inst.requiresMigration}
+                          onClick={() => void act(inst.id, 'restart')}
+                        >
+                          重启
+                        </button>
+                        <button
+                          className="btn btn-danger"
+                          type="button"
+                          disabled={busyId === inst.id}
+                          onClick={() => void remove(inst.id)}
+                        >
+                          删除
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         )}

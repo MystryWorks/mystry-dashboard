@@ -8,6 +8,8 @@
 
 - 开源仓库文档：`LICENSE`、`CONTRIBUTING.md`、`SECURITY.md`、`CODE_OF_CONDUCT.md`
 - GitHub Issue / Pull Request 模板
+- 实例总览与详情页「强杀」按钮（调用 `POST /api/instances/:id/stop?force=1`，二次确认）
+- 文件页「下载」「重命名」操作（对接已有 download / rename API）
 
 ### Changed
 
