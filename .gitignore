@@ -11,3 +11,4 @@ uploads/
 .vite/
 coverage/
 .slim/deepwork/
+*.tsbuildinfo
