@@ -1,0 +1,37 @@
+# Changelog
+
+本文件记录项目的重要变更。格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
+
+## [Unreleased]
+
+### Added
+
+- 开源仓库文档：`LICENSE`、`CONTRIBUTING.md`、`SECURITY.md`、`CODE_OF_CONDUCT.md`
+- GitHub Issue / Pull Request 模板
+
+### Changed
+
+- 实例统一托管在 `DATA_DIR/instances/<id>`，移除自定义实例目录和全盘目录浏览约定。
+- 所有实例进程固定使用 PATH 中的 `java`；Java 接口仅返回可用状态和版本。
+- 首次初始化要求两个互不相同的 64 位十六进制 `JWT_SECRET` 与 `SETUP_TOKEN`，setup 使用 `X-Setup-Token` header，且仅在用户表为空时可用。
+- 增加旧版外部实例的手动接管流程；面板不会自动搬迁、访问或删除旧外部目录。
+- 补充 JSON、上传、任务、下载、Installer、文本、命令和控制台的默认限制配置。
+- 同步阶段二资源防护配置：`HTTP_REQUEST_TIMEOUT_MS`、`HTTP_CONNECTION_TIMEOUT_MS`、`HTTP_KEEP_ALIVE_TIMEOUT_MS`、`UPLOAD_IDLE_TIMEOUT_MS` 分别为 `900000`、`300000`、`72000`、`30000` 毫秒；`MAX_CORE_METADATA_BYTES` / `CORE_METADATA_TIMEOUT_MS` 为 `2097152` 字节 / `15000` 毫秒。
+- 上传超限返回 413，上传容量耗尽返回 429；核心缓存改为完整文件校验后原子发布，任务支持排队并受执行超时保护。
+- 文件下载增加 `MAX_CONCURRENT_FILE_DOWNLOADS=4` 与 `FILE_DOWNLOAD_IDLE_TIMEOUT_MS=60000`；并发容量耗尽返回 429，下载空闲超时会释放下载资源。
+- 控制台增加 `MAX_CONSOLE_CONNECTIONS=20`、每 `CONSOLE_COMMAND_WINDOW_MS=60000` 毫秒最多 `MAX_CONSOLE_COMMANDS_PER_WINDOW=60` 条命令、`MAX_CONSOLE_INCOMING_BYTES=4352` 字节入站消息和 `MAX_CONSOLE_STDIN_BYTES=65536` 字节 stdin 缓冲限制；Installer 取消后按 `INSTALLER_KILL_GRACE_MS=5000` 毫秒宽限期再强制结束。
+
+## [0.1.0] - 2026-07-26
+
+### Added
+
+- 单机一体 Minecraft 服务端管理面板（Fastify + React）
+- 实例 CRUD、启停 / 重启 / 强杀
+- WebSocket 实时控制台（xterm.js）
+- 实例根目录内的文件浏览、上传、下载、编辑
+- `server.properties` 编辑与 EULA 确认
+- 一键部署 Vanilla / Paper / Fabric / Forge / NeoForge
+- 导入服务端 zip 安装包（路径逃逸防护）
+- 首启管理员账号与 JWT 登录
+- PATH 中 `java` 的可用状态检测
+- 中文用户文档（快速开始、教程、使用指南、配置、架构、API、开发）

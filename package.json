@@ -1,0 +1,33 @@
+{
+  "name": "minecraft-mystery-dashboard",
+  "private": true,
+  "version": "0.1.0",
+  "description": "单机一体的 Minecraft 服务端 Web 管理面板",
+  "license": "MIT",
+  "keywords": [
+    "minecraft",
+    "server",
+    "panel",
+    "dashboard",
+    "paper",
+    "fabric",
+    "forge",
+    "neoforge",
+    "fastify",
+    "react"
+  ],
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:server": "npm run dev -w @mmd/server",
+    "dev:web": "npm run dev -w @mmd/web",
+    "build": "npm run build -w @mmd/shared && npm run build -w @mmd/server && npm run build -w @mmd/web",
+    "typecheck": "npm run typecheck -w @mmd/shared && npm run typecheck -w @mmd/server && npm run typecheck -w @mmd/web",
+    "start": "npm run start -w @mmd/server"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

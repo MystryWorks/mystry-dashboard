@@ -1,0 +1,2 @@
+# 仅保留结构化 Issue 模板；安全问题请勿公开开 Issue，见仓库根目录 SECURITY.md
+blank_issues_enabled: false

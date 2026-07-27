@@ -1,0 +1,142 @@
+# Minecraft Mystery Dashboard
+
+单机一体的 Minecraft **服务端** Web 管理面板（类似 MCSManager 的精简版）。
+
+用浏览器管理本机上的多个 Java 版服务端：启停、实时控制台、文件与配置、一键部署核心、导入现有 zip 安装包。
+
+> **不是** Minecraft 客户端模组，也无需 Fabric / Forge 作为模组加载。本仓库是独立的 Node.js 面板程序。
+
+[快速开始](docs/getting-started.md) · [分步教程](docs/tutorials.md) · [使用指南](docs/user-guide.md) · [API](docs/api.md) · [贡献指南](CONTRIBUTING.md)
+
+---
+
+## 功能
+
+- 多实例启停 / 重启 / 强杀
+- 实时控制台（WebSocket + xterm.js）
+- 实例根目录内的文件管理与文本编辑
+- `server.properties` 可视化编辑与 EULA 确认
+- 一键部署 **Vanilla / Paper / Fabric / Forge / NeoForge**
+- 一键导入现有服务端 **zip**（含路径逃逸防护）
+- 首启创建管理员 + JWT 登录
+- 检测 PATH 中 `java` 的可用状态与版本
+
+实例只托管在 `DATA_DIR/instances/<id>`，不支持自定义安装目录，也不提供全盘目录浏览。`DATA_DIR` 可填写相对项目根目录的路径或绝对路径；无论哪种写法，实例都固定位于其 `instances/<id>` 下。所有实例进程固定使用 PATH 中的 `java`。
+
+## 环境要求
+
+| 依赖 | 要求 |
+|------|------|
+| Node.js | **≥ 22**（使用内置 `node:sqlite`，无需原生 SQLite 模块） |
+| Java | PATH 中必须可执行 `java`；面板不接受完整 Java 路径 |
+| 操作系统 | Windows 已验证；Linux / macOS 理论上可用 |
+
+## 快速开始
+
+```bash
+# 安装依赖
+npm install
+
+# 构建共享类型包
+npm run build -w @mmd/shared
+
+# 复制环境变量
+cp .env.example .env          # Linux / macOS
+# copy .env.example .env      # Windows
+```
+
+首次启动前，编辑 `.env`，分别为 `JWT_SECRET` 和 `SETUP_TOKEN` 填入两个不同的 64 位十六进制随机值。请各执行一次以下命令生成值，不要使用示例中的固定密钥：
+
+```bash
+node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"
+```
+
+启动后，初始化请求必须在 `X-Setup-Token` header 中携带 `SETUP_TOKEN`。setup 仅在用户表为空时可用；创建管理员后即可从 `.env` 移除 `SETUP_TOKEN`，再重启面板。
+
+```bash
+# 终端 1：后端（默认 http://127.0.0.1:3000）
+npm run dev:server
+
+# 终端 2：前端（http://127.0.0.1:5173，已代理 API）
+npm run dev:web
+```
+
+浏览器打开前端地址，按 [快速开始](docs/getting-started.md) 完成初始化。
+
+## 生产部署
+
+```bash
+npm run build
+npm start
+```
+
+后端会托管 `apps/web/dist`，默认监听 `http://127.0.0.1:3000`。完整环境变量、首次启动和迁移说明见 [配置说明](docs/configuration.md)。
+
+部署与导入可能先进入排队状态，前端会持续显示并刷新任务状态，直到完成或超时失败。上传文件超过上限返回 **413**，上传处理容量已满返回 **429**；文件下载默认由 `MAX_CONCURRENT_FILE_DOWNLOADS=4` 限制，并发容量已满时返回 **429**，`FILE_DOWNLOAD_IDLE_TIMEOUT_MS=60000` 空闲超时会关闭下载并释放并发资源。核心下载完整写入临时文件并校验后，才原子发布到缓存，未完成文件不会被复用。控制台同时限制连接数、单条命令大小、命令速率、入站消息和 stdin 输入缓冲，详见 [配置说明](docs/configuration.md)。
+
+## 目录结构
+
+```
+minecraft-mystery-dashboard/
+├── apps/
+│   ├── server/          # Fastify 后端：进程 / 文件 / 部署
+│   └── web/             # React 前端面板
+├── packages/
+│   └── shared/          # 共享 TypeScript 类型
+├── docs/                # 用户与开发文档
+├── data/                # 运行时数据（gitignore，启动后生成）
+├── .env.example
+└── package.json         # npm workspaces 根配置
+```
+
+| 路径 | 说明 |
+|------|------|
+| `DATA_DIR/instances/<id>/` | 实例唯一工作目录 |
+| `DATA_DIR/cache/cores/` | 核心 jar 下载缓存 |
+| `DATA_DIR/panel.db` | SQLite 元数据库 |
+
+### 旧版外部实例
+
+旧版记录指向的外部实例目录不会被面板访问，也不会被面板删除。需要迁移时，先停止实例和面板服务，再使用操作系统工具将完整目录复制到 `DATA_DIR/instances/<id>`，启动面板后在实例页面点击 **接管**。面板不会自动搬迁、复制或删除旧目录；详见 [使用指南](docs/user-guide.md#旧版外部实例接管)。
+
+## 技术栈
+
+| 层级 | 技术 |
+|------|------|
+| 后端 | Node.js ≥ 22、Fastify 5、WebSocket、`node:sqlite` |
+| 前端 | React 19、Vite 6、React Router、xterm.js |
+| 包管理 | npm workspaces（`apps/*` + `packages/*`） |
+
+## 安全提示
+
+- 默认只监听本机回环地址；若对外暴露，请使用 HTTPS、限制来源并使用强随机密钥。
+- 面板具备实例文件读写与进程执行能力，等同于本机高权限工具，请勿暴露给不可信网络。
+- `JWT_SECRET`、`SETUP_TOKEN` 不得提交到仓库；setup 完成后应移除 `SETUP_TOKEN`。
+- `JWT_SECRET` 与 `SETUP_TOKEN` 必须是两个不同的 64 位十六进制随机值。
+- 文件与 zip 解压均做了路径逃逸防护，仍请遵守最小暴露原则。
+- 发现安全问题请按 [SECURITY.md](SECURITY.md) 私下报告，勿直接公开 Issue。
+
+## 文档索引
+
+| 文档 | 内容 |
+|------|------|
+| [docs/getting-started.md](docs/getting-started.md) | 安装、初始化、开发模式、生产部署 |
+| [docs/tutorials.md](docs/tutorials.md) | **新手教程**：分步开服、导入与接管 |
+| [docs/user-guide.md](docs/user-guide.md) | 界面说明、字段含义、FAQ |
+| [docs/configuration.md](docs/configuration.md) | 环境变量与数据目录 |
+| [docs/architecture.md](docs/architecture.md) | 模块结构与数据流 |
+| [docs/api.md](docs/api.md) | REST / WebSocket API |
+| [docs/development.md](docs/development.md) | 扩展开发与构建流程 |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | 贡献流程与约定 |
+| [SECURITY.md](SECURITY.md) | 安全漏洞披露 |
+| [CHANGELOG.md](CHANGELOG.md) | 版本变更记录 |
+
+## 贡献
+
+欢迎 Issue 与 Pull Request。请先阅读 [贡献指南](CONTRIBUTING.md) 与 [行为准则](CODE_OF_CONDUCT.md)。
+
+## 许可证
+
+本项目采用 [MIT License](LICENSE) 开源。
+
+Minecraft 是 Microsoft / Mojang 的商标。本项目与 Mojang Studios、Microsoft 无官方关联。

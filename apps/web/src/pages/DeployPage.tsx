@@ -1,0 +1,304 @@
+import { useCallback, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import type { TaskInfo } from '@mmd/shared';
+import { api, pollTask } from '../api';
+import { LazyScrollSelect } from '../components/LazyScrollSelect';
+import { JavaEnvironmentStatus } from '../components/PathFields';
+
+type CoreType = 'paper' | 'fabric' | 'vanilla' | 'forge' | 'neoforge';
+
+export function DeployPage() {
+  const navigate = useNavigate();
+  const [coreType, setCoreType] = useState<CoreType | ''>('');
+  const [versions, setVersions] = useState<string[]>([]);
+  const [versionsLoading, setVersionsLoading] = useState(false);
+  const [versionsLoadedFor, setVersionsLoadedFor] = useState<CoreType | ''>('');
+  const [mcVersion, setMcVersion] = useState('');
+  const [builds, setBuilds] = useState<number[]>([]);
+  const [buildsLoading, setBuildsLoading] = useState(false);
+  const [buildsLoadedFor, setBuildsLoadedFor] = useState('');
+  const [build, setBuild] = useState<number | ''>('');
+  const [loaders, setLoaders] = useState<string[]>([]);
+  const [loadersLoading, setLoadersLoading] = useState(false);
+  const [loadersLoadedFor, setLoadersLoadedFor] = useState('');
+  const [loaderVersion, setLoaderVersion] = useState('');
+  const [installers, setInstallers] = useState<string[]>([]);
+  const [installersLoading, setInstallersLoading] = useState(false);
+  const [installersLoadedFor, setInstallersLoadedFor] = useState('');
+  const [installerVersion, setInstallerVersion] = useState('');
+  const [name, setName] = useState('我的服务器');
+  const [jvmArgs, setJvmArgs] = useState('-Xms1G -Xmx2G');
+  const [acceptEula, setAcceptEula] = useState(true);
+  const [error, setError] = useState('');
+  const [progress, setProgress] = useState<TaskInfo | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  function resetDependentFields() {
+    setVersions([]);
+    setVersionsLoadedFor('');
+    setMcVersion('');
+    setBuilds([]);
+    setBuildsLoadedFor('');
+    setBuild('');
+    setLoaders([]);
+    setLoadersLoadedFor('');
+    setLoaderVersion('');
+    setInstallers([]);
+    setInstallersLoadedFor('');
+    setInstallerVersion('');
+  }
+
+  function handleCoreTypeChange(next: CoreType | '') {
+    setCoreType(next);
+    setError('');
+    resetDependentFields();
+  }
+
+  function handleMcVersionChange(next: string) {
+    setMcVersion(next);
+    setBuilds([]);
+    setBuildsLoadedFor('');
+    setBuild('');
+    setLoaders([]);
+    setLoadersLoadedFor('');
+    setLoaderVersion('');
+    setInstallers([]);
+    setInstallersLoadedFor('');
+    setInstallerVersion('');
+  }
+
+  const loadVersions = useCallback(async () => {
+    if (!coreType) return;
+    if (versionsLoadedFor === coreType) return;
+    setVersionsLoading(true);
+    setError('');
+    try {
+      const res = await api<{ versions: string[] }>(`/api/cores/${coreType}/versions`);
+      setVersions(res.versions);
+      setVersionsLoadedFor(coreType);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setVersionsLoading(false);
+    }
+  }, [coreType, versionsLoadedFor]);
+
+  const loadBuilds = useCallback(async () => {
+    if (coreType !== 'paper' || !mcVersion) return;
+    const key = `${coreType}:${mcVersion}`;
+    if (buildsLoadedFor === key) return;
+    setBuildsLoading(true);
+    setError('');
+    try {
+      const res = await api<{ builds: number[] }>(`/api/cores/paper/${mcVersion}/builds`);
+      setBuilds(res.builds);
+      setBuildsLoadedFor(key);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBuildsLoading(false);
+    }
+  }, [coreType, mcVersion, buildsLoadedFor]);
+
+  const loadLoaders = useCallback(async () => {
+    if (!coreType || !mcVersion) return;
+    if (coreType !== 'fabric' && coreType !== 'forge' && coreType !== 'neoforge') return;
+    const key = `${coreType}:${mcVersion}`;
+    if (loadersLoadedFor === key) return;
+    setLoadersLoading(true);
+    setError('');
+    try {
+      if (coreType === 'fabric') {
+        const res = await api<{ loaders: string[]; installers: string[] }>(
+          `/api/cores/fabric/${mcVersion}/loaders`,
+        );
+        setLoaders(res.loaders);
+        setInstallers(res.installers);
+        setLoadersLoadedFor(key);
+        setInstallersLoadedFor(key);
+      } else {
+        const res = await api<{ loaders: string[] }>(`/api/cores/${coreType}/${mcVersion}/loaders`);
+        setLoaders(res.loaders);
+        setLoadersLoadedFor(key);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setLoadersLoading(false);
+    }
+  }, [coreType, mcVersion, loadersLoadedFor]);
+
+  const loadInstallers = useCallback(async () => {
+    if (coreType !== 'fabric' || !mcVersion) return;
+    const key = `${coreType}:${mcVersion}`;
+    if (installersLoadedFor === key) return;
+    // Fabric 的 installer 与 loader 同源接口，复用 loadLoaders
+    await loadLoaders();
+  }, [coreType, mcVersion, installersLoadedFor, loadLoaders]);
+
+  async function deploy() {
+    if (!coreType || !mcVersion) return;
+    setBusy(true);
+    setError('');
+    try {
+      const task = await api<TaskInfo>('/api/cores/deploy', {
+        method: 'POST',
+        json: {
+          name,
+          coreType,
+          mcVersion,
+          build: build === '' ? undefined : Number(build),
+          loaderVersion: loaderVersion || undefined,
+          installerVersion: installerVersion || undefined,
+          jvmArgs,
+          acceptEula,
+        },
+      });
+      setProgress(task);
+      const result = await pollTask(task.id, (t) => setProgress(t as TaskInfo));
+      if (result.instanceId) navigate(`/instances/${result.instanceId}`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const loaderLabel =
+    coreType === 'forge' ? 'Forge 版本' : coreType === 'neoforge' ? 'NeoForge 版本' : 'Loader 版本';
+
+  const canDeploy =
+    Boolean(coreType && mcVersion) &&
+    (coreType !== 'paper' || build !== '') &&
+    (coreType !== 'fabric' || (Boolean(loaderVersion) && Boolean(installerVersion))) &&
+    ((coreType !== 'forge' && coreType !== 'neoforge') || Boolean(loaderVersion));
+
+  return (
+    <div>
+      <h1 className="page-title">一键部署</h1>
+      <p className="page-desc">
+        从官网下载 Vanilla / Paper / Fabric / Forge / NeoForge 并创建实例。
+      </p>
+
+      <div className="panel" style={{ maxWidth: 640 }}>
+        <div className="field">
+          <label>实例名称</label>
+          <input value={name} onChange={(e) => setName(e.target.value)} />
+        </div>
+        <div className="managed-note"><strong>实例目录由面板托管</strong><span>面板会使用 data/instances/&lt;实例 ID&gt;，不接受外部安装路径。</span></div>
+        <div className="field">
+          <label>核心类型</label>
+          <select
+            value={coreType}
+            onChange={(e) => handleCoreTypeChange(e.target.value as CoreType | '')}
+          >
+            <option value="">请选择</option>
+            <option value="paper">Paper</option>
+            <option value="fabric">Fabric</option>
+            <option value="forge">Forge</option>
+            <option value="neoforge">NeoForge</option>
+            <option value="vanilla">Vanilla</option>
+          </select>
+        </div>
+        <div className="field">
+          <label>游戏版本</label>
+          <LazyScrollSelect
+            value={mcVersion}
+            options={versions}
+            onChange={handleMcVersionChange}
+            onOpen={() => void loadVersions()}
+            loading={versionsLoading}
+            disabled={busy || !coreType}
+            placeholder="请选择"
+            emptyText="暂无可用版本"
+          />
+        </div>
+        {coreType === 'paper' && (
+          <div className="field">
+            <label>Paper Build</label>
+            <LazyScrollSelect
+              value={build}
+              options={builds}
+              onChange={setBuild}
+              onOpen={() => void loadBuilds()}
+              loading={buildsLoading}
+              formatLabel={(b) => `#${b}`}
+              disabled={busy || !mcVersion}
+              placeholder="请选择"
+              emptyText="暂无 Build"
+            />
+          </div>
+        )}
+        {(coreType === 'fabric' || coreType === 'forge' || coreType === 'neoforge') && (
+          <div className="field">
+            <label>{loaderLabel}</label>
+            <LazyScrollSelect
+              value={loaderVersion}
+              options={loaders}
+              onChange={setLoaderVersion}
+              onOpen={() => void loadLoaders()}
+              loading={loadersLoading}
+              disabled={busy || !mcVersion}
+              placeholder="请选择"
+              emptyText="暂无版本"
+            />
+          </div>
+        )}
+        {coreType === 'fabric' && (
+          <div className="field">
+            <label>Installer 版本</label>
+            <LazyScrollSelect
+              value={installerVersion}
+              options={installers}
+              onChange={setInstallerVersion}
+              onOpen={() => void loadInstallers()}
+              loading={installersLoading || loadersLoading}
+              disabled={busy || !mcVersion}
+              placeholder="请选择"
+              emptyText="暂无版本"
+            />
+          </div>
+        )}
+        {(coreType === 'forge' || coreType === 'neoforge') && (
+          <p className="muted" style={{ fontSize: '0.85rem' }}>
+            Forge/NeoForge 会下载官方 Installer 并在安装目录执行 --installServer，耗时可能较长。
+          </p>
+        )}
+        <JavaEnvironmentStatus />
+        <div className="field">
+          <label>JVM 参数</label>
+          <input value={jvmArgs} onChange={(e) => setJvmArgs(e.target.value)} />
+        </div>
+        <label style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginBottom: '1rem' }}>
+          <input
+            type="checkbox"
+            checked={acceptEula}
+            onChange={(e) => setAcceptEula(e.target.checked)}
+          />
+          自动接受 Mojang EULA（eula=true）
+        </label>
+
+        {error && <p className="error">{error}</p>}
+        {progress && (
+          <div style={{ marginBottom: '1rem' }}>
+            <div className="muted">
+              {progress.message}（{Math.round(progress.progress)}%）
+            </div>
+            <div className="progress">
+              <span style={{ width: `${progress.progress}%` }} />
+            </div>
+          </div>
+        )}
+
+        <button
+          className="btn"
+          type="button"
+          disabled={busy || !canDeploy}
+          onClick={() => void deploy()}
+        >
+          {busy ? '部署中…' : '开始部署'}
+        </button>
+      </div>
+    </div>
+  );
+}
