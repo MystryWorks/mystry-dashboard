@@ -8,7 +8,7 @@ import multipart from '@fastify/multipart';
 import websocket from '@fastify/websocket';
 import fastifyStatic from '@fastify/static';
 import { config } from './config.js';
-import { initDb } from './db.js';
+import { getDb, initDb } from './db.js';
 import { authRoutes, registerAuthHooks } from './routes/auth.js';
 import { instanceRoutes } from './routes/instances.js';
 import { fileRoutes } from './routes/files.js';
@@ -16,9 +16,20 @@ import { coreRoutes } from './routes/cores.js';
 import { consoleRoutes } from './routes/console.js';
 import { systemRoutes } from './routes/system.js';
 import { nodeRoutes } from './routes/nodes.js';
+import {
+  launcherRoutes,
+  type LauncherRouteOptions,
+  type ShutdownSummary,
+} from './routes/launcher.js';
+import { processManager } from './services/process-manager.js';
 import { createRateLimitHook } from './services/security-service.js';
+import { getTaskActivity, shutdownTasks } from './services/task-service.js';
 
-export async function buildApp() {
+export type BuildAppOptions = LauncherRouteOptions & {
+  isShuttingDown?: () => boolean;
+};
+
+export async function buildApp(options: BuildAppOptions = {}) {
   initDb();
 
   const app = Fastify({
@@ -59,6 +70,15 @@ export async function buildApp() {
       windowMs: config.rateLimitWindowMs,
     }),
   );
+  app.addHook('onRequest', async (req, reply) => {
+    if (
+      options.isShuttingDown?.()
+      && req.url !== '/api/health'
+      && req.url !== '/api/launcher/shutdown'
+    ) {
+      return reply.code(503).send({ error: '面板正在关闭' });
+    }
+  });
   app.addHook('onSend', async (_req, reply, payload) => {
     // 不设置激进 CSP，避免破坏生产环境托管的前端资源；其余响应仍使用基础安全头。
     reply.header('X-Content-Type-Options', 'nosniff');
@@ -78,8 +98,15 @@ export async function buildApp() {
   await app.register(consoleRoutes);
   await app.register(systemRoutes);
   await app.register(nodeRoutes);
+  await app.register(launcherRoutes, {
+    prepareShutdown: options.prepareShutdown,
+    startShutdown: options.startShutdown,
+  });
 
-  app.get('/api/health', async () => ({ ok: true }));
+  app.get('/api/health', async () => ({
+    ok: true,
+    service: 'minecraft-mystery-dashboard',
+  }));
 
   // 生产环境托管前端构建产物
   if (fs.existsSync(config.webDist)) {
@@ -99,7 +126,69 @@ export async function buildApp() {
 }
 
 async function main() {
-  const app = await buildApp();
+  let app: Awaited<ReturnType<typeof buildApp>> | null = null;
+  let shuttingDown = false;
+  let shutdownPromise: Promise<void> | null = null;
+  let removeSignalHandlers = () => {};
+
+  const prepareShutdown = (): ShutdownSummary => {
+    const alreadyShuttingDown = shuttingDown;
+    const taskActivity = getTaskActivity();
+    const summary = {
+      runningInstances: processManager.getRunningCount(),
+      runningTasks: taskActivity.running,
+      queuedTasks: taskActivity.queued,
+      alreadyShuttingDown,
+    };
+    shuttingDown = true;
+    return summary;
+  };
+
+  const shutdown = (reason: string): Promise<void> => {
+    if (shutdownPromise) return shutdownPromise;
+    if (!shuttingDown) prepareShutdown();
+
+    shutdownPromise = (async () => {
+      removeSignalHandlers();
+      app?.log.info({ reason }, '正在安全关闭面板');
+      await shutdownTasks();
+      const instanceResult = await processManager.stopAll();
+      if (instanceResult.errors.length > 0) {
+        app?.log.error(
+          { errors: instanceResult.errors },
+          '部分 Minecraft 实例关闭时发生错误',
+        );
+      }
+      if (app) await app.close();
+      getDb().close();
+    })().catch((error) => {
+      process.exitCode = 1;
+      console.error('安全关闭面板失败', error);
+    });
+    return shutdownPromise;
+  };
+
+  app = await buildApp({
+    isShuttingDown: () => shuttingDown,
+    prepareShutdown,
+    startShutdown: () => {
+      void shutdown('launcher');
+    },
+  });
+  const handleSigint = () => {
+    prepareShutdown();
+    void shutdown('SIGINT');
+  };
+  const handleSigterm = () => {
+    prepareShutdown();
+    void shutdown('SIGTERM');
+  };
+  removeSignalHandlers = () => {
+    process.off('SIGINT', handleSigint);
+    process.off('SIGTERM', handleSigterm);
+  };
+  process.once('SIGINT', handleSigint);
+  process.once('SIGTERM', handleSigterm);
   await app.listen({ host: config.host, port: config.port });
   app.log.info(`面板已启动 http://${config.host}:${config.port}`);
 }

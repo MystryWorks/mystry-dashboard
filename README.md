@@ -33,6 +33,30 @@
 
 ## 快速开始
 
+### Windows 一键管理（推荐）
+
+安装 Node.js 22 或更高版本后，直接双击仓库根目录的：
+
+```text
+PanelManager.cmd
+```
+
+管理器会自动检查环境、安装依赖、创建 `.env`、生成随机密钥、构建并启动面板。中文 Windows 默认显示中文，其他系统语言默认显示英文；菜单中按 `L` 可以切换并记住语言。
+
+也可以从命令行直接操作：
+
+```powershell
+PanelManager.cmd start
+PanelManager.cmd foreground
+PanelManager.cmd stop
+PanelManager.cmd restart
+PanelManager.cmd logs
+PanelManager.cmd rebuild
+PanelManager.cmd status
+```
+
+### 手动安装
+
 ```bash
 # 安装依赖
 npm install
@@ -45,7 +69,7 @@ cp .env.example .env          # Linux / macOS
 # copy .env.example .env      # Windows
 ```
 
-首次启动前，编辑 `.env`，分别为 `JWT_SECRET` 和 `SETUP_TOKEN` 填入两个不同的 64 位十六进制随机值。请各执行一次以下命令生成值，不要使用示例中的固定密钥：
+首次启动前，编辑 `.env`，分别为 `JWT_SECRET` 和 `SETUP_TOKEN` 填入两个不同的 64 位十六进制随机值。若需要使用 PanelManager 的后台安全停止功能，还要为 `LAUNCHER_TOKEN` 生成第三个不同的随机值。请分别执行以下命令，不要使用固定密钥：
 
 ```bash
 node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"

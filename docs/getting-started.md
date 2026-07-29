@@ -10,7 +10,37 @@
 
 面板不接受 Java 完整路径，也不提供选择 Java 安装目录的功能。先在运行面板的同一用户环境中执行 `java -version` 检查 PATH。
 
-## 安装与首次配置
+## Windows 一键管理（推荐）
+
+安装 Node.js 22 或更高版本后，双击仓库根目录的 `PanelManager.cmd`。它会自动完成：
+
+1. 检查 Node、npm 和 Java。
+2. 按 `package-lock.json` 安装依赖。
+3. 创建 `.env` 并生成互不相同的随机密钥。
+4. 构建 shared、server 和 web。
+5. 后台启动面板并打开浏览器。
+
+中文 Windows 默认显示中文菜单，其他系统语言默认显示英文。菜单中按 `L` 可切换语言并保存到本机运行数据中。也可以直接使用：
+
+```powershell
+PanelManager.cmd start
+PanelManager.cmd foreground
+PanelManager.cmd stop
+PanelManager.cmd restart
+PanelManager.cmd logs
+PanelManager.cmd rebuild
+PanelManager.cmd status
+
+# 仅覆盖本次显示语言，不修改保存的偏好
+PanelManager.cmd status --lang en-US
+PanelManager.cmd status --lang zh-CN
+```
+
+后台停止和重启会先取消部署/导入任务，再逐个安全停止正在运行的 Minecraft 实例；不要直接在任务管理器中强杀 Node 进程。
+
+若已有 `.env` 中的密钥不是 64 位十六进制字符串，PanelManager 会先将原文件备份到 `data/launcher/config-backups/`，再生成合规的新密钥。更换 `JWT_SECRET` 会使旧登录令牌失效，但不会删除管理员、实例或 Minecraft 存档。
+
+## 手动安装与首次配置
 
 在仓库根目录执行：
 
@@ -29,7 +59,7 @@ copy .env.example .env
 cp .env.example .env
 ```
 
-编辑 `.env`。首次启动**必须**配置 `JWT_SECRET` 和 `SETUP_TOKEN`，两者都必须是 64 位十六进制字符串且必须使用不同随机值。请分别执行两次以下命令生成值；命令不包含可用固定密钥：
+编辑 `.env`。首次启动**必须**配置 `JWT_SECRET` 和 `SETUP_TOKEN`，两者都必须是 64 位十六进制字符串且必须使用不同随机值。若要使用 PanelManager 的安全停止接口，还应配置第三个不同的 `LAUNCHER_TOKEN`。请分别执行以下命令生成值；命令不包含可用固定密钥：
 
 ```bash
 node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"

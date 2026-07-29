@@ -8,8 +8,9 @@
 
 - `JWT_SECRET`：64 位十六进制字符串，用于 JWT 签名。
 - `SETUP_TOKEN`：64 位十六进制字符串，用于首次 setup 请求的 `X-Setup-Token` header。
+- `LAUNCHER_TOKEN`：PanelManager 自动生成的独立本机关闭令牌；手动运行且不使用管理器时可以不配置。
 
-两者必须使用不同的随机值，不能相同。Node.js 生成命令如下，请分别执行两次并将两次输出填入 `.env`；文档和模板不提供可用固定密钥：
+已配置的密钥必须分别使用不同的随机值。Node.js 生成命令如下；文档和模板不提供可用固定密钥：
 
 ```bash
 node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"
@@ -29,6 +30,7 @@ node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"
 | `PORT` | `3000` | 监听端口 |
 | `JWT_SECRET` | 无；初次启动前必填 | 64 位十六进制 JWT 签名密钥，不要使用固定示例值 |
 | `SETUP_TOKEN` | 无；初次 setup 前必填 | 64 位十六进制初始化令牌；setup 完成后可移除 |
+| `LAUNCHER_TOKEN` | 无；使用 PanelManager 时自动生成 | 64 位十六进制本机关闭令牌；仅回环地址可使用 |
 | `JWT_EXPIRES_IN` | `2h` | JWT 有效期 |
 | `CORS_ORIGINS` | `http://127.0.0.1:5173,http://localhost:5173` | 精确 CORS 来源白名单，逗号分隔，不要填写 `*` |
 | `RATE_LIMIT_MAX` | `120` | 普通请求限流窗口内的最大次数 |

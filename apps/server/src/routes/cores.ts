@@ -11,7 +11,11 @@ import {
   listPaperBuilds,
 } from '../services/core-depot.js';
 import { importZipPackage } from '../services/import-service.js';
-import { getTask, isTaskCapacityError } from '../services/task-service.js';
+import {
+  getTask,
+  isTaskCapacityError,
+  isTaskShuttingDownError,
+} from '../services/task-service.js';
 import {
   isUploadCapacityError,
   isUploadTooLargeError,
@@ -96,6 +100,9 @@ export async function coreRoutes(app: FastifyInstance): Promise<void> {
       const task = await deployCore(body);
       return task;
     } catch (err) {
+      if (isTaskShuttingDownError(err)) {
+        return reply.code(503).send({ error: err.message });
+      }
       if (isCapacityError(err)) {
         return reply.code(429).send({ error: err instanceof Error ? err.message : String(err) });
       }
@@ -161,6 +168,9 @@ export async function coreRoutes(app: FastifyInstance): Promise<void> {
     } catch (err) {
       if (isUploadTooLargeError(err)) {
         return reply.code(413).send({ error: err.message });
+      }
+      if (isTaskShuttingDownError(err)) {
+        return reply.code(503).send({ error: err.message });
       }
       if (isCapacityError(err)) {
         return reply.code(429).send({ error: err instanceof Error ? err.message : String(err) });

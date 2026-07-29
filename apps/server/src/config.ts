@@ -44,12 +44,14 @@ function parseSecret(name: string, required: boolean): string | null {
 const host = process.env.HOST || '127.0.0.1';
 const jwtSecret = parseSecret('JWT_SECRET', true)!;
 const setupToken = parseSecret('SETUP_TOKEN', false);
+const launcherToken = parseSecret('LAUNCHER_TOKEN', false);
 
 export const config = {
   host,
   port: parsePositiveInt('PORT', 3000),
   jwtSecret,
   setupToken,
+  launcherToken,
   jwtExpiresIn: process.env.JWT_EXPIRES_IN?.trim() || '2h',
   corsOrigins: parseOrigins(),
   repoRoot,

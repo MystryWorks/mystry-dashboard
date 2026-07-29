@@ -40,6 +40,7 @@ async function main(): Promise<void> {
   process.env.DATA_DIR = dataRoot;
   process.env.JWT_SECRET = 'a'.repeat(64);
   process.env.SETUP_TOKEN = 'b'.repeat(64);
+  process.env.LAUNCHER_TOKEN = 'c'.repeat(64);
   process.env.MAX_CONCURRENT_UPLOADS = '1';
   process.env.MAX_UPLOAD_BYTES = '256';
   process.env.MAX_CONCURRENT_FILE_DOWNLOADS = '1';
@@ -60,7 +61,18 @@ async function main(): Promise<void> {
   const { registerStdinSafetyHandlers } = await import('./services/process-manager.js');
   const { defaultInstanceDir, readOwnershipMarker, resolveSafePath } = await import('./utils/path.js');
 
-  const app = await buildApp();
+  let launcherShutdownStarted = false;
+  const app = await buildApp({
+    prepareShutdown: () => ({
+      runningInstances: 0,
+      runningTasks: 0,
+      queuedTasks: 0,
+      alreadyShuttingDown: false,
+    }),
+    startShutdown: () => {
+      launcherShutdownStarted = true;
+    },
+  });
   const testRoot = fs.mkdtempSync(path.join(config.uploadDir, '.security-self-test-'));
   try {
     assert.throws(() => resolveSafePath(testRoot, '../outside'), /非法路径/);
@@ -335,6 +347,30 @@ async function main(): Promise<void> {
     const badExtracted = path.join(testRoot, 'bad-extracted');
     await assert.rejects(() => safeExtract(badZipPath, badExtracted), /不安全的 zip 路径/);
     assert.equal(fs.existsSync(path.join(testRoot, 'escape.txt')), false);
+
+    const missingLauncherToken = await app.inject({
+      method: 'POST',
+      url: '/api/launcher/shutdown',
+    });
+    assert.equal(missingLauncherToken.statusCode, 401);
+
+    const remoteLauncherShutdown = await app.inject({
+      method: 'POST',
+      url: '/api/launcher/shutdown',
+      remoteAddress: '192.0.2.10',
+      headers: { 'x-launcher-token': 'c'.repeat(64) },
+    });
+    assert.equal(remoteLauncherShutdown.statusCode, 403);
+
+    const launcherShutdown = await app.inject({
+      method: 'POST',
+      url: '/api/launcher/shutdown',
+      headers: { 'x-launcher-token': 'c'.repeat(64) },
+    });
+    assert.equal(launcherShutdown.statusCode, 202);
+    assert.equal(launcherShutdown.json<{ accepted: boolean }>().accepted, true);
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    assert.equal(launcherShutdownStarted, true);
   } finally {
     await app.close();
     getDb().close();

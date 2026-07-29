@@ -89,6 +89,10 @@ export class ProcessManager extends EventEmitter {
     return status === 'running' || status === 'starting' || status === 'stopping';
   }
 
+  getRunningCount(): number {
+    return this.processes.size;
+  }
+
   async start(instance: InstanceRow): Promise<void> {
     if (this.isRunning(instance.id)) {
       throw new Error('实例已在运行或正在启停');
@@ -238,6 +242,20 @@ export class ProcessManager extends EventEmitter {
       await this.stop(instance.id);
     }
     await this.start(instance);
+  }
+
+  /** 面板退出前逐个安全停止所有由当前进程管理的实例。 */
+  async stopAll(): Promise<{ attempted: number; errors: string[] }> {
+    const instanceIds = [...this.processes.keys()];
+    const errors: string[] = [];
+    for (const instanceId of instanceIds) {
+      try {
+        await this.stop(instanceId);
+      } catch (error) {
+        errors.push(`${instanceId}: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    }
+    return { attempted: instanceIds.length, errors };
   }
 
   sendCommand(instanceId: string, command: string): void {
