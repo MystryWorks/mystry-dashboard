@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, NavLink, Route, Routes, useParams } from 'react-router-dom';
 import type { FileEntry, InstanceInfo } from '@mmd/shared';
 import { api } from '../api';
@@ -11,6 +11,13 @@ const statusLabel: Record<string, string> = {
   stopping: '停止中',
   crashed: '已崩溃',
 };
+
+/** 与服务端默认 MAX_TEXT_FILE_BYTES 对齐，用于判断是否显示「编辑」。 */
+const MAX_EDITABLE_FILE_BYTES = 1_048_576;
+
+function canEditFile(file: FileEntry): boolean {
+  return !file.isDirectory && file.size <= MAX_EDITABLE_FILE_BYTES;
+}
 
 function ConsoleTab({ instance }: { instance: InstanceInfo; onChange: () => void }) {
   return (
@@ -47,7 +54,12 @@ function FilesTab({ instanceId }: { instanceId: string }) {
   const [editPath, setEditPath] = useState<string | null>(null);
   const [content, setContent] = useState('');
   const [error, setError] = useState('');
+  const [editError, setEditError] = useState('');
+  const [saved, setSaved] = useState(false);
   const [newDir, setNewDir] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [loadingEdit, setLoadingEdit] = useState(false);
+  const editDialogRef = useRef<HTMLDialogElement>(null);
 
   const load = useCallback(async () => {
     try {
@@ -65,34 +77,60 @@ function FilesTab({ instanceId }: { instanceId: string }) {
     void load();
   }, [load]);
 
-  async function openFile(file: FileEntry) {
-    if (file.isDirectory) {
-      setPath(file.path);
-      setEditPath(null);
-      return;
-    }
+  useEffect(() => {
+    const dialog = editDialogRef.current;
+    if (!dialog) return;
+    if (editPath && !dialog.open) dialog.showModal();
+    else if (!editPath && dialog.open) dialog.close();
+  }, [editPath]);
+
+  function closeEditor() {
+    setEditPath(null);
+    setContent('');
+    setEditError('');
+    setLoadingEdit(false);
+  }
+
+  async function openDirectory(file: FileEntry) {
+    if (!file.isDirectory) return;
+    setPath(file.path);
+  }
+
+  async function startEdit(file: FileEntry) {
+    if (!canEditFile(file)) return;
+    setLoadingEdit(true);
+    setEditError('');
+    setEditPath(file.path);
+    setContent('');
     try {
       const res = await api<{ content: string }>(
         `/api/instances/${instanceId}/files/content?path=${encodeURIComponent(file.path)}`,
       );
-      setEditPath(file.path);
       setContent(res.content);
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setEditError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setLoadingEdit(false);
     }
   }
 
   async function saveFile() {
     if (!editPath) return;
+    setSaving(true);
     try {
       await api(`/api/instances/${instanceId}/files/content`, {
         method: 'PUT',
         json: { path: editPath, content },
       });
+      setEditError('');
       setError('');
-      alert('已保存');
+      closeEditor();
+      setSaved(true);
+      setTimeout(() => setSaved(false), 1500);
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setEditError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -102,7 +140,7 @@ function FilesTab({ instanceId }: { instanceId: string }) {
       await api(`/api/instances/${instanceId}/files?path=${encodeURIComponent(file.path)}`, {
         method: 'DELETE',
       });
-      if (editPath === file.path) setEditPath(null);
+      if (editPath === file.path) closeEditor();
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -157,9 +195,9 @@ function FilesTab({ instanceId }: { instanceId: string }) {
   }
 
   return (
-    <div className="grid grid-2">
-      <div className="panel">
-        <div className="btn-row" style={{ marginBottom: '0.75rem' }}>
+    <div className="files-workspace panel">
+      <div className="files-toolbar">
+        <div className="btn-row">
           <button className="btn btn-ghost" type="button" onClick={goUp} disabled={!path}>
             上级
           </button>
@@ -168,44 +206,98 @@ function FilesTab({ instanceId }: { instanceId: string }) {
             <input type="file" hidden onChange={(e) => void upload(e)} />
           </label>
         </div>
-        <p className="muted">当前路径：/{path || ''}</p>
+        <p className="muted files-path">当前路径：/{path || ''}</p>
         {error && <p className="error">{error}</p>}
-        <ul className="file-list">
-          {files.map((f) => (
-            <li key={f.path}>
-              <button className="linkish" type="button" onClick={() => void openFile(f)}>
-                {f.isDirectory ? '📁 ' : '📄 '}
+        {saved && <p className="muted">已保存</p>}
+      </div>
+
+      <ul className="file-list">
+        {files.map((f) => (
+          <li key={f.path}>
+            {f.isDirectory ? (
+              <button className="linkish" type="button" onClick={() => void openDirectory(f)}>
+                <span className="file-kind dir" aria-hidden="true" />
                 {f.name}
               </button>
+            ) : (
+              <span className="file-name">
+                <span className="file-kind file" aria-hidden="true" />
+                {f.name}
+              </span>
+            )}
+            <div className="file-actions">
+              {canEditFile(f) && (
+                <button className="btn btn-ghost" type="button" onClick={() => void startEdit(f)}>
+                  编辑
+                </button>
+              )}
               <button className="btn btn-ghost" type="button" onClick={() => void remove(f)}>
                 删除
               </button>
-            </li>
-          ))}
-        </ul>
-        <div className="field" style={{ marginTop: '1rem' }}>
-          <label>新建文件夹</label>
-          <div className="btn-row">
-            <input value={newDir} onChange={(e) => setNewDir(e.target.value)} placeholder="目录名" />
-            <button className="btn btn-ghost" type="button" onClick={() => void createDir()}>
-              创建
-            </button>
-          </div>
+            </div>
+          </li>
+        ))}
+      </ul>
+
+      <div className="files-footer field">
+        <label>新建文件夹</label>
+        <div className="btn-row">
+          <input value={newDir} onChange={(e) => setNewDir(e.target.value)} placeholder="目录名" />
+          <button className="btn btn-ghost" type="button" onClick={() => void createDir()}>
+            创建
+          </button>
         </div>
       </div>
-      <div className="panel">
-        <h3 style={{ marginTop: 0 }}>{editPath ? `编辑：${editPath}` : '选择文件进行编辑'}</h3>
-        {editPath ? (
-          <>
-            <textarea value={content} onChange={(e) => setContent(e.target.value)} rows={18} />
-            <button className="btn" type="button" onClick={() => void saveFile()}>
-              保存
+
+      <dialog
+        ref={editDialogRef}
+        className="file-edit-dialog"
+        aria-labelledby="file-edit-dialog-title"
+        onClose={closeEditor}
+        onCancel={(event) => {
+          event.preventDefault();
+          closeEditor();
+        }}
+        onMouseDown={(event) => {
+          if (event.target === event.currentTarget) closeEditor();
+        }}
+      >
+        <div className="file-edit-dialog-panel">
+          <header className="file-edit-dialog-header">
+            <div>
+              <h2 id="file-edit-dialog-title">编辑文件</h2>
+              <p className="file-edit-dialog-path">{editPath}</p>
+            </div>
+            <button className="btn btn-ghost" type="button" aria-label="关闭编辑" onClick={closeEditor}>
+              关闭
             </button>
-          </>
-        ) : (
-          <p className="muted">点击左侧文本文件即可编辑。</p>
-        )}
-      </div>
+          </header>
+          {editError && <p className="error file-edit-dialog-error">{editError}</p>}
+          {loadingEdit ? (
+            <p className="muted file-edit-dialog-loading">加载中…</p>
+          ) : (
+            <textarea
+              className="file-edit-dialog-textarea"
+              value={content}
+              onChange={(e) => setContent(e.target.value)}
+              spellCheck={false}
+            />
+          )}
+          <footer className="file-edit-dialog-footer">
+            <button className="btn btn-ghost" type="button" onClick={closeEditor}>
+              取消
+            </button>
+            <button
+              className="btn"
+              type="button"
+              disabled={saving || loadingEdit || !editPath}
+              onClick={() => void saveFile()}
+            >
+              {saving ? '保存中…' : '保存'}
+            </button>
+          </footer>
+        </div>
+      </dialog>
     </div>
   );
 }
@@ -242,11 +334,13 @@ function ConfigTab({ instanceId }: { instanceId: string }) {
   const keys = Object.keys(props).sort();
 
   return (
-    <div className="panel">
-      <p className="page-desc">编辑 server.properties（修改后需重启实例生效）。</p>
-      {error && <p className="error">{error}</p>}
-      {saved && <p className="muted">已保存</p>}
-      <div className="grid grid-2">
+    <div className="config-workspace panel">
+      <div className="config-workspace-header">
+        <p className="page-desc">编辑 server.properties（修改后需重启实例生效）。</p>
+        {error && <p className="error">{error}</p>}
+        {saved && <p className="muted">已保存</p>}
+      </div>
+      <div className="config-fields grid grid-2">
         {keys.map((key) => (
           <div className="field" key={key}>
             <label>{key}</label>
@@ -257,9 +351,11 @@ function ConfigTab({ instanceId }: { instanceId: string }) {
           </div>
         ))}
       </div>
-      <button className="btn" type="button" onClick={() => void save()}>
-        保存配置
-      </button>
+      <div className="config-workspace-footer">
+        <button className="btn" type="button" onClick={() => void save()}>
+          保存配置
+        </button>
+      </div>
     </div>
   );
 }
@@ -366,69 +462,78 @@ export function InstancePage() {
   }
 
   return (
-    <div>
-      <p>
-        <Link to="/">← 返回总览</Link>
-      </p>
-      <div className="instance-header">
-        <div>
-          <h1 className="page-title">{instance.name}</h1>
-          <p className="page-desc">
-            {instance.coreType} {instance.mcVersion || ''} ·{' '}
-            <span className={`badge ${instance.status}`}>{statusLabel[instance.status]}</span>
-          </p>
+    <div className="instance-page">
+      <div className="instance-page-top">
+        <p className="instance-back">
+          <Link to="/">← 返回总览</Link>
+        </p>
+        <div className="instance-header">
+          <div>
+            <h1 className="page-title">{instance.name}</h1>
+            <p className="page-desc">
+              {instance.coreType} {instance.mcVersion || ''} ·{' '}
+              <span className={`badge ${instance.status}`}>{statusLabel[instance.status]}</span>
+            </p>
+          </div>
+          <div className="btn-row instance-actions">
+            <button className="btn" type="button" disabled={busy || instance.requiresMigration} onClick={() => void act('start')}>
+              启动
+            </button>
+            <button className="btn btn-ghost" type="button" disabled={busy || instance.requiresMigration} onClick={() => void act('stop')}>
+              停止
+            </button>
+            <button
+              className="btn btn-ghost"
+              type="button"
+              disabled={busy || instance.requiresMigration}
+              onClick={() => void act('restart')}
+            >
+              重启
+            </button>
+          </div>
         </div>
-        <div className="btn-row instance-actions">
-          <button className="btn" type="button" disabled={busy || instance.requiresMigration} onClick={() => void act('start')}>
-            启动
-          </button>
-          <button className="btn btn-ghost" type="button" disabled={busy || instance.requiresMigration} onClick={() => void act('stop')}>
-            停止
-          </button>
-          <button
-            className="btn btn-ghost"
-            type="button"
-            disabled={busy || instance.requiresMigration}
-            onClick={() => void act('restart')}
-          >
-            重启
-          </button>
-        </div>
+
+        {error && <p className="error">{error}</p>}
+
+        {!instance.requiresMigration && (
+          <div className="tabs">
+            <NavLink to={`/instances/${id}`} end className={({ isActive }) => (isActive ? 'active' : undefined)}>
+              控制台
+            </NavLink>
+            <NavLink
+              to={`/instances/${id}/files`}
+              className={({ isActive }) => (isActive ? 'active' : undefined)}
+            >
+              文件
+            </NavLink>
+            <NavLink
+              to={`/instances/${id}/config`}
+              className={({ isActive }) => (isActive ? 'active' : undefined)}
+            >
+              配置
+            </NavLink>
+            <NavLink
+              to={`/instances/${id}/settings`}
+              className={({ isActive }) => (isActive ? 'active' : undefined)}
+            >
+              设置
+            </NavLink>
+          </div>
+        )}
       </div>
 
-      {error && <p className="error">{error}</p>}
-
-      {instance.requiresMigration ? <MigrationPanel instance={instance} onAdopt={load} /> : <>
-      <div className="tabs">
-        <NavLink to={`/instances/${id}`} end className={({ isActive }) => (isActive ? 'active' : undefined)}>
-          控制台
-        </NavLink>
-        <NavLink
-          to={`/instances/${id}/files`}
-          className={({ isActive }) => (isActive ? 'active' : undefined)}
-        >
-          文件
-        </NavLink>
-        <NavLink
-          to={`/instances/${id}/config`}
-          className={({ isActive }) => (isActive ? 'active' : undefined)}
-        >
-          配置
-        </NavLink>
-        <NavLink
-          to={`/instances/${id}/settings`}
-          className={({ isActive }) => (isActive ? 'active' : undefined)}
-        >
-          设置
-        </NavLink>
+      <div className="instance-body">
+        {instance.requiresMigration ? (
+          <MigrationPanel instance={instance} onAdopt={load} />
+        ) : (
+          <Routes>
+            <Route index element={<ConsoleTab instance={instance} onChange={load} />} />
+            <Route path="files" element={<FilesTab instanceId={instance.id} />} />
+            <Route path="config" element={<ConfigTab instanceId={instance.id} />} />
+            <Route path="settings" element={<SettingsTab instance={instance} onSaved={load} />} />
+          </Routes>
+        )}
       </div>
-
-      <Routes>
-        <Route index element={<ConsoleTab instance={instance} onChange={load} />} />
-        <Route path="files" element={<FilesTab instanceId={instance.id} />} />
-        <Route path="config" element={<ConfigTab instanceId={instance.id} />} />
-        <Route path="settings" element={<SettingsTab instance={instance} onSaved={load} />} />
-      </Routes></>}
     </div>
   );
 }
