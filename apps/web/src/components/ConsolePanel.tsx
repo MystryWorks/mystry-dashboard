@@ -3,6 +3,12 @@ import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import '@xterm/xterm/css/xterm.css';
 import { createConsoleTicket } from '../api';
+import {
+  colorizeConsoleLine,
+  colorizeConsoleStream,
+  createConsoleColorizeState,
+  flushConsoleColorize,
+} from '../console-colorize';
 
 type Props = {
   instanceId: string;
@@ -30,10 +36,27 @@ export function ConsolePanel({ instanceId, canSend = true, onStatus }: Props) {
       cursorBlink: false,
       fontFamily: 'IBM Plex Mono, monospace',
       fontSize: 13,
+      // ECMA-48 / ISO 6429 标准调色板（亮色用于 INFO/WARN/ERROR）
       theme: {
         background: '#0a0f0d',
         foreground: '#d7e6dc',
         cursor: '#3dba7e',
+        black: '#0a0f0d',
+        red: '#c42b3c',
+        green: '#2ea043',
+        yellow: '#c9a227',
+        blue: '#3b6ea5',
+        magenta: '#9b4d96',
+        cyan: '#2a9d8f',
+        white: '#d7e6dc',
+        brightBlack: '#6b7c72',
+        brightRed: '#ff5d7d',
+        brightGreen: '#65d6a0',
+        brightYellow: '#e0a84a',
+        brightBlue: '#6cb6ff',
+        brightMagenta: '#d67ae0',
+        brightCyan: '#56d4dd',
+        brightWhite: '#f5fff8',
       },
     });
     const fit = new FitAddon();
@@ -45,6 +68,23 @@ export function ConsolePanel({ instanceId, canSend = true, onStatus }: Props) {
     let disposed = false;
     let ws: WebSocket | null = null;
     const ticketRequest = new AbortController();
+    const colorState = createConsoleColorizeState();
+
+    const writeColored = (chunk: string, flush = false) => {
+      const colored = colorizeConsoleStream(chunk, colorState);
+      if (colored) term.write(colored);
+      if (flush) {
+        const rest = flushConsoleColorize(colorState);
+        if (rest) term.write(rest);
+      }
+    };
+
+    const writeSystemLine = (line: string) => {
+      const rest = flushConsoleColorize(colorState);
+      if (rest) term.write(rest);
+      term.write('\r\n');
+      term.writeln(colorizeConsoleLine(line));
+    };
 
     const connect = async () => {
       try {
@@ -69,28 +109,30 @@ export function ConsolePanel({ instanceId, canSend = true, onStatus }: Props) {
               data: string;
               status?: string;
             };
-            if (msg.type === 'history' || msg.type === 'output') {
-              term.write(msg.data);
+            if (msg.type === 'history') {
+              writeColored(msg.data, true);
+            } else if (msg.type === 'output') {
+              writeColored(msg.data);
             }
             if (msg.type === 'error') {
-              term.writeln(`\r\n[错误] ${msg.data}`);
+              writeSystemLine(`[错误] ${msg.data}`);
             }
             if (msg.status && onStatus) onStatus(msg.status);
           } catch {
-            term.write(String(ev.data));
+            writeColored(String(ev.data));
           }
         };
 
         ws.onclose = () => {
           if (!disposed) {
             setConnected(false);
-            term.writeln('\r\n[面板] 控制台连接已断开');
+            writeSystemLine('[面板] 控制台连接已断开');
           }
         };
       } catch (err) {
         if (disposed || (err instanceof Error && err.name === 'AbortError')) return;
         setConnected(false);
-        term.writeln(`\r\n[错误] ${err instanceof Error ? err.message : String(err)}`);
+        writeSystemLine(`[错误] ${err instanceof Error ? err.message : String(err)}`);
       }
     };
 
@@ -103,6 +145,7 @@ export function ConsolePanel({ instanceId, canSend = true, onStatus }: Props) {
       disposed = true;
       ticketRequest.abort();
       window.removeEventListener('resize', onResize);
+      flushConsoleColorize(colorState);
       ws?.close();
       term.dispose();
       termRef.current = null;
