@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict';
+import type { ChildProcessWithoutNullStreams } from 'node:child_process';
+import { EventEmitter } from 'node:events';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -47,7 +49,7 @@ async function main(): Promise<void> {
   process.env.MAX_CONCURRENT_FILE_DOWNLOADS = '1';
   process.env.MAX_COMMAND_BYTES = '4';
 
-  const { config } = await import('./config.js');
+  const { assertDistinctSecrets, config } = await import('./config.js');
   const { getDb } = await import('./db.js');
   const { buildApp } = await import('./index.js');
   const { consumeConsoleTicket, issueConsoleTicket } = await import('./services/console-ticket-service.js');
@@ -59,7 +61,23 @@ async function main(): Promise<void> {
   } = await import('./services/upload-service.js');
   const { getMinecraftChildEnv } = await import('./utils/child-env.js');
   const { acquireFileDownloadSlot } = await import('./services/file-service.js');
-  const { registerStdinSafetyHandlers } = await import('./services/process-manager.js');
+  const { ProcessManager, registerStdinSafetyHandlers } = await import('./services/process-manager.js');
+  const {
+    createInstance,
+    deleteInstance,
+    getInstanceRow,
+  } = await import('./services/instance-service.js');
+  const {
+    createTask,
+    getTask,
+    recoverInterruptedTasks,
+    updateTask,
+  } = await import('./services/task-service.js');
+  const { parseJvmArgs, serializeJvmArgFile } = await import('./utils/jvm-args.js');
+  const {
+    isRetryableInstallerFailure,
+    summarizeInstallerDownloadFailure,
+  } = await import('./services/core-depot.js');
   const { defaultInstanceDir, readOwnershipMarker, resolveSafePath } = await import('./utils/path.js');
 
   let launcherShutdownStarted = false;
@@ -81,6 +99,108 @@ async function main(): Promise<void> {
     assert.equal(health.json<{ processFingerprint: string }>().processFingerprint, 'security-self-test');
     assert.throws(() => resolveSafePath(testRoot, '../outside'), /非法路径/);
     assert.equal(getMinecraftChildEnv().JWT_SECRET, undefined);
+    const installerNetworkFailure = [
+      'Failed to establish connection to https://maven.minecraftforge.net/example.jar',
+      'java.net.SocketTimeoutException: Read timed out',
+      'These libraries failed to download. Try again.',
+      '',
+      'org.example:library:1.0',
+      'There was an error during installation',
+    ].join('\n');
+    assert.equal(isRetryableInstallerFailure(installerNetworkFailure), true);
+    assert.equal(isRetryableInstallerFailure('Installer configuration is invalid'), false);
+    assert.match(
+      summarizeInstallerDownloadFailure(installerNetworkFailure, 2),
+      /已自动重试 1 次.*maven\.minecraftforge\.net 读取超时.*org\.example:library:1\.0/,
+    );
+    assert.throws(
+      () => assertDistinctSecrets([
+        ['JWT_SECRET', 'a'.repeat(64)],
+        ['SETUP_TOKEN', 'A'.repeat(64)],
+      ]),
+      /必须使用不同的随机值/,
+    );
+
+    const interruptedInstance = createInstance({ name: '中断任务实例', coreType: 'custom' });
+    const interruptedTask = createTask('deploy');
+    updateTask(interruptedTask.id, {
+      status: 'running',
+      result: { instanceId: interruptedInstance.id },
+    });
+    const queuedTask = createTask('import');
+    const recovery = recoverInterruptedTasks();
+    assert.deepEqual(recovery, { interrupted: 2, cleanedInstances: 1, cleanupFailures: 0 });
+    assert.equal(getTask(interruptedTask.id)?.status, 'failed');
+    assert.equal(getTask(queuedTask.id)?.status, 'failed');
+    assert.equal(getInstanceRow(interruptedInstance.id), null);
+    assert.equal(fs.existsSync(defaultInstanceDir(interruptedInstance.id)), false);
+
+    const lockedInstance = createInstance({ name: '模拟文件锁实例', coreType: 'custom' });
+    const lockedDirectory = defaultInstanceDir(lockedInstance.id);
+    const originalRmSync = fs.rmSync;
+    fs.rmSync = ((target, options) => {
+      if (path.resolve(String(target)) === path.resolve(lockedDirectory)) {
+        throw new Error('模拟 Windows 文件锁');
+      }
+      return originalRmSync(target, options);
+    }) as typeof fs.rmSync;
+    try {
+      assert.throws(() => deleteInstance(lockedInstance.id), /模拟 Windows 文件锁/);
+    } finally {
+      fs.rmSync = originalRmSync;
+    }
+    assert.notEqual(getInstanceRow(lockedInstance.id), null);
+    assert.equal(fs.existsSync(lockedDirectory), true);
+    deleteInstance(lockedInstance.id);
+
+    const parsedJvmArgs = parseJvmArgs(
+      '-Xmx2G -Dconfig="C:\\Minecraft Server\\config.json" -Dlabel=\'Mystery Panel\'',
+    );
+    assert.deepEqual(parsedJvmArgs, [
+      '-Xmx2G',
+      '-Dconfig=C:\\Minecraft Server\\config.json',
+      '-Dlabel=Mystery Panel',
+    ]);
+    assert.throws(() => parseJvmArgs('-Dconfig="not-closed'), /未闭合的引号/);
+    assert.deepEqual(
+      parseJvmArgs('-Dshare="\\\\server\\Minecraft Servers"'),
+      ['-Dshare=\\\\server\\Minecraft Servers'],
+    );
+    assert.equal(
+      serializeJvmArgFile(parsedJvmArgs),
+      '"-Xmx2G"\n"-Dconfig=C:\\\\Minecraft Server\\\\config.json"\n"-Dlabel=Mystery Panel"',
+    );
+
+    const crashedInstance = createInstance({
+      name: '崩溃状态实例',
+      coreType: 'custom',
+      jvmArgs: '-Xmx2G -Dconfig="C:\\Minecraft Server\\config.json"',
+    });
+    const crashedRow = getInstanceRow(crashedInstance.id)!;
+    fs.writeFileSync(path.join(defaultInstanceDir(crashedInstance.id), 'server.jar'), 'jar', 'utf8');
+    const fakeStdout = new PassThrough();
+    const fakeStderr = new PassThrough();
+    const fakeStdin = new PassThrough();
+    const fakeChild = Object.assign(new EventEmitter(), {
+      stdout: fakeStdout,
+      stderr: fakeStderr,
+      stdin: fakeStdin,
+      kill: () => true,
+    }) as unknown as ChildProcessWithoutNullStreams;
+    let spawnedArgs: readonly string[] = [];
+    const isolatedProcessManager = new ProcessManager((_command, args) => {
+      spawnedArgs = [...args];
+      return fakeChild;
+    });
+    await isolatedProcessManager.start(crashedRow);
+    fakeStderr.write('模拟崩溃输出');
+    fakeChild.emit('exit', 1, null);
+    assert.equal(spawnedArgs.includes('-Dconfig=C:\\Minecraft Server\\config.json'), true);
+    assert.equal(isolatedProcessManager.getStatus(crashedInstance.id), 'crashed');
+    assert.match(isolatedProcessManager.getHistory(crashedInstance.id), /模拟崩溃输出/);
+    assert.match(isolatedProcessManager.getHistory(crashedInstance.id), /code=1/);
+    assert.equal(isolatedProcessManager.getRunningCount(), 0);
+    deleteInstance(crashedInstance.id);
 
     const setup = await app.inject({
       method: 'POST',

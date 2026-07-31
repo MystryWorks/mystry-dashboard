@@ -15,7 +15,7 @@ import {
   getInstanceDir,
   resolveSafePath,
 } from '../utils/path.js';
-import { runBackgroundTask } from './task-service.js';
+import { recordTaskInstance, runBackgroundTask } from './task-service.js';
 import { assertUploadPath } from './upload-service.js';
 import { removeUploadTemp } from './upload-service.js';
 
@@ -294,7 +294,7 @@ export async function importZipPackage(options: {
   acceptEula?: boolean;
 }) {
   const zipPath = assertUploadPath(options.zipPath);
-  return runBackgroundTask('import', '正在导入安装包…', async (_id, signal, report) => {
+  return runBackgroundTask('import', '正在导入安装包…', async (taskId, signal, report) => {
     let instanceId: string | null = null;
     let staging: string | null = null;
     let completed = false;
@@ -307,6 +307,7 @@ export async function importZipPackage(options: {
         acceptEula: options.acceptEula,
       });
       instanceId = instance.id;
+      recordTaskInstance(taskId, instance.id);
       const dir = getInstanceDir(instance.id);
       staging = path.join(config.uploadDir, `.extract-${Date.now()}-${instance.id}`);
       fs.mkdirSync(staging, { recursive: true });

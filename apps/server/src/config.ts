@@ -54,10 +54,28 @@ function parseSecret(name: string, required: boolean): string | null {
   return value;
 }
 
+export function assertDistinctSecrets(entries: ReadonlyArray<readonly [string, string | null]>): void {
+  const configured = entries.filter((entry): entry is readonly [string, string] => entry[1] !== null);
+  for (let index = 0; index < configured.length; index += 1) {
+    for (let otherIndex = index + 1; otherIndex < configured.length; otherIndex += 1) {
+      const current = configured[index]!;
+      const other = configured[otherIndex]!;
+      if (current[1].toLowerCase() === other[1].toLowerCase()) {
+        throw new Error(`${current[0]} 与 ${other[0]} 必须使用不同的随机值`);
+      }
+    }
+  }
+}
+
 const host = process.env.HOST || '127.0.0.1';
 const jwtSecret = parseSecret('JWT_SECRET', true)!;
 const setupToken = parseSecret('SETUP_TOKEN', false);
 const launcherToken = parseSecret('LAUNCHER_TOKEN', false);
+assertDistinctSecrets([
+  ['JWT_SECRET', jwtSecret],
+  ['SETUP_TOKEN', setupToken],
+  ['LAUNCHER_TOKEN', launcherToken],
+]);
 
 export const config = {
   host,

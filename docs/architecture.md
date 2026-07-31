@@ -83,7 +83,7 @@ minecraft-mystery-dashboard/
 ### 入口 `apps/server/src/index.ts`
 
 - 注册 CORS、JWT、multipart、WebSocket、静态资源。
-- 挂载路由：`auth`、`instances`、`files`、`cores`、`console`、`system`、`nodes`。
+- 挂载路由：`auth`、`instances`、`files`、`cores`、`console`、`system`、`nodes`、`launcher`。
 - 健康检查：`GET /api/health`。
 
 ### 路由层 `apps/server/src/routes/`
@@ -97,8 +97,9 @@ minecraft-mystery-dashboard/
 | `console.ts` | `/api/instances/:id/console-ticket`、`/ws/console/:id` | 控制台 ticket 与 WebSocket |
 | `system.ts` | `/api/system/java` | PATH `java` 状态检测 |
 | `nodes.ts` | `/api/nodes/*` | 本机/远程节点列表与管理（阶段一） |
+| `launcher.ts` | `/api/launcher/shutdown` | PanelManager 本机令牌关闭通道 |
 
-除 `auth/status`、`auth/setup`、`auth/login` 与健康检查外，业务路由经 `authenticate` 校验 JWT。`auth/setup` 另需 `X-Setup-Token`，且只在用户表为空时有效。
+除 `auth/status`、`auth/setup`、`auth/login`、健康检查与本机 launcher 关闭通道外，业务路由经 `authenticate` 校验 JWT。`auth/setup` 另需 `X-Setup-Token`，且只在用户表为空时有效；launcher 关闭通道只接受回环地址与有效 `X-Launcher-Token`。
 
 ### 服务层 `apps/server/src/services/`
 
@@ -106,12 +107,12 @@ minecraft-mystery-dashboard/
 |------|------|
 | `auth-service` | bcrypt 密码、单用户 setup |
 | `instance-service` | 实例 CRUD、托管目录接管，与 DB 同步 |
-| `process-manager` | 使用 PATH `java` 的 `spawn`、缓冲输出、启停重启 |
+| `process-manager` | 使用 PATH `java` 的 `spawn`、参数解析、缓冲输出、启停重启与终态快照 |
 | `file-service` | 实例根目录路径规范化、防目录逃逸 |
 | `config-service` | `server.properties` 解析与写入 |
 | `core-depot` | Vanilla / Paper / Fabric 下载与部署任务 |
 | `import-service` | zip 解压导入到托管实例目录 |
-| `task-service` | 异步任务状态与进度 |
+| `task-service` | 内存任务调度、持久化状态、启动中断收敛与半成品清理 |
 | `java-detect` | 执行 `java -version` 并返回可用状态与版本 |
 | `node-service` | 节点 CRUD、密钥哈希；远程创建受 `REMOTE_NODE_CREATION_ENABLED` 控制 |
 | `node-registry` | 节点在线态 / 心跳（内存；Agent 接入前本机恒为 online） |
@@ -153,6 +154,8 @@ DATA_DIR/
 - 子进程引用
 - 状态（与前端 `InstanceStatus` 一致）
 - 受 `MAX_CONSOLE_BUFFER_BYTES` 限制的环形文本缓冲
+
+子进程退出后，活动进程引用会释放，但 `stopped` / `crashed` 终态和最后一段受限控制台历史会保留到下一次启动或实例删除，供页面刷新和 WebSocket 重连读取。
 
 普通 jar 的启动命令形态：
 
@@ -201,7 +204,7 @@ java <jvmArgs...> -jar <jarFile> nogui
 
 下载文件可缓存在 `DATA_DIR/cache/cores/` 以减少重复拉取；下载大小和超时受对应环境变量限制。
 
-核心缓存下载先写入临时文件，完整下载并通过校验后才原子发布到最终缓存路径，失败、取消或超时不会留下可复用的部分文件。部署 / 导入任务由并发槽位和等待队列调度，队列满时拒绝新任务；任务执行超过配置的超时会被取消，Installer 结束时先等待 `INSTALLER_KILL_GRACE_MS` 再强制结束。
+核心缓存下载先写入临时文件，完整下载并通过校验后才原子发布到最终缓存路径，失败、取消或超时不会留下可复用的部分文件。部署 / 导入任务由并发槽位和等待队列调度，队列满时拒绝新任务；任务执行超过配置的超时会被取消，Installer 结束时先等待 `INSTALLER_KILL_GRACE_MS` 再强制结束。任务 worker 不跨进程恢复；启动时遗留的 `pending` / `running` 会转为失败，并尝试删除任务已关联的半成品实例。
 
 HTTP 请求与上传还有总请求、连接、keep-alive 和上传空闲超时。上传大小超限返回 413，上传并发容量或任务队列耗尽返回 429。实例文件下载受 `MAX_CONCURRENT_FILE_DOWNLOADS=4` 并发槽位限制，容量耗尽返回 429；`FILE_DOWNLOAD_IDLE_TIMEOUT_MS=60000` 空闲超时会关闭下载并释放槽位。控制台 transport、并发连接、命令速率、stdin 待处理输入和历史输出均有独立字节 / 数量上限。
 

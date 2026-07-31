@@ -8,6 +8,7 @@ import type { InstanceRow } from '../db.js';
 import { config } from '../config.js';
 import { assertSafeInstanceRoot, resolveDirFromRow, resolveSafePath } from '../utils/path.js';
 import { getMinecraftChildEnv } from '../utils/child-env.js';
+import { parseJvmArgs, serializeJvmArgFile } from '../utils/jvm-args.js';
 
 type ResourceLimits = {
   maxCommandBytes: number;
@@ -29,6 +30,14 @@ type ManagedProcess = {
   stdinAvailable: boolean;
   stdinBackpressured: boolean;
 };
+
+type ProcessSnapshot = Pick<ManagedProcess, 'status' | 'buffer' | 'bufferBytes'>;
+
+export type MinecraftProcessSpawner = (
+  command: string,
+  args: readonly string[],
+  options: { cwd: string; env: NodeJS.ProcessEnv; windowsHide: boolean },
+) => ChildProcessWithoutNullStreams;
 
 export type StdinSafetyState = Pick<ManagedProcess, 'stdinAvailable' | 'stdinBackpressured'>;
 
@@ -75,13 +84,25 @@ function takeUtf8Suffix(text: string, maxBytes: number): string {
  */
 export class ProcessManager extends EventEmitter {
   private processes = new Map<string, ManagedProcess>();
+  private snapshots = new Map<string, ProcessSnapshot>();
+
+  constructor(
+    private readonly spawnMinecraft: MinecraftProcessSpawner = (command, args, options) =>
+      spawn(command, args, options),
+  ) {
+    super();
+  }
 
   getStatus(instanceId: string): InstanceStatus {
-    return this.processes.get(instanceId)?.status ?? 'stopped';
+    return this.processes.get(instanceId)?.status
+      ?? this.snapshots.get(instanceId)?.status
+      ?? 'stopped';
   }
 
   getBuffer(instanceId: string): string[] {
-    return [...(this.processes.get(instanceId)?.buffer ?? [])];
+    return [...(this.processes.get(instanceId)?.buffer
+      ?? this.snapshots.get(instanceId)?.buffer
+      ?? [])];
   }
 
   isRunning(instanceId: string): boolean {
@@ -106,7 +127,7 @@ export class ProcessManager extends EventEmitter {
       fs.writeFileSync(eulaPath, 'eula=true\n', 'utf8');
     }
 
-    const jvmArgs = instance.jvm_args.trim().split(/\s+/).filter(Boolean);
+    const jvmArgs = parseJvmArgs(instance.jvm_args);
     let args: string[];
 
     // Forge / NeoForge：使用 @user_jvm_args.txt + @xxx_args.txt
@@ -119,7 +140,7 @@ export class ProcessManager extends EventEmitter {
       const safeArgsRel = path.relative(cwd, argsAbs).replace(/\\/g, '/');
       // 同步 JVM 参数到 user_jvm_args.txt
       const userJvm = resolveSafePath(cwd, 'user_jvm_args.txt');
-      fs.writeFileSync(userJvm, `${jvmArgs.join('\n')}\n`, 'utf8');
+      fs.writeFileSync(userJvm, `${serializeJvmArgFile(jvmArgs)}\n`, 'utf8');
       // Forge 官方 run 脚本使用相对路径的 @argfile
       args = ['@user_jvm_args.txt', `@${safeArgsRel}`, 'nogui'];
     } else if (instance.jar_file === '@modloader') {
@@ -133,7 +154,7 @@ export class ProcessManager extends EventEmitter {
       args = [...jvmArgs, '-jar', safeJarRel, 'nogui'];
     }
 
-    const child = spawn('java', args, {
+    const child = this.spawnMinecraft('java', args, {
       cwd,
       env: getMinecraftChildEnv(),
       windowsHide: true,
@@ -148,6 +169,7 @@ export class ProcessManager extends EventEmitter {
       stdinBackpressured: false,
     };
     registerStdinSafetyHandlers(child.stdin, managed);
+    this.snapshots.delete(instance.id);
     this.processes.set(instance.id, managed);
     this.emitStatus(instance.id, 'starting');
 
@@ -166,23 +188,21 @@ export class ProcessManager extends EventEmitter {
     });
 
     child.on('error', (err) => {
+      if (this.processes.get(instance.id) !== managed) return;
       this.appendOutput(instance.id, `\n[面板] 进程启动失败：${err.message}\n`);
-      managed.status = 'crashed';
-      this.emitStatus(instance.id, 'crashed');
-      this.processes.delete(instance.id);
+      this.archiveProcess(instance.id, managed, 'crashed');
     });
 
     child.on('exit', (code, signal) => {
       const current = this.processes.get(instance.id);
       if (!current) return;
       const wasStopping = current.status === 'stopping';
-      current.status = wasStopping ? 'stopped' : 'crashed';
+      const status = wasStopping ? 'stopped' : 'crashed';
       this.appendOutput(
         instance.id,
         `\n[面板] 进程已退出 code=${code ?? 'null'} signal=${signal ?? 'null'}\n`,
       );
-      this.emitStatus(instance.id, current.status);
-      this.processes.delete(instance.id);
+      this.archiveProcess(instance.id, current, status);
     });
   }
 
@@ -304,6 +324,29 @@ export class ProcessManager extends EventEmitter {
 
   getHistory(instanceId: string): string {
     return this.getBuffer(instanceId).join('');
+  }
+
+  /** 实例记录删除后同步清理当前进程内保留的终态与控制台历史。 */
+  forget(instanceId: string): void {
+    if (this.processes.has(instanceId)) {
+      throw new Error('运行中的实例不能清理进程状态');
+    }
+    this.snapshots.delete(instanceId);
+  }
+
+  private archiveProcess(
+    instanceId: string,
+    managed: ManagedProcess,
+    status: Extract<InstanceStatus, 'stopped' | 'crashed'>,
+  ): void {
+    managed.status = status;
+    this.emitStatus(instanceId, status);
+    this.processes.delete(instanceId);
+    this.snapshots.set(instanceId, {
+      status,
+      buffer: [...managed.buffer],
+      bufferBytes: managed.bufferBytes,
+    });
   }
 
   private appendOutput(instanceId: string, text: string | Buffer): void {

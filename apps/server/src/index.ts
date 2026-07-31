@@ -23,7 +23,11 @@ import {
 } from './routes/launcher.js';
 import { processManager } from './services/process-manager.js';
 import { createRateLimitHook } from './services/security-service.js';
-import { getTaskActivity, shutdownTasks } from './services/task-service.js';
+import {
+  getTaskActivity,
+  recoverInterruptedTasks,
+  shutdownTasks,
+} from './services/task-service.js';
 
 export type BuildAppOptions = LauncherRouteOptions & {
   isShuttingDown?: () => boolean;
@@ -31,6 +35,7 @@ export type BuildAppOptions = LauncherRouteOptions & {
 
 export async function buildApp(options: BuildAppOptions = {}) {
   initDb();
+  const taskRecovery = recoverInterruptedTasks();
 
   const app = Fastify({
     logger: true,
@@ -40,6 +45,9 @@ export async function buildApp(options: BuildAppOptions = {}) {
     keepAliveTimeout: config.httpKeepAliveTimeoutMs,
     ajv: { customOptions: { removeAdditional: false } },
   });
+  if (taskRecovery.interrupted > 0) {
+    app.log.warn(taskRecovery, '已将上次面板进程遗留的任务标记为失败');
+  }
 
   await app.register(cors, { origin: config.corsOrigins, credentials: true });
   await app.register(jwt, {

@@ -60,7 +60,7 @@ node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"
 | `MAX_QUEUED_TASKS` | `2` | 等待执行的任务数上限 |
 | `TASK_TIMEOUT_MS` | `1800000` | 单个任务超时，30 分钟 |
 
-部署和导入任务受并发数与队列数共同限制。达到 `MAX_CONCURRENT_TASKS` 后，新任务会进入 `pending` 排队；队列已满时请求返回 **429**。任务开始执行后，超过 `TASK_TIMEOUT_MS` 会失败并清理；前端应持续显示并轮询 `pending` / `running` 状态，不能把排队误判为失败。
+部署和导入任务受并发数与队列数共同限制。达到 `MAX_CONCURRENT_TASKS` 后，新任务会进入 `pending` 排队；队列已满时请求返回 **429**。任务开始执行后，超过 `TASK_TIMEOUT_MS` 会失败并清理；前端应持续显示并轮询 `pending` / `running` 状态，不能把排队误判为失败。任务 worker 仍位于内存中，面板重启不会断点续跑；启动时会把遗留任务标记为失败，并尝试清理任务已创建的半成品实例。
 
 文件下载受 `MAX_CONCURRENT_FILE_DOWNLOADS` 限制；并发槽位已满时文件下载请求返回 **429**。下载在 `FILE_DOWNLOAD_IDLE_TIMEOUT_MS` 时间内无数据活动会被关闭，并释放占用的下载并发资源。
 

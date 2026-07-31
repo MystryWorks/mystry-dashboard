@@ -179,6 +179,16 @@ Authorization: Bearer <token>
 { "type": "command", "data": "say hello" }
 ```
 
+## PanelManager 本机关闭
+
+`POST /api/launcher/shutdown` 只供仓库根目录的 PanelManager 调用，不使用登录 JWT。请求必须来自回环地址并携带：
+
+```http
+X-Launcher-Token: <LAUNCHER_TOKEN>
+```
+
+有效请求返回 **202**，响应包含 `accepted`、运行实例数、运行/排队任务数和是否已经处于关闭过程。令牌无效返回 401，非本机来源返回 403，当前启动方式未提供安全关闭回调时返回 503。该接口使用独立限流，并在响应发送完成后开始停止任务、Minecraft 实例、HTTP 服务和数据库。
+
 ## 节点 `/api/nodes`
 
 阶段一仅保证本机节点 `local` 可用。远程节点创建由共享常量 `REMOTE_NODE_CREATION_ENABLED` 控制，当前为关闭。

@@ -190,15 +190,20 @@ export function deleteInstance(id: string): void {
   if (!row) return;
   if (row.install_path !== null) {
     getDb().prepare('DELETE FROM instances WHERE id = ?').run(id);
+    processManager.forget(id);
     return;
   }
   const dir = defaultInstanceDir(row.id);
   const canRemoveDirectory = hasValidOwnershipMarker(row);
-  getDb().prepare('DELETE FROM instances WHERE id = ?').run(id);
   if (canRemoveDirectory && fs.existsSync(dir)) {
     assertSafeInstanceRoot(dir);
     fs.rmSync(dir, { recursive: true, force: true });
   }
+  const result = getDb().prepare('DELETE FROM instances WHERE id = ?').run(id);
+  if (Number(result.changes) !== 1) {
+    throw new Error('删除实例失败：数据库记录未删除');
+  }
+  processManager.forget(id);
 }
 
 /** 接管同一实例 ID 对应的默认目录，不读取或操作旧的外部目录。 */

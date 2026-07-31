@@ -3,6 +3,7 @@ import type { TaskInfo } from '@mmd/shared';
 import { config } from '../config.js';
 import { getDb, type TaskRow } from '../db.js';
 import { nowIso } from '../utils/path.js';
+import { deleteInstance, getInstanceRow } from './instance-service.js';
 
 export class TaskCapacityError extends Error {
   readonly code = 'TASK_CAPACITY';
@@ -118,6 +119,66 @@ export function updateTask(
       id,
     );
   return getTask(id)!;
+}
+
+/** 记录任务创建的实例，使面板重启后可以清理未完成的部署或导入。 */
+export function recordTaskInstance(taskId: string, instanceId: string): TaskInfo {
+  return updateTask(taskId, { result: { instanceId } });
+}
+
+export type InterruptedTaskRecovery = {
+  interrupted: number;
+  cleanedInstances: number;
+  cleanupFailures: number;
+};
+
+/**
+ * 内存 worker 无法跨面板进程恢复；启动时把遗留任务收敛为失败终态，
+ * 并尽可能清理任务已经创建的半成品实例。
+ */
+export function recoverInterruptedTasks(): InterruptedTaskRecovery {
+  const rows = getDb()
+    .prepare("SELECT * FROM tasks WHERE status IN ('pending', 'running') ORDER BY created_at")
+    .all() as TaskRow[];
+  let cleanedInstances = 0;
+  let cleanupFailures = 0;
+  const update = getDb().prepare(
+    `UPDATE tasks
+     SET status = 'failed', message = '已中断', error = ?, result_json = ?, updated_at = ?
+     WHERE id = ?`,
+  );
+
+  for (const row of rows) {
+    let instanceId: string | null = null;
+    if (row.result_json) {
+      try {
+        const result = JSON.parse(row.result_json) as { instanceId?: unknown };
+        if (typeof result.instanceId === 'string' && result.instanceId) {
+          instanceId = result.instanceId;
+        }
+      } catch {
+        // 无效的旧结果不阻止任务状态恢复，原始内容会保留以便排查。
+      }
+    }
+
+    let cleanupError: string | null = null;
+    if (instanceId && getInstanceRow(instanceId)) {
+      try {
+        deleteInstance(instanceId);
+        cleanedInstances += 1;
+      } catch (error) {
+        cleanupFailures += 1;
+        cleanupError = error instanceof Error ? error.message : String(error);
+      }
+    }
+
+    const error = cleanupError
+      ? `面板重启，内存任务无法恢复；半成品实例清理失败：${cleanupError}`
+      : '面板重启，内存任务无法恢复，请重新提交';
+    update.run(error, cleanupError ? row.result_json : null, nowIso(), row.id);
+  }
+
+  return { interrupted: rows.length, cleanedInstances, cleanupFailures };
 }
 
 function abortError(signal: AbortSignal): Error {
