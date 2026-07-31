@@ -1,11 +1,21 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { TaskInfo } from '@mmd/shared';
 import { api, pollTask } from '../api';
 import { LazyScrollSelect } from '../components/LazyScrollSelect';
 import { JavaEnvironmentStatus } from '../components/PathFields';
+import '../deploy-error.css';
 
 type CoreType = 'paper' | 'fabric' | 'vanilla' | 'forge' | 'neoforge';
+
+// 页面只保留紧凑摘要，完整错误交给受限尺寸的详情弹窗展示。
+const ERROR_PREVIEW_MAX_LENGTH = 240;
+
+function createErrorPreview(message: string): string {
+  const normalized = message.replace(/\s+/g, ' ').trim();
+  if (normalized.length <= ERROR_PREVIEW_MAX_LENGTH) return normalized;
+  return `${normalized.slice(0, ERROR_PREVIEW_MAX_LENGTH - 1)}…`;
+}
 
 export function DeployPage() {
   const navigate = useNavigate();
@@ -32,6 +42,39 @@ export function DeployPage() {
   const [error, setError] = useState('');
   const [progress, setProgress] = useState<TaskInfo | null>(null);
   const [busy, setBusy] = useState(false);
+  const [showErrorDetails, setShowErrorDetails] = useState(false);
+  const [copyStatus, setCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
+  const errorDialogRef = useRef<HTMLDialogElement>(null);
+  const errorPreview = useMemo(() => createErrorPreview(error), [error]);
+  const hasErrorDetails = error.includes('\n') || error.length > ERROR_PREVIEW_MAX_LENGTH;
+
+  useEffect(() => {
+    const dialog = errorDialogRef.current;
+    if (!dialog) return;
+    if (showErrorDetails && !dialog.open) dialog.showModal();
+    else if (!showErrorDetails && dialog.open) dialog.close();
+  }, [showErrorDetails]);
+
+  useEffect(() => {
+    if (error) return;
+    setShowErrorDetails(false);
+    setCopyStatus('idle');
+  }, [error]);
+
+  useEffect(() => {
+    if (copyStatus === 'idle') return;
+    const timer = window.setTimeout(() => setCopyStatus('idle'), 2_000);
+    return () => window.clearTimeout(timer);
+  }, [copyStatus]);
+
+  async function copyError(): Promise<void> {
+    try {
+      await navigator.clipboard.writeText(error);
+      setCopyStatus('copied');
+    } catch {
+      setCopyStatus('failed');
+    }
+  }
 
   function resetDependentFields() {
     setVersions([]);
@@ -278,7 +321,6 @@ export function DeployPage() {
           自动接受 Mojang EULA（eula=true）
         </label>
 
-        {error && <p className="error">{error}</p>}
         {progress && (
           <div style={{ marginBottom: '1rem' }}>
             <div className="muted">
@@ -288,6 +330,83 @@ export function DeployPage() {
               <span style={{ width: `${progress.progress}%` }} />
             </div>
           </div>
+        )}
+        {error && (
+          <section className="error-summary" role="alert" aria-labelledby="deploy-error-title">
+            <div className="error-summary-content">
+              <strong id="deploy-error-title">部署失败</strong>
+              <p>{errorPreview}</p>
+            </div>
+            <div className="error-summary-actions">
+              <button className="btn btn-ghost" type="button" onClick={() => void copyError()}>
+                {copyStatus === 'copied'
+                  ? '已复制'
+                  : copyStatus === 'failed'
+                    ? '复制失败'
+                    : '复制错误'}
+              </button>
+              {hasErrorDetails && (
+                <button
+                  className="btn btn-ghost"
+                  type="button"
+                  onClick={() => setShowErrorDetails(true)}
+                >
+                  查看详情
+                </button>
+              )}
+            </div>
+          </section>
+        )}
+
+        {error && (
+          <dialog
+            ref={errorDialogRef}
+            className="error-dialog"
+            aria-labelledby="error-dialog-title"
+            onClose={() => setShowErrorDetails(false)}
+            onCancel={(event) => {
+              event.preventDefault();
+              setShowErrorDetails(false);
+            }}
+            onKeyDown={(event) => {
+              if (event.key !== 'Escape') return;
+              event.preventDefault();
+              setShowErrorDetails(false);
+            }}
+            onMouseDown={(event) => {
+              if (event.target === event.currentTarget) setShowErrorDetails(false);
+            }}
+          >
+            <div className="error-dialog-panel">
+              <header className="error-dialog-header">
+                <div>
+                  <h2 id="error-dialog-title">部署错误详情</h2>
+                  <p>完整错误内容，可复制后用于排查。</p>
+                </div>
+                <button
+                  className="btn btn-ghost"
+                  type="button"
+                  aria-label="关闭错误详情"
+                  onClick={() => setShowErrorDetails(false)}
+                >
+                  关闭
+                </button>
+              </header>
+              <pre className="error-dialog-output">{error}</pre>
+              <footer className="error-dialog-footer">
+                <span className="muted" aria-live="polite">
+                  {copyStatus === 'copied'
+                    ? '错误内容已复制到剪贴板'
+                    : copyStatus === 'failed'
+                      ? '复制失败，请在内容区域中手动选择复制'
+                      : ''}
+                </span>
+                <button className="btn" type="button" onClick={() => void copyError()}>
+                  {copyStatus === 'copied' ? '已复制' : '复制全部'}
+                </button>
+              </footer>
+            </div>
+          </dialog>
         )}
 
         <button
