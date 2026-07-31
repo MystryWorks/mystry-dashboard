@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useAuth } from '../auth';
 
 export function LoginPage() {
-  const { needsSetup, login, setup } = useAuth();
+  const { needsSetup, statusError, login, setup, refresh } = useAuth();
   const [username, setUsername] = useState('admin');
   const [password, setPassword] = useState('');
   const [setupToken, setSetupToken] = useState('');
@@ -21,6 +21,20 @@ export function LoginPage() {
     } finally {
       setBusy(false);
     }
+  }
+
+  if (statusError) {
+    return (
+      <div className="login-page">
+        <div className="panel login-card">
+          <h1 className="page-title">面板服务不可用</h1>
+          <p className="error">{statusError}</p>
+          <button className="btn" type="button" onClick={() => void refresh()}>
+            重新检查
+          </button>
+        </div>
+      </div>
+    );
   }
 
   return (

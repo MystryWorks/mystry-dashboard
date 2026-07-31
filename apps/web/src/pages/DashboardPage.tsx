@@ -58,20 +58,30 @@ export function DashboardPage() {
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap' }}>
+      <header className="dashboard-header">
         <div>
           <h1 className="page-title">实例总览</h1>
           <p className="page-desc">管理本机 Minecraft 服务端进程。</p>
         </div>
-        <div className="btn-row">
-          <Link className="btn" to="/deploy">
-            一键部署
+        <nav className="dashboard-actions" aria-label="创建实例">
+          <Link className="quick-action quick-action-primary" to="/deploy">
+            <span className="quick-action-icon" aria-hidden="true">＋</span>
+            <span className="quick-action-copy">
+              <strong>一键部署</strong>
+              <small>在线选择服务端核心</small>
+            </span>
+            <span className="quick-action-arrow" aria-hidden="true">›</span>
           </Link>
-          <Link className="btn btn-ghost" to="/import">
-            导入安装包
+          <Link className="quick-action" to="/import">
+            <span className="quick-action-icon" aria-hidden="true">⇩</span>
+            <span className="quick-action-copy">
+              <strong>导入安装包</strong>
+              <small>从本地 ZIP 创建实例</small>
+            </span>
+            <span className="quick-action-arrow" aria-hidden="true">›</span>
           </Link>
-        </div>
-      </div>
+        </nav>
+      </header>
 
       {error && <p className="error">{error}</p>}
 
