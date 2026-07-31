@@ -16,6 +16,7 @@ Minecraft Mystery Dashboard 是一套单机一体的 Minecraft **服务端**管�
 | [架构设计](architecture.md) | Monorepo 结构、模块职责与数据流 |
 | [API 参考](api.md) | REST / WebSocket 接口说明 |
 | [开发指南](development.md) | 本地开发、构建与扩展建议 |
+| [AI 项目知识库](ai/README.md) | AI 开发事实、决策、防错流程与验证门禁 |
 
 ## 社区与开源
 

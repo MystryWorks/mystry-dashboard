@@ -149,7 +149,7 @@ minecraft-mystery-dashboard/
 - 默认只监听本机回环地址；若对外暴露，请使用 HTTPS、限制来源并使用强随机密钥。
 - 面板具备实例文件读写与进程执行能力，等同于本机高权限工具，请勿暴露给不可信网络。
 - `JWT_SECRET`、`SETUP_TOKEN` 不得提交到仓库；setup 完成后应移除 `SETUP_TOKEN`。
-- `JWT_SECRET` 与 `SETUP_TOKEN` 必须是两个不同的 64 位十六进制随机值。
+- `JWT_SECRET`、`SETUP_TOKEN` 与已配置的 `LAUNCHER_TOKEN` 必须使用互不相同的 64 位十六进制随机值。
 - 文件与 zip 解压均做了路径逃逸防护，仍请遵守最小暴露原则。
 - 发现安全问题请按 [SECURITY.md](SECURITY.md) 私下报告，勿直接公开 Issue。
 
@@ -165,6 +165,7 @@ minecraft-mystery-dashboard/
 | [docs/architecture.md](docs/architecture.md) | 模块结构与数据流 |
 | [docs/api.md](docs/api.md) | REST / WebSocket API |
 | [docs/development.md](docs/development.md) | 扩展开发与构建流程 |
+| [docs/ai/README.md](docs/ai/README.md) | AI 开发事实、决策、防错流程与验证门禁 |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | 贡献流程与约定 |
 | [SECURITY.md](SECURITY.md) | 安全漏洞披露 |
 | [CHANGELOG.md](CHANGELOG.md) | 版本变更记录 |
