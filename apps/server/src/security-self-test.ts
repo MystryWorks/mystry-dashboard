@@ -41,6 +41,7 @@ async function main(): Promise<void> {
   process.env.JWT_SECRET = 'a'.repeat(64);
   process.env.SETUP_TOKEN = 'b'.repeat(64);
   process.env.LAUNCHER_TOKEN = 'c'.repeat(64);
+  process.env.MMD_PROCESS_FINGERPRINT = 'security-self-test';
   process.env.MAX_CONCURRENT_UPLOADS = '1';
   process.env.MAX_UPLOAD_BYTES = '256';
   process.env.MAX_CONCURRENT_FILE_DOWNLOADS = '1';
@@ -75,6 +76,9 @@ async function main(): Promise<void> {
   });
   const testRoot = fs.mkdtempSync(path.join(config.uploadDir, '.security-self-test-'));
   try {
+    const health = await app.inject({ method: 'GET', url: '/api/health' });
+    assert.equal(health.statusCode, 200);
+    assert.equal(health.json<{ processFingerprint: string }>().processFingerprint, 'security-self-test');
     assert.throws(() => resolveSafePath(testRoot, '../outside'), /非法路径/);
     assert.equal(getMinecraftChildEnv().JWT_SECRET, undefined);
 

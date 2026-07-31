@@ -3,11 +3,24 @@ import { fileURLToPath } from 'node:url';
 import dotenv from 'dotenv';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-// 从仓库根目录加载 .env
-dotenv.config({ path: path.resolve(__dirname, '../../../.env') });
-
 const repoRoot = path.resolve(__dirname, '../../..');
-const dataDir = path.resolve(repoRoot, process.env.DATA_DIR || 'data');
+
+function resolveFromHome(value: string, homeDir: string): string {
+  return path.isAbsolute(value) ? path.resolve(value) : path.resolve(homeDir, value);
+}
+
+const configuredHome = process.env.MMD_HOME?.trim();
+const homeDir = configuredHome ? path.resolve(configuredHome) : repoRoot;
+const configuredConfigPath = process.env.MMD_CONFIG_PATH?.trim();
+const configPath = configuredConfigPath
+  ? resolveFromHome(configuredConfigPath, homeDir)
+  : path.join(homeDir, configuredHome ? 'config' : '', configuredHome ? 'panel.env' : '.env');
+
+// 开发模式默认读取仓库 .env；便携包由 mmdctl 指向 config/panel.env。
+dotenv.config({ path: configPath });
+
+const configuredDataDir = process.env.MMD_DATA_DIR?.trim() || process.env.DATA_DIR?.trim() || 'data';
+const dataDir = resolveFromHome(configuredDataDir, homeDir);
 
 function parsePositiveInt(name: string, fallback: number): number {
   const value = Number(process.env[name] || fallback);
@@ -55,7 +68,10 @@ export const config = {
   jwtExpiresIn: process.env.JWT_EXPIRES_IN?.trim() || '2h',
   corsOrigins: parseOrigins(),
   repoRoot,
+  homeDir,
+  configPath,
   dataDir,
+  processFingerprint: process.env['MMD_PROCESS_FINGERPRINT']?.trim() || null,
   dbPath: path.join(dataDir, 'panel.db'),
   instancesDir: path.join(dataDir, 'instances'),
   cacheDir: path.join(dataDir, 'cache', 'cores'),

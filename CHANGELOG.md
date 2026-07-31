@@ -8,9 +8,15 @@
 
 - 开源仓库文档：`LICENSE`、`CONTRIBUTING.md`、`SECURITY.md`、`CODE_OF_CONDUCT.md`
 - GitHub Issue / Pull Request 模板
+- 五目标便携包构建：Windows x64、Linux x64 / ARM64、macOS Intel / Apple Silicon。
+- 跨平台 `mmdctl`，提供后台启停、前台运行、PID 指纹、健康检查、状态、日志和浏览器打开命令。
+- 最终压缩包冒烟测试、文件级 `manifest.json`、SHA-256、CycloneDX SBOM 和 GitHub Preview Release 流水线。
 
 ### Changed
 
+- 版本进入 `0.2.0-preview.1`；便携包内置固定 Node.js 22 和生产依赖，Java 暂继续使用系统 `PATH`。
+- 运行布局新增 `MMD_HOME`、`MMD_CONFIG_PATH`、`MMD_DATA_DIR`，配置与数据不再绑定源码仓库目录。
+- 升级生产依赖并移除未使用的 `adm-zip`，公开发布门禁拒绝 high / critical 生产依赖漏洞。
 - 实例统一托管在 `DATA_DIR/instances/<id>`，移除自定义实例目录和全盘目录浏览约定。
 - 所有实例进程固定使用 PATH 中的 `java`；Java 接口仅返回可用状态和版本。
 - 首次初始化要求两个互不相同的 64 位十六进制 `JWT_SECRET` 与 `SETUP_TOKEN`，setup 使用 `X-Setup-Token` header，且仅在用户表为空时可用。
@@ -20,6 +26,10 @@
 - 上传超限返回 413，上传容量耗尽返回 429；核心缓存改为完整文件校验后原子发布，任务支持排队并受执行超时保护。
 - 文件下载增加 `MAX_CONCURRENT_FILE_DOWNLOADS=4` 与 `FILE_DOWNLOAD_IDLE_TIMEOUT_MS=60000`；并发容量耗尽返回 429，下载空闲超时会释放下载资源。
 - 控制台增加 `MAX_CONSOLE_CONNECTIONS=20`、每 `CONSOLE_COMMAND_WINDOW_MS=60000` 毫秒最多 `MAX_CONSOLE_COMMANDS_PER_WINDOW=60` 条命令、`MAX_CONSOLE_INCOMING_BYTES=4352` 字节入站消息和 `MAX_CONSOLE_STDIN_BYTES=65536` 字节 stdin 缓冲限制；Installer 取消后按 `INSTALLER_KILL_GRACE_MS=5000` 毫秒宽限期再强制结束。
+
+### Security
+
+- 2026-07-30 官方 registry 生产依赖审计为 0 critical、0 high、2 moderate；React Router 6 的两项 moderate 公告已作为 Preview 残余风险记录。
 
 ## [0.1.0] - 2026-07-26
 

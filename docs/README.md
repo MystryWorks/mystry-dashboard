@@ -8,6 +8,7 @@ Minecraft Mystery Dashboard 是一套单机一体的 Minecraft **服务端**管�
 
 | 文档 | 说明 |
 |------|------|
+| [便携预览版](portable-release.md) | 五平台下载、校验、启停、升级、数据保留与已知限制 |
 | [快速开始](getting-started.md) | 环境要求、安装、开发与生产部署 |
 | [分步教程](tutorials.md) | **推荐新手**：从零开服、导入、联机、模组服、备份 |
 | [使用指南](user-guide.md) | 界面导览、字段说明、常见问题 |
@@ -60,4 +61,4 @@ minecraft-mystery-dashboard/
 
 ## 版本
 
-当前包版本：`0.1.0`（见根目录 `package.json`）。完整变更见 [CHANGELOG.md](../CHANGELOG.md)。
+当前包版本：`0.2.0-preview.1`（见根目录 `package.json`）。完整变更见 [CHANGELOG.md](../CHANGELOG.md)。

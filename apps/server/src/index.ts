@@ -106,6 +106,9 @@ export async function buildApp(options: BuildAppOptions = {}) {
   app.get('/api/health', async () => ({
     ok: true,
     service: 'minecraft-mystery-dashboard',
+    ...(config.processFingerprint
+      ? { processFingerprint: config.processFingerprint }
+      : {}),
   }));
 
   // 生产环境托管前端构建产物

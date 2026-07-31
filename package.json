@@ -1,7 +1,7 @@
 {
   "name": "minecraft-mystery-dashboard",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0-preview.1",
   "description": "单机一体的 Minecraft 服务端 Web 管理面板",
   "license": "MIT",
   "keywords": [
@@ -25,9 +25,19 @@
     "dev:web": "npm run dev -w @mmd/web",
     "build": "npm run build -w @mmd/shared && npm run build -w @mmd/server && npm run build -w @mmd/web",
     "typecheck": "npm run typecheck -w @mmd/shared && npm run typecheck -w @mmd/server && npm run typecheck -w @mmd/web",
+    "verify": "npm run portable:test && npm run build -w @mmd/shared && npm run typecheck && npm run test:security -w @mmd/server && npm run build",
+    "audit:production": "node scripts/check-production-audit.mjs",
+    "portable:package": "node scripts/portable/package-portable.mjs",
+    "portable:smoke": "node scripts/portable/smoke-portable.mjs",
+    "portable:checksums": "node scripts/portable/create-checksums.mjs",
+    "portable:test": "node --test scripts/portable/portable.test.mjs",
+    "sbom": "node scripts/portable/create-sbom.mjs --output sbom.cdx.json",
     "start": "npm run start -w @mmd/server"
   },
   "engines": {
     "node": ">=22"
+  },
+  "devDependencies": {
+    "yazl": "^3.3.1"
   }
 }

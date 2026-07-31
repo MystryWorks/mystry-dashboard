@@ -1,6 +1,6 @@
 # 配置说明
 
-配置通过仓库根目录的 `.env` 文件加载（后端启动时从 `apps/server` 相对路径解析到仓库根目录）。可先复制 `.env.example`，再填写密钥和需要调整的值。
+源码运行默认从仓库根目录加载 `.env`。便携控制器默认加载包根目录的 `config/panel.env`，并在首次启动时创建该文件及随机密钥。可先复制 `.env.example` 再手动配置源码运行环境。
 
 ## 首次启动必需配置
 
@@ -107,6 +107,9 @@ node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"
 | 变量 | 默认值 | 说明 |
 |------|--------|------|
 | `DATA_DIR` | `data` | 数据根目录；相对值相对于仓库根目录解析，也可填写绝对路径 |
+| `MMD_HOME` | 源码为仓库根目录；便携版为包根目录 | 运行布局根目录；必须在启动 Node 前由进程环境设置 |
+| `MMD_CONFIG_PATH` | 源码为 `.env`；便携版为 `config/panel.env` | 配置文件路径；相对值相对于 `MMD_HOME` |
+| `MMD_DATA_DIR` | 未设置时使用 `DATA_DIR` | 优先级高于 `DATA_DIR`；相对值相对于 `MMD_HOME` |
 
 `DATA_DIR` 下的运行时结构为：
 
@@ -118,7 +121,9 @@ node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"
 | `cache/cores/` | 核心 jar 下载缓存 |
 | `uploads/` | 上传临时目录 |
 
-无论 `DATA_DIR` 使用相对路径还是绝对路径，实例始终只能位于 `DATA_DIR/instances/<id>`。部署、导入、创建和启动都使用这一目录；不支持自定义安装目录，也不提供从整台机器选择目录的功能。实例文件 API 的路径只是相对于该实例根目录的逻辑路径。
+无论最终数据目录来自 `MMD_DATA_DIR` 还是 `DATA_DIR`，实例始终只能位于该目录的 `instances/<id>`。部署、导入、创建和启动都使用这一目录；不支持自定义实例安装目录，也不提供从整台机器选择目录的功能。实例文件 API 的路径只是相对于该实例根目录的逻辑路径。
+
+`MMD_HOME` 和 `MMD_CONFIG_PATH` 用于确定配置文件位置，因此不能依赖该配置文件自己改变其加载位置；应由 `mmdctl`、shell 或进程环境在启动前设置。便携用户通常不需要手动设置这些变量。
 
 ## 旧版外部实例
 

@@ -68,6 +68,22 @@ npm run build -w @mmd/shared
 - 用户可见文案与注释使用中文（与项目一致）。
 - 避免无关重构；小范围修复优先。
 
+## 便携包开发与发布
+
+便携工具位于 `scripts/portable/`。每个压缩包必须在相同操作系统和架构的原生 runner 上组装，再从最终压缩包解压验证：
+
+```bash
+npm run portable:test
+npm run audit:production
+npm run build
+node scripts/portable/package-portable.mjs --platform win32 --arch x64 --output-dir release
+node scripts/portable/smoke-portable.mjs release/mmd-v0.2.0-preview.1-windows-x64.zip
+```
+
+`package-portable.mjs` 会从官方 Node.js 发布站下载固定版本运行时并按 `SHASUMS256.txt` 校验，使用 `npm ci --omit=dev` 创建独立生产依赖树，物理复制 `@mmd/shared`，并拒绝包内符号链接。不要从当前仓库的 `node_modules` 直接打包。
+
+`.github/workflows/portable-release.yml` 在五目标矩阵全部通过后生成 Release。发布前还必须通过 `npm run verify` 和 `npm run audit:production`；签名密钥缺失会阻止公开 Release。维护操作和数据升级流程见 [便携预览版](portable-release.md)。
+
 ## 本地验证清单
 
 - [ ] `npm run typecheck` 无错误
@@ -83,3 +99,4 @@ npm run build -w @mmd/shared
 - [贡献指南](../CONTRIBUTING.md)
 - [架构设计](architecture.md)
 - [配置说明](configuration.md)
+- [便携预览版](portable-release.md)

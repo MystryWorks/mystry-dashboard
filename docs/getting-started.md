@@ -1,12 +1,23 @@
 # 快速开始
 
+## 便携版（普通用户推荐）
+
+便携包已经包含 Node.js、生产依赖和构建产物。Windows 解压后双击 `mmdctl.cmd`；Linux / macOS 解压后运行：
+
+```bash
+chmod +x mmdctl
+./mmdctl start
+```
+
+无需执行 `npm install`。仍需先确认 `java -version` 可用；完整平台列表、校验、升级和限制见 [便携预览版](portable-release.md)。
+
 ## 环境要求
 
 | 依赖 | 要求 |
 |------|------|
 | Node.js | **≥ 22**（使用内置 `node:sqlite`，无需编译原生 SQLite 模块） |
 | Java | PATH 中必须可用 `java`；所有实例固定使用该命令 |
-| 操作系统 | 已在 Windows 上验证；Linux / macOS 理论上可用（进程管理基于 `child_process.spawn`） |
+| 操作系统 | 源码管理器在 Windows 使用；便携产物由五个目标平台分别构建和冒烟验证 |
 
 面板不接受 Java 完整路径，也不提供选择 Java 安装目录的功能。先在运行面板的同一用户环境中执行 `java -version` 检查 PATH。
 
@@ -110,6 +121,8 @@ npm start
 | `npm run dev:server` | 后端热重载开发（`@mmd/server`） |
 | `npm run dev:web` | 前端 Vite 开发服务器（`@mmd/web`） |
 | `npm run build` | 构建 shared → server → web |
+| `npm run portable:test` | 验证便携控制器和发布辅助脚本 |
+| `npm run audit:production` | 使用官方 registry 检查生产依赖，阻断 high / critical |
 | `npm start` | 运行生产后端 |
 
 ## 五分钟上手路径

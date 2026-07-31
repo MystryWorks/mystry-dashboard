@@ -12,7 +12,9 @@ Authorization: Bearer <token>
 
 | 方法 | 路径 | 认证 | 响应 |
 |------|------|------|------|
-| GET | `/api/health` | 否 | `{ "ok": true }` |
+| GET | `/api/health` | 否 | `{ ok: true, service: "minecraft-mystery-dashboard", processFingerprint?: string }` |
+
+`processFingerprint` 仅在便携控制器启动服务时出现。它用于让 `mmdctl` 将状态文件、PID 与实际监听服务对应起来，不是认证密钥，也不能替代 `X-Launcher-Token`。
 
 ## 认证 `/api/auth`
 
@@ -69,7 +71,7 @@ Java 状态响应准确结构为：
 | POST | `/api/instances/:id/restart` | 重启 |
 | POST | `/api/instances/:id/command` | Body：`{ command: string }`，发送控制台指令 |
 
-实例目录固定为 `DATA_DIR/instances/<id>`。`DATA_DIR` 可为相对项目根目录的路径或绝对路径；创建、部署、导入和启动都不会接受另一个目录；`jarFile` 也只能表示实例根目录内的相对文件。
+实例目录固定为最终数据根目录的 `instances/<id>`。最终数据根优先取 `MMD_DATA_DIR`，否则取 `DATA_DIR`；创建、部署、导入和启动都不会接受另一个实例目录，`jarFile` 也只能表示实例根目录内的相对文件。
 
 ### 接管旧版实例
 

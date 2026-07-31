@@ -1,0 +1,237 @@
+name: Portable Preview Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 已存在且位于 main 历史中的版本标签
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: portable-release-${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    name: 发布前门禁
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    outputs:
+      tag: ${{ steps.release-tag.outputs.tag }}
+
+    steps:
+      - name: Checkout tag
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
+          fetch-depth: 0
+
+      - name: Validate tag and main ancestry
+        id: release-tag
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+        run: |
+          set -euo pipefail
+          [[ "$RELEASE_TAG" == v* ]] || {
+            echo "::error::版本标签必须以 v 开头"
+            exit 1
+          }
+          TAG_COMMIT="$(git rev-parse "refs/tags/$RELEASE_TAG^{commit}")"
+          git fetch origin main --no-tags
+          git merge-base --is-ancestor "$TAG_COMMIT" origin/main || {
+            echo "::error::标签提交不在 origin/main 历史中"
+            exit 1
+          }
+          PACKAGE_VERSION="$(node -p "require('./package.json').version")"
+          [[ "${RELEASE_TAG#v}" == "$PACKAGE_VERSION" ]] || {
+            echo "::error::标签 $RELEASE_TAG 与 package.json 版本 $PACKAGE_VERSION 不一致"
+            exit 1
+          }
+          echo "tag=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22.23.1
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify project
+        run: npm run verify
+
+      - name: Audit production dependencies
+        run: npm run audit:production
+
+  build:
+    name: ${{ matrix.label }}
+    needs: prepare
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: Windows x64
+            os: windows-2025
+            platform: win32
+            arch: x64
+            asset_suffix: windows-x64.zip
+          - label: Linux x64
+            os: ubuntu-24.04
+            platform: linux
+            arch: x64
+            asset_suffix: linux-x64.tar.gz
+          - label: Linux ARM64
+            os: ubuntu-24.04-arm
+            platform: linux
+            arch: arm64
+            asset_suffix: linux-arm64.tar.gz
+          - label: macOS Intel
+            os: macos-15-intel
+            platform: darwin
+            arch: x64
+            asset_suffix: macos-x64.tar.gz
+          - label: macOS Apple Silicon
+            os: macos-15
+            platform: darwin
+            arch: arm64
+            asset_suffix: macos-arm64.tar.gz
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout tag
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.prepare.outputs.tag }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22.23.1
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build application
+        run: npm run build
+
+      - name: Verify portable tooling
+        run: npm run portable:test
+
+      - name: Assemble portable archive
+        run: >-
+          node scripts/portable/package-portable.mjs
+          --platform ${{ matrix.platform }}
+          --arch ${{ matrix.arch }}
+          --output-dir release
+
+      - name: Smoke test final archive
+        run: >-
+          node scripts/portable/smoke-portable.mjs
+          "release/mmd-${{ needs.prepare.outputs.tag }}-${{ matrix.asset_suffix }}"
+
+      - name: Upload portable archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: portable-${{ matrix.platform }}-${{ matrix.arch }}
+          path: release/mmd-${{ needs.prepare.outputs.tag }}-${{ matrix.asset_suffix }}
+          if-no-files-found: error
+          retention-days: 14
+
+  release:
+    name: 发布 Preview
+    needs:
+      - prepare
+      - build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    environment: release
+
+    steps:
+      - name: Checkout tag
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.prepare.outputs.tag }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22.23.1
+
+      - name: Download all archives
+        uses: actions/download-artifact@v5
+        with:
+          pattern: portable-*
+          path: release-assets
+          merge-multiple: true
+
+      - name: Generate CycloneDX SBOM
+        run: node scripts/portable/create-sbom.mjs --output release-assets/sbom.cdx.json
+
+      - name: Generate SHA-256 checksums
+        run: node scripts/portable/create-checksums.mjs release-assets
+
+      - name: Sign checksums
+        shell: bash
+        env:
+          RELEASE_GPG_PRIVATE_KEY: ${{ secrets.RELEASE_GPG_PRIVATE_KEY }}
+          RELEASE_GPG_PASSPHRASE: ${{ secrets.RELEASE_GPG_PASSPHRASE }}
+        run: |
+          set -euo pipefail
+          [[ -n "$RELEASE_GPG_PRIVATE_KEY" ]] || {
+            echo "::error::缺少 RELEASE_GPG_PRIVATE_KEY，拒绝发布未签名校验和"
+            exit 1
+          }
+          printf '%s' "$RELEASE_GPG_PRIVATE_KEY" | gpg --batch --import
+          if [[ -n "$RELEASE_GPG_PASSPHRASE" ]]; then
+            printf '%s' "$RELEASE_GPG_PASSPHRASE" | gpg --batch --yes --pinentry-mode loopback \
+              --passphrase-fd 0 \
+              --armor --detach-sign \
+              --output release-assets/SHA256SUMS.asc \
+              release-assets/SHA256SUMS
+          else
+            gpg --batch --yes --armor --detach-sign \
+              --output release-assets/SHA256SUMS.asc \
+              release-assets/SHA256SUMS
+          fi
+
+      - name: Verify release asset set
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="${{ needs.prepare.outputs.tag }}"
+          test -f "release-assets/mmd-${VERSION}-windows-x64.zip"
+          test -f "release-assets/mmd-${VERSION}-linux-x64.tar.gz"
+          test -f "release-assets/mmd-${VERSION}-linux-arm64.tar.gz"
+          test -f "release-assets/mmd-${VERSION}-macos-x64.tar.gz"
+          test -f "release-assets/mmd-${VERSION}-macos-arm64.tar.gz"
+          test -f release-assets/SHA256SUMS
+          test -f release-assets/SHA256SUMS.asc
+          test -f release-assets/sbom.cdx.json
+
+      - name: Create GitHub prerelease
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
+        run: |
+          set -euo pipefail
+          gh release create "$RELEASE_TAG" release-assets/* \
+            --verify-tag \
+            --generate-notes \
+            --notes "$(cat .github/portable-preview-notes.md)" \
+            --prerelease \
+            --title "$RELEASE_TAG"

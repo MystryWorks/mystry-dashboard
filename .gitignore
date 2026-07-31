@@ -10,5 +10,7 @@ data/
 uploads/
 .vite/
 coverage/
+release/
+/sbom.cdx.json
 .slim/deepwork/
 *.tsbuildinfo

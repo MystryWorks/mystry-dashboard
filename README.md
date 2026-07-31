@@ -6,7 +6,7 @@
 
 > **不是** Minecraft 客户端模组，也无需 Fabric / Forge 作为模组加载。本仓库是独立的 Node.js 面板程序。
 
-[快速开始](docs/getting-started.md) · [分步教程](docs/tutorials.md) · [使用指南](docs/user-guide.md) · [API](docs/api.md) · [贡献指南](CONTRIBUTING.md)
+[便携预览版](docs/portable-release.md) · [快速开始](docs/getting-started.md) · [分步教程](docs/tutorials.md) · [使用指南](docs/user-guide.md) · [API](docs/api.md) · [贡献指南](CONTRIBUTING.md)
 
 ---
 
@@ -21,19 +21,32 @@
 - 首启创建管理员 + JWT 登录
 - 检测 PATH 中 `java` 的可用状态与版本
 
-实例只托管在 `DATA_DIR/instances/<id>`，不支持自定义安装目录，也不提供全盘目录浏览。`DATA_DIR` 可填写相对项目根目录的路径或绝对路径；无论哪种写法，实例都固定位于其 `instances/<id>` 下。所有实例进程固定使用 PATH 中的 `java`。
+实例只托管在最终数据根目录的 `instances/<id>`，不支持自定义安装目录，也不提供全盘目录浏览。源码模式默认由 `DATA_DIR` 指定数据根；便携控制器使用优先级更高的 `MMD_DATA_DIR`。所有实例进程固定使用 PATH 中的 `java`。
 
-## 环境要求
+## 便携预览版
+
+GitHub Release 提供 Windows x64、Linux x64 / ARM64、macOS Intel / Apple Silicon 五个便携包。包内已包含固定版本的 Node.js 22、生产依赖和前后端构建物；用户无需安装 Node.js 或运行 `npm install`。
+
+Windows 解压后双击 `mmdctl.cmd`；Linux / macOS 解压后执行：
+
+```bash
+chmod +x mmdctl
+./mmdctl start
+```
+
+便携版仍要求系统 `PATH` 中存在适合目标 Minecraft 版本的 `java`。完整下载、校验、升级、数据保留和已知限制见 [便携预览版说明](docs/portable-release.md)。
+
+## 源码运行环境要求
 
 | 依赖 | 要求 |
 |------|------|
 | Node.js | **≥ 22**（使用内置 `node:sqlite`，无需原生 SQLite 模块） |
 | Java | PATH 中必须可执行 `java`；面板不接受完整 Java 路径 |
-| 操作系统 | Windows 已验证；Linux / macOS 理论上可用 |
+| 操作系统 | 源码管理器仅面向 Windows；便携包按五个目标分别构建和验证 |
 
 ## 快速开始
 
-### Windows 一键管理（推荐）
+### Windows 源码管理器
 
 安装 Node.js 22 或更高版本后，直接双击仓库根目录的：
 
@@ -145,6 +158,7 @@ minecraft-mystery-dashboard/
 | 文档 | 内容 |
 |------|------|
 | [docs/getting-started.md](docs/getting-started.md) | 安装、初始化、开发模式、生产部署 |
+| [docs/portable-release.md](docs/portable-release.md) | 五平台便携包、校验、升级、数据保留与发布流程 |
 | [docs/tutorials.md](docs/tutorials.md) | **新手教程**：分步开服、导入与接管 |
 | [docs/user-guide.md](docs/user-guide.md) | 界面说明、字段含义、FAQ |
 | [docs/configuration.md](docs/configuration.md) | 环境变量与数据目录 |
