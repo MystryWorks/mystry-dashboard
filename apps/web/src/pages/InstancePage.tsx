@@ -18,9 +18,9 @@ function ConsoleTab({ instance }: { instance: InstanceInfo; onChange: () => void
       <p className="muted" style={{ marginTop: 0 }}>
         状态：
         <span className={`badge ${instance.status}`}>{statusLabel[instance.status]}</span>
-        （在终端输入指令后回车发送）
+        （在下方输入指令后回车发送）
       </p>
-      <ConsolePanel instanceId={instance.id} />
+      <ConsolePanel instanceId={instance.id} canSend={instance.status === 'running'} />
     </div>
   );
 }
@@ -370,7 +370,7 @@ export function InstancePage() {
       <p>
         <Link to="/">← 返回总览</Link>
       </p>
-      <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap' }}>
+      <div className="instance-header">
         <div>
           <h1 className="page-title">{instance.name}</h1>
           <p className="page-desc">
@@ -378,7 +378,7 @@ export function InstancePage() {
             <span className={`badge ${instance.status}`}>{statusLabel[instance.status]}</span>
           </p>
         </div>
-        <div className="btn-row">
+        <div className="btn-row instance-actions">
           <button className="btn" type="button" disabled={busy || instance.requiresMigration} onClick={() => void act('start')}>
             启动
           </button>

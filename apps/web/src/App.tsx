@@ -30,10 +30,10 @@ function Shell({ children }: { children: React.ReactNode }) {
             节点管理
           </NavLink>
         </nav>
-        <div style={{ marginTop: 'auto' }} className="muted">
-          <div style={{ marginBottom: '0.5rem' }}>{user?.username}</div>
-          <button className="btn btn-ghost" type="button" onClick={logout}>
-            退出登录
+        <div className="sidebar-footer">
+          <span className="sidebar-user">{user?.username}</span>
+          <button className="btn btn-ghost sidebar-logout" type="button" onClick={logout}>
+            退出
           </button>
         </div>
       </aside>
