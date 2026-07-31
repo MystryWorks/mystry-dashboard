@@ -88,6 +88,8 @@ $script:Resources = @{
     SetupGenerated = '已生成首次初始化令牌。'
     SecretRepaired = '{0} 格式无效；原配置已备份到 {1}，并已自动生成新值。'
     SecretInvalid = '{0} 必须是 64 位十六进制字符串；为保护已有配置，管理器没有覆盖它。'
+    SecretDuplicate = '{0} 不能与 {1} 相同；为保护进程环境变量，管理器没有覆盖它。'
+    SecretSeparated = '{0} 与 {1} 重复；原配置已备份到 {2}，并已自动生成不同的新值。'
     DatabaseCheckFailed = '无法检查管理员初始化状态：{0}'
     StartingBackground = '正在后台启动面板…'
     StartingForeground = '正在前台启动面板。按 Ctrl+C 将安全停止面板。'
@@ -160,6 +162,8 @@ $script:Resources = @{
     SetupGenerated = 'Generated the initial setup token.'
     SecretRepaired = '{0} was invalid. The old configuration was backed up to {1}, and a new value was generated.'
     SecretInvalid = '{0} must be a 64-character hexadecimal value. The existing value was not overwritten.'
+    SecretDuplicate = '{0} must differ from {1}. The process environment value was not overwritten.'
+    SecretSeparated = '{0} duplicated {1}. The old configuration was backed up to {2}, and a different value was generated.'
     DatabaseCheckFailed = 'Unable to check administrator setup state: {0}'
     StartingBackground = 'Starting the panel in the background…'
     StartingForeground = 'Starting in the foreground. Press Ctrl+C to stop the panel safely.'
@@ -395,6 +399,24 @@ function Repair-InvalidFileSecret {
   Write-Manager 'SecretRepaired' $Name $backupPath
 }
 
+function Repair-DuplicateFileSecret {
+  param(
+    [Parameter(Mandatory = $true)][string]$Name,
+    [Parameter(Mandatory = $true)][string]$OtherName,
+    [Parameter(Mandatory = $true)][hashtable]$Environment
+  )
+  $processValue = [Environment]::GetEnvironmentVariable($Name, 'Process')
+  if ($null -ne $processValue) {
+    throw (Get-Message 'SecretDuplicate' $Name $OtherName)
+  }
+  $backupPath = Backup-EnvironmentOnce
+  do {
+    $replacement = New-RandomHex
+  } while ($Environment.Values -contains $replacement)
+  Set-EnvValue $Name $replacement
+  Write-Manager 'SecretSeparated' $Name $OtherName $backupPath
+}
+
 function Assert-Secret {
   param(
     [Parameter(Mandatory = $true)][string]$Name,
@@ -464,6 +486,10 @@ function Ensure-EnvironmentConfiguration {
   } else {
     Assert-Secret 'LAUNCHER_TOKEN' ([string]$environment.LAUNCHER_TOKEN)
   }
+  if ([string]$environment.JWT_SECRET -eq [string]$environment.LAUNCHER_TOKEN) {
+    Repair-DuplicateFileSecret 'LAUNCHER_TOKEN' 'JWT_SECRET' $environment
+    $environment = Read-EnvMap
+  }
 
   $needsSetup = Test-NeedsSetup $environment
   if ($needsSetup) {
@@ -478,6 +504,13 @@ function Ensure-EnvironmentConfiguration {
       $environment = Read-EnvMap
     } else {
       Assert-Secret 'SETUP_TOKEN' ([string]$environment.SETUP_TOKEN)
+    }
+    if ([string]$environment.SETUP_TOKEN -eq [string]$environment.JWT_SECRET) {
+      Repair-DuplicateFileSecret 'SETUP_TOKEN' 'JWT_SECRET' $environment
+      $environment = Read-EnvMap
+    } elseif ([string]$environment.SETUP_TOKEN -eq [string]$environment.LAUNCHER_TOKEN) {
+      Repair-DuplicateFileSecret 'SETUP_TOKEN' 'LAUNCHER_TOKEN' $environment
+      $environment = Read-EnvMap
     }
   } elseif ($environment.ContainsKey('SETUP_TOKEN')) {
     Remove-EnvValue 'SETUP_TOKEN'
@@ -558,7 +591,7 @@ function Invoke-Npm {
   )
   Push-Location $script:ProjectRoot
   try {
-    & npm.cmd @Arguments
+    & npm.cmd @Arguments | Out-Host
     if ($LASTEXITCODE -ne 0) { throw (Get-Message $FailureMessageKey) }
   } finally {
     Pop-Location
