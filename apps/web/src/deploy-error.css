@@ -124,7 +124,7 @@
   font-size: 0.82rem;
 }
 
-@media (max-width: 620px) {
+@media (max-width: 768px) {
   .error-summary {
     flex-direction: column;
   }

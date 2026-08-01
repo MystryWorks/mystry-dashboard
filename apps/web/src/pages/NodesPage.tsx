@@ -71,18 +71,18 @@ export function NodesPage() {
             <tbody>
               {nodes.map((node) => (
                 <tr key={node.id}>
-                  <td>{node.name}</td>
-                  <td>{node.isLocal ? '本机' : '远程（未开放）'}</td>
-                  <td>
+                  <td data-label="名称">{node.name}</td>
+                  <td data-label="类型">{node.isLocal ? '本机' : '远程（未开放）'}</td>
+                  <td data-label="状态">
                     <span className={`badge ${node.status === 'online' ? 'running' : 'stopped'}`}>
                       {statusLabel[node.status] || node.status}
                     </span>
                   </td>
-                  <td>{node.instanceCount}</td>
-                  <td className="muted">
+                  <td data-label="实例数">{node.instanceCount}</td>
+                  <td data-label="最近心跳" className="muted">
                     {node.lastSeenAt ? new Date(node.lastSeenAt).toLocaleString() : '—'}
                   </td>
-                  <td>
+                  <td data-label="操作">
                     {!node.isLocal && (
                       <button
                         className="btn btn-danger"

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import type { InstanceInfo } from '@mmd/shared';
 import { api } from '../api';
+import { ConfirmDialog } from '../components/ConfirmDialog';
 
 const statusLabel: Record<string, string> = {
   stopped: '已停止',
@@ -11,10 +12,17 @@ const statusLabel: Record<string, string> = {
   crashed: '已崩溃',
 };
 
+/** 进程仍可能存活的状态：此时禁止删除，避免删除运行中实例的目录。 */
+function isAlive(status: InstanceInfo['status']): boolean {
+  return status === 'running' || status === 'starting' || status === 'stopping';
+}
+
 export function DashboardPage() {
   const [instances, setInstances] = useState<InstanceInfo[]>([]);
   const [error, setError] = useState('');
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [restartTarget, setRestartTarget] = useState<InstanceInfo | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<InstanceInfo | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -43,11 +51,20 @@ export function DashboardPage() {
     }
   }
 
-  async function remove(id: string) {
-    if (!confirm(instances.find((item) => item.id === id)?.requiresMigration ? '确定移除该实例记录？不会删除旧目录。' : '确定删除该实例及其全部文件？')) return;
-    setBusyId(id);
+  async function confirmRestart() {
+    if (!restartTarget) return;
+    const target = restartTarget;
+    setRestartTarget(null);
+    await act(target.id, 'restart');
+  }
+
+  async function confirmDelete() {
+    if (!deleteTarget) return;
+    const target = deleteTarget;
+    setBusyId(target.id);
     try {
-      await api(`/api/instances/${id}`, { method: 'DELETE' });
+      await api(`/api/instances/${target.id}`, { method: 'DELETE' });
+      setDeleteTarget(null);
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -102,15 +119,15 @@ export function DashboardPage() {
             <tbody>
               {instances.map((inst) => (
                 <tr key={inst.id}>
-                  <td>
+                  <td data-label="名称">
                     <Link to={`/instances/${inst.id}`}>{inst.name}</Link>
                   </td>
-                  <td>{inst.coreType}</td>
-                  <td>{inst.mcVersion || '-'}</td>
-                  <td>
+                  <td data-label="核心">{inst.coreType}</td>
+                  <td data-label="版本">{inst.mcVersion || '-'}</td>
+                  <td data-label="状态">
                     <span className={`badge ${inst.requiresMigration ? 'migration' : inst.status}`}>{inst.requiresMigration ? '待迁移' : statusLabel[inst.status] || inst.status}</span>
                   </td>
-                  <td>
+                  <td data-label="操作">
                     <div className="btn-row">
                       <button
                         className="btn"
@@ -132,15 +149,20 @@ export function DashboardPage() {
                         className="btn btn-ghost"
                         type="button"
                         disabled={busyId === inst.id || inst.requiresMigration}
-                        onClick={() => void act(inst.id, 'restart')}
+                        onClick={() => setRestartTarget(inst)}
                       >
                         重启
                       </button>
                       <button
                         className="btn btn-danger"
                         type="button"
-                        disabled={busyId === inst.id}
-                        onClick={() => void remove(inst.id)}
+                        disabled={busyId === inst.id || (!inst.requiresMigration && isAlive(inst.status))}
+                        title={
+                          !inst.requiresMigration && isAlive(inst.status)
+                            ? '实例仍在运行，请先停止后再删除'
+                            : undefined
+                        }
+                        onClick={() => setDeleteTarget(inst)}
                       >
                         删除
                       </button>
@@ -152,6 +174,31 @@ export function DashboardPage() {
           </table>
         )}
       </div>
+
+      <ConfirmDialog
+        open={restartTarget !== null}
+        title={`重启实例「${restartTarget?.name ?? ''}」？`}
+        description="重启会中断当前游戏进程并断开所有在线玩家，未保存的世界数据可能丢失。"
+        confirmLabel="确认重启"
+        busy={busyId === restartTarget?.id}
+        onConfirm={() => void confirmRestart()}
+        onCancel={() => setRestartTarget(null)}
+      />
+      <ConfirmDialog
+        open={deleteTarget !== null}
+        title={deleteTarget?.requiresMigration ? `移除实例记录「${deleteTarget?.name ?? ''}」？` : `删除实例「${deleteTarget?.name ?? ''}」？`}
+        description={
+          deleteTarget?.requiresMigration
+            ? '仅移除面板中的实例记录，不会删除旧目录中的任何文件。'
+            : '将永久删除该实例目录及其全部文件（世界、配置、模组），此操作不可恢复。'
+        }
+        confirmLabel={deleteTarget?.requiresMigration ? '移除记录' : '永久删除'}
+        danger
+        busy={busyId === deleteTarget?.id}
+        requireText={deleteTarget?.requiresMigration ? undefined : deleteTarget?.name}
+        onConfirm={() => void confirmDelete()}
+        onCancel={() => setDeleteTarget(null)}
+      />
     </div>
   );
 }

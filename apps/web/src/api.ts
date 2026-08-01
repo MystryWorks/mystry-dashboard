@@ -1,4 +1,7 @@
+import type { JavaRuntimeListResult, TaskListResult } from '@mmd/shared';
+
 const TOKEN_KEY = 'mmd_token';
+
 
 export function getToken(): string | null {
   return localStorage.getItem(TOKEN_KEY);
@@ -15,6 +18,19 @@ export class ApiError extends Error {
     super(message);
     this.status = status;
   }
+}
+
+/** 登录态失效事件：auth.tsx 监听后清空用户并自动跳回登录页。 */
+export const UNAUTHORIZED_EVENT = 'mmd:unauthorized';
+
+/** 这些路径的 401 是业务结果（如密码错误），不能当作会话失效处理。 */
+const AUTH_EXEMPT_PATHS = ['/api/auth/login', '/api/auth/setup', '/api/auth/status'];
+
+function handleUnauthorized(path: string): void {
+  if (AUTH_EXEMPT_PATHS.some((exempt) => path.startsWith(exempt))) return;
+  if (!getToken()) return;
+  setToken(null);
+  window.dispatchEvent(new CustomEvent(UNAUTHORIZED_EVENT));
 }
 
 export async function api<T>(
@@ -43,6 +59,7 @@ export async function api<T>(
   }
 
   if (!res.ok) {
+    if (res.status === 401) handleUnauthorized(path);
     const message =
       typeof data === 'object' && data && 'error' in data
         ? String((data as { error: string }).error)
@@ -60,6 +77,7 @@ export async function apiForm<T>(path: string, form: FormData): Promise<T> {
   const res = await fetch(path, { method: 'POST', headers, body: form });
   const data = await res.json();
   if (!res.ok) {
+    if (res.status === 401) handleUnauthorized(path);
     throw new ApiError(res.status, data.error || `请求失败 (${res.status})`);
   }
   return data as T;
@@ -73,6 +91,20 @@ export function createConsoleTicket(
     `/api/instances/${encodeURIComponent(instanceId)}/console-ticket`,
     { method: 'POST', signal },
   );
+}
+
+/** 任务中心：拉取最近的任务列表（含排队/进行中和已结束任务）。 */
+export async function listTasks() {
+  const res = await api<TaskListResult>('/api/tasks');
+  return res.tasks;
+}
+
+/** Java 运行时清单；refresh=true 强制重新扫描本机安装目录。 */
+export async function listJavaRuntimes(refresh = false) {
+  const res = await api<JavaRuntimeListResult>(
+    `/api/system/java-runtimes${refresh ? '?refresh=1' : ''}`,
+  );
+  return res.runtimes;
 }
 
 export async function pollTask(

@@ -8,7 +8,7 @@ import {
   type ReactNode,
 } from 'react';
 import type { AuthUser } from '@mmd/shared';
-import { api, ApiError, getToken, setToken } from './api';
+import { api, ApiError, getToken, setToken, UNAUTHORIZED_EVENT } from './api';
 
 type AuthState = {
   user: AuthUser | null;
@@ -63,6 +63,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     void refresh();
   }, [refresh]);
+
+  // 任一请求收到 401（token 过期等）时清空登录态，RequireAuth 会自动跳回登录页。
+  useEffect(() => {
+    const onUnauthorized = () => {
+      setToken(null);
+      setUser(null);
+    };
+    window.addEventListener(UNAUTHORIZED_EVENT, onUnauthorized);
+    return () => window.removeEventListener(UNAUTHORIZED_EVENT, onUnauthorized);
+  }, []);
 
   const login = useCallback(async (username: string, password: string) => {
     const res = await api<{ token: string; user: AuthUser }>('/api/auth/login', {

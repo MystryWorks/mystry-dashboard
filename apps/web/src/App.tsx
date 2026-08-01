@@ -1,5 +1,9 @@
-import { NavLink, Navigate, Route, Routes } from 'react-router-dom';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom';
+import { Menu, X } from 'lucide-react';
 import { useAuth } from './auth';
+import { TaskCenter } from './components/TaskCenter';
+import { ThemeToggle } from './components/ThemeToggle';
 import { LoginPage } from './pages/LoginPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { InstancePage } from './pages/InstancePage';
@@ -9,14 +13,35 @@ import { NodesPage } from './pages/NodesPage';
 
 function Shell({ children }: { children: React.ReactNode }) {
   const { user, logout } = useAuth();
+  const location = useLocation();
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const toggleRef = useRef<HTMLButtonElement>(null);
+
+  const closeSidebar = useCallback(() => setSidebarOpen(false), []);
+
+  useEffect(() => {
+    closeSidebar();
+  }, [location.pathname, closeSidebar]);
+
+  useEffect(() => {
+    if (!sidebarOpen) return;
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key !== 'Escape') return;
+      setSidebarOpen(false);
+      toggleRef.current?.focus();
+    }
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [sidebarOpen]);
+
   return (
-    <div className="app-shell">
-      <aside className="sidebar">
+    <div className={`app-shell${sidebarOpen ? ' sidebar-open' : ''}`}>
+      <aside id="app-sidebar" className={`sidebar${sidebarOpen ? ' sidebar-open' : ''}`}>
         <div className="brand">
           Mystery Dashboard
           <span>Minecraft 服务端管理</span>
         </div>
-        <nav className="nav">
+        <nav className="nav" onClick={closeSidebar}>
           <NavLink to="/" end className={({ isActive }) => (isActive ? 'active' : undefined)}>
             实例总览
           </NavLink>
@@ -31,12 +56,33 @@ function Shell({ children }: { children: React.ReactNode }) {
           </NavLink>
         </nav>
         <div className="sidebar-footer">
+          <TaskCenter placement="sidebar" />
+          <ThemeToggle />
           <span className="sidebar-user">{user?.username}</span>
           <button className="btn btn-ghost sidebar-logout" type="button" onClick={logout}>
             退出
           </button>
         </div>
       </aside>
+      <div className="app-topbar">
+        <button
+          ref={toggleRef}
+          type="button"
+          className="sidebar-toggle"
+          aria-label={sidebarOpen ? '关闭导航菜单' : '打开导航菜单'}
+          aria-expanded={sidebarOpen}
+          aria-controls="app-sidebar"
+          onClick={() => setSidebarOpen((open) => !open)}
+        >
+          {sidebarOpen ? <X size={20} aria-hidden="true" /> : <Menu size={20} aria-hidden="true" />}
+          <span>{sidebarOpen ? '关闭' : '菜单'}</span>
+        </button>
+        <div className="topbar-task-center">
+          <ThemeToggle />
+          <TaskCenter placement="topbar" />
+        </div>
+      </div>
+      {sidebarOpen && <div className="sidebar-backdrop" onClick={closeSidebar} aria-hidden="true" />}
       <main className="main">{children}</main>
     </div>
   );

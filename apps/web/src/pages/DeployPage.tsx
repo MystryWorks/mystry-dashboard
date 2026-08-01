@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import type { TaskInfo } from '@mmd/shared';
 import { api, pollTask } from '../api';
 import { LazyScrollSelect } from '../components/LazyScrollSelect';
+import { JavaRuntimeSelect } from '../components/JavaRuntimeSelect';
 import { JavaEnvironmentStatus } from '../components/PathFields';
 import '../deploy-error.css';
 
@@ -38,6 +39,7 @@ export function DeployPage() {
   const [installerVersion, setInstallerVersion] = useState('');
   const [name, setName] = useState('我的服务器');
   const [jvmArgs, setJvmArgs] = useState('-Xms1G -Xmx2G');
+  const [javaRuntimeId, setJavaRuntimeId] = useState<string | null>(null);
   const [acceptEula, setAcceptEula] = useState(true);
   const [error, setError] = useState('');
   const [progress, setProgress] = useState<TaskInfo | null>(null);
@@ -195,6 +197,7 @@ export function DeployPage() {
           installerVersion: installerVersion || undefined,
           jvmArgs,
           acceptEula,
+          javaRuntimeId,
         },
       });
       setProgress(task);
@@ -308,6 +311,12 @@ export function DeployPage() {
           </p>
         )}
         <JavaEnvironmentStatus />
+        <JavaRuntimeSelect
+          value={javaRuntimeId}
+          onChange={setJavaRuntimeId}
+          mcVersion={mcVersion || null}
+          disabled={busy}
+        />
         <div className="field">
           <label>JVM 参数</label>
           <input value={jvmArgs} onChange={(e) => setJvmArgs(e.target.value)} />

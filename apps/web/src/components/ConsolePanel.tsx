@@ -69,6 +69,10 @@ export function ConsolePanel({ instanceId, canSend = true, onStatus }: Props) {
     let ws: WebSocket | null = null;
     const ticketRequest = new AbortController();
     const colorState = createConsoleColorizeState();
+    // 断线重连：指数退避 1s→2s→5s→10s，封顶 30s；组件卸载即放弃。
+    let retryAttempt = 0;
+    let retryTimer: ReturnType<typeof setTimeout> | null = null;
+    const RETRY_DELAYS_MS = [1_000, 2_000, 5_000, 10_000, 30_000];
 
     const writeColored = (chunk: string, flush = false) => {
       const colored = colorizeConsoleStream(chunk, colorState);
@@ -86,6 +90,14 @@ export function ConsolePanel({ instanceId, canSend = true, onStatus }: Props) {
       term.writeln(colorizeConsoleLine(line));
     };
 
+    const scheduleReconnect = (reason: string) => {
+      if (disposed) return;
+      const delay = RETRY_DELAYS_MS[Math.min(retryAttempt, RETRY_DELAYS_MS.length - 1)];
+      retryAttempt += 1;
+      writeSystemLine(`[面板] ${reason}，${Math.round(delay / 1000)} 秒后重连…`);
+      retryTimer = setTimeout(() => void connect(), delay);
+    };
+
     const connect = async () => {
       try {
         const { ticket } = await createConsoleTicket(instanceId, ticketRequest.signal);
@@ -98,7 +110,10 @@ export function ConsolePanel({ instanceId, canSend = true, onStatus }: Props) {
         wsRef.current = ws;
 
         ws.onopen = () => {
-          if (!disposed) setConnected(true);
+          if (disposed) return;
+          if (retryAttempt > 0) writeSystemLine('[面板] 控制台已重新连接');
+          retryAttempt = 0;
+          setConnected(true);
         };
 
         ws.onmessage = (ev) => {
@@ -124,15 +139,14 @@ export function ConsolePanel({ instanceId, canSend = true, onStatus }: Props) {
         };
 
         ws.onclose = () => {
-          if (!disposed) {
-            setConnected(false);
-            writeSystemLine('[面板] 控制台连接已断开');
-          }
+          if (disposed) return;
+          setConnected(false);
+          scheduleReconnect('控制台连接已断开');
         };
       } catch (err) {
         if (disposed || (err instanceof Error && err.name === 'AbortError')) return;
         setConnected(false);
-        writeSystemLine(`[错误] ${err instanceof Error ? err.message : String(err)}`);
+        scheduleReconnect(err instanceof Error ? err.message : String(err));
       }
     };
 
@@ -144,6 +158,7 @@ export function ConsolePanel({ instanceId, canSend = true, onStatus }: Props) {
     return () => {
       disposed = true;
       ticketRequest.abort();
+      if (retryTimer) clearTimeout(retryTimer);
       window.removeEventListener('resize', onResize);
       flushConsoleColorize(colorState);
       ws?.close();

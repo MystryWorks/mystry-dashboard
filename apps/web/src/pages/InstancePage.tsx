@@ -1,8 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, NavLink, Route, Routes, useParams } from 'react-router-dom';
 import type { FileEntry, InstanceInfo } from '@mmd/shared';
-import { api } from '../api';
+import { api, apiForm } from '../api';
+import { ConfirmDialog } from '../components/ConfirmDialog';
+import { ConfigTab } from '../components/ConfigTab';
 import { ConsolePanel } from '../components/ConsolePanel';
+import { JavaRuntimeSelect } from '../components/JavaRuntimeSelect';
 
 const statusLabel: Record<string, string> = {
   stopped: '已停止',
@@ -153,17 +156,10 @@ function FilesTab({ instanceId }: { instanceId: string }) {
     const form = new FormData();
     form.append('file', file);
     try {
-      const token = localStorage.getItem('mmd_token');
-      const res = await fetch(
+      await apiForm(
         `/api/instances/${instanceId}/files/upload?path=${encodeURIComponent(path)}`,
-        {
-          method: 'POST',
-          headers: token ? { Authorization: `Bearer ${token}` } : {},
-          body: form,
-        },
+        form,
       );
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || '上传失败');
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -302,64 +298,6 @@ function FilesTab({ instanceId }: { instanceId: string }) {
   );
 }
 
-function ConfigTab({ instanceId }: { instanceId: string }) {
-  const [props, setProps] = useState<Record<string, string>>({});
-  const [error, setError] = useState('');
-  const [saved, setSaved] = useState(false);
-
-  useEffect(() => {
-    void (async () => {
-      try {
-        setProps(await api(`/api/instances/${instanceId}/config/server.properties`));
-      } catch (err) {
-        setError(err instanceof Error ? err.message : String(err));
-      }
-    })();
-  }, [instanceId]);
-
-  async function save() {
-    try {
-      await api(`/api/instances/${instanceId}/config/server.properties`, {
-        method: 'PUT',
-        json: props,
-      });
-      setSaved(true);
-      setError('');
-      setTimeout(() => setSaved(false), 1500);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    }
-  }
-
-  const keys = Object.keys(props).sort();
-
-  return (
-    <div className="config-workspace panel">
-      <div className="config-workspace-header">
-        <p className="page-desc">编辑 server.properties（修改后需重启实例生效）。</p>
-        {error && <p className="error">{error}</p>}
-        {saved && <p className="muted">已保存</p>}
-      </div>
-      <div className="config-fields grid grid-2">
-        {keys.map((key) => (
-          <div className="field" key={key}>
-            <label>{key}</label>
-            <input
-              value={props[key] ?? ''}
-              onChange={(e) => setProps((p) => ({ ...p, [key]: e.target.value }))}
-            />
-          </div>
-        ))}
-      </div>
-      <div className="config-workspace-footer">
-        <button className="btn" type="button" onClick={() => void save()}>
-          保存配置
-        </button>
-      </div>
-    </div>
-  );
-}
-
 function SettingsTab({
   instance,
   onSaved,
@@ -371,13 +309,14 @@ function SettingsTab({
   const [jarFile, setJarFile] = useState(instance.jarFile);
   const [jvmArgs, setJvmArgs] = useState(instance.jvmArgs);
   const [acceptEula, setAcceptEula] = useState(instance.acceptEula);
+  const [javaRuntimeId, setJavaRuntimeId] = useState<string | null>(instance.javaRuntimeId);
   const [error, setError] = useState('');
 
   async function save() {
     try {
       await api(`/api/instances/${instance.id}`, {
         method: 'PATCH',
-        json: { name, jarFile, jvmArgs, acceptEula },
+        json: { name, jarFile, jvmArgs, acceptEula, javaRuntimeId },
       });
       setError('');
       onSaved();
@@ -409,6 +348,11 @@ function SettingsTab({
         <label>JVM 参数</label>
         <input value={jvmArgs} onChange={(e) => setJvmArgs(e.target.value)} />
       </div>
+      <JavaRuntimeSelect
+        value={javaRuntimeId}
+        onChange={setJavaRuntimeId}
+        mcVersion={instance.mcVersion}
+      />
       <label style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginBottom: '1rem' }}>
         <input
           type="checkbox"
@@ -429,6 +373,7 @@ export function InstancePage() {
   const [instance, setInstance] = useState<InstanceInfo | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [confirmRestart, setConfirmRestart] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -486,7 +431,7 @@ export function InstancePage() {
               className="btn btn-ghost"
               type="button"
               disabled={busy || instance.requiresMigration}
-              onClick={() => void act('restart')}
+              onClick={() => setConfirmRestart(true)}
             >
               重启
             </button>
@@ -534,6 +479,19 @@ export function InstancePage() {
           </Routes>
         )}
       </div>
+
+      <ConfirmDialog
+        open={confirmRestart}
+        title={`重启实例「${instance.name}」？`}
+        description="重启会中断当前游戏进程并断开所有在线玩家，未保存的世界数据可能丢失。"
+        confirmLabel="确认重启"
+        busy={busy}
+        onConfirm={() => {
+          setConfirmRestart(false);
+          void act('restart');
+        }}
+        onCancel={() => setConfirmRestart(false)}
+      />
     </div>
   );
 }
