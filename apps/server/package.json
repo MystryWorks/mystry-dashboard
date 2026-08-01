@@ -7,6 +7,7 @@
     "dev": "node --watch --experimental-sqlite --import tsx src/index.ts",
     "build": "tsc",
     "typecheck": "tsc --noEmit",
+    "test:static": "node --test --import tsx src/frontend-assets.test.ts",
     "start": "node --experimental-sqlite dist/index.js",
     "test:security": "node --import tsx src/security-self-test.ts"
   },

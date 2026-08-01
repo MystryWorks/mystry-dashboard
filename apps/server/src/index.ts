@@ -1,4 +1,3 @@
-import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import Fastify from 'fastify';
@@ -6,9 +5,9 @@ import cors from '@fastify/cors';
 import jwt from '@fastify/jwt';
 import multipart from '@fastify/multipart';
 import websocket from '@fastify/websocket';
-import fastifyStatic from '@fastify/static';
 import { config } from './config.js';
 import { getDb, initDb } from './db.js';
+import { registerFrontendAssets } from './frontend-assets.js';
 import { authRoutes, registerAuthHooks } from './routes/auth.js';
 import { instanceRoutes } from './routes/instances.js';
 import { fileRoutes } from './routes/files.js';
@@ -119,19 +118,8 @@ export async function buildApp(options: BuildAppOptions = {}) {
       : {}),
   }));
 
-  // 生产环境托管前端构建产物
-  if (fs.existsSync(config.webDist)) {
-    await app.register(fastifyStatic, {
-      root: config.webDist,
-      wildcard: false,
-    });
-    app.setNotFoundHandler((req, reply) => {
-      if (req.url.startsWith('/api') || req.url.startsWith('/ws')) {
-        return reply.code(404).send({ error: 'Not Found' });
-      }
-      return reply.sendFile('index.html');
-    });
-  }
+  // 生产环境托管前端构建产物。
+  await registerFrontendAssets(app, config.webDist);
 
   return app;
 }

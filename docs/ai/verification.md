@@ -11,6 +11,7 @@ npm.cmd run portable:test
 npm.cmd run windows:test
 npm.cmd run typecheck
 npm.cmd run test:security -w @mmd/server
+npm.cmd run test:static
 npm.cmd run build
 npm.cmd run audit:production
 ```
