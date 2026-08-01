@@ -129,6 +129,9 @@ export function DashboardPage() {
                   </td>
                   <td data-label="操作">
                     <div className="btn-row">
+                      <Link className="btn btn-ghost" to={`/instances/${inst.id}`}>
+                        查看实例
+                      </Link>
                       <button
                         className="btn"
                         type="button"
