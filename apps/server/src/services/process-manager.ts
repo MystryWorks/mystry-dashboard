@@ -9,6 +9,7 @@ import { config } from '../config.js';
 import { assertSafeInstanceRoot, resolveDirFromRow, resolveSafePath } from '../utils/path.js';
 import { getMinecraftChildEnv } from '../utils/child-env.js';
 import { parseJvmArgs, serializeJvmArgFile } from '../utils/jvm-args.js';
+import { resolveJavaRuntimeCommand } from './java-runtime-service.js';
 
 type ResourceLimits = {
   maxCommandBytes: number;
@@ -154,7 +155,10 @@ export class ProcessManager extends EventEmitter {
       args = [...jvmArgs, '-jar', safeJarRel, 'nogui'];
     }
 
-    const child = this.spawnMinecraft('java', args, {
+    // 默认由 PATH 解析 java；已绑定条目会在启动前重新执行 -version 验证。
+    const javaCommand = await resolveJavaRuntimeCommand(instance.java_runtime_id);
+
+    const child = this.spawnMinecraft(javaCommand, args, {
       cwd,
       env: getMinecraftChildEnv(),
       windowsHide: true,

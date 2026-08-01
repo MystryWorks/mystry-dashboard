@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import type { ChildProcessWithoutNullStreams } from 'node:child_process';
 import { EventEmitter } from 'node:events';
 import fs from 'node:fs';
+import { DatabaseSync } from 'node:sqlite';
 import os from 'node:os';
 import path from 'node:path';
 import { PassThrough, Readable } from 'node:stream';
@@ -49,6 +50,24 @@ async function main(): Promise<void> {
   process.env.MAX_CONCURRENT_FILE_DOWNLOADS = '1';
   process.env.MAX_COMMAND_BYTES = '4';
 
+  // 先写入不含 Java 运行时字段的旧库，验证启动期兼容迁移。
+  const legacyDb = new DatabaseSync(path.join(dataRoot, 'panel.db'));
+  legacyDb.exec(`
+    CREATE TABLE instances (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      core_type TEXT NOT NULL DEFAULT 'custom',
+      mc_version TEXT,
+      jar_file TEXT NOT NULL DEFAULT 'server.jar',
+      java_path TEXT NOT NULL DEFAULT 'java',
+      jvm_args TEXT NOT NULL DEFAULT '-Xms1G -Xmx2G',
+      accept_eula INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+  `);
+  legacyDb.close();
+
   const { assertDistinctSecrets, config } = await import('./config.js');
   const { getDb } = await import('./db.js');
   const { buildApp } = await import('./index.js');
@@ -60,6 +79,10 @@ async function main(): Promise<void> {
     UploadTooLargeError,
   } = await import('./services/upload-service.js');
   const { getMinecraftChildEnv } = await import('./utils/child-env.js');
+  const {
+    resolveJavaRuntimeCommand,
+    verifyJavaExecutable,
+  } = await import('./services/java-runtime-service.js');
   const { acquireFileDownloadSlot } = await import('./services/file-service.js');
   const { ProcessManager, registerStdinSafetyHandlers } = await import('./services/process-manager.js');
   const {
@@ -94,11 +117,28 @@ async function main(): Promise<void> {
   });
   const testRoot = fs.mkdtempSync(path.join(config.uploadDir, '.security-self-test-'));
   try {
+    const instanceColumns = getDb().prepare('PRAGMA table_info(instances)').all() as Array<{ name: string }>;
+    const runtimeColumns = getDb().prepare('PRAGMA table_info(java_runtimes)').all() as Array<{ name: string }>;
+    assert.equal(instanceColumns.some((column) => column.name === 'java_runtime_id'), true);
+    assert.equal(runtimeColumns.some((column) => column.name === 'available'), true);
     const health = await app.inject({ method: 'GET', url: '/api/health' });
     assert.equal(health.statusCode, 200);
     assert.equal(health.json<{ processFingerprint: string }>().processFingerprint, 'security-self-test');
     assert.throws(() => resolveSafePath(testRoot, '../outside'), /非法路径/);
     assert.equal(getMinecraftChildEnv().JWT_SECRET, undefined);
+    const mockedJavaPath = process.platform === 'win32'
+      ? 'C:/runtime/bin/java.exe'
+      : '/runtime/bin/java';
+    const verifiedJava = await verifyJavaExecutable(
+      mockedJavaPath,
+      async (_command, _args, options) => {
+        assert.equal(options.env.JWT_SECRET, undefined);
+        assert.equal(options.env.SETUP_TOKEN, undefined);
+        assert.equal(options.env.LAUNCHER_TOKEN, undefined);
+        return { stdout: '', stderr: 'openjdk version "21.0.3"' };
+      },
+    );
+    assert.deepEqual(verifiedJava, { version: '21.0.3', majorVersion: 21 });
     const installerNetworkFailure = [
       'Failed to establish connection to https://maven.minecraftforge.net/example.jar',
       'java.net.SocketTimeoutException: Read timed out',
@@ -120,6 +160,31 @@ async function main(): Promise<void> {
       ]),
       /必须使用不同的随机值/,
     );
+
+    const unavailableRuntimeId = 'unavailable-runtime';
+    getDb()
+      .prepare(
+        `INSERT INTO java_runtimes
+         (id, path, version, major_version, source, verified_at, available)
+         VALUES (?, ?, ?, ?, ?, ?, 0)`,
+      )
+      .run(
+        unavailableRuntimeId,
+        path.join(dataRoot, 'missing-java.exe'),
+        '17.0.0',
+        17,
+        'scan',
+        new Date().toISOString(),
+      );
+    assert.throws(
+      () => createInstance({
+        name: '不可用 Java 运行时',
+        coreType: 'custom',
+        javaRuntimeId: unavailableRuntimeId,
+      }),
+      /不可用/,
+    );
+    await assert.rejects(() => resolveJavaRuntimeCommand(unavailableRuntimeId), /不可用/);
 
     const interruptedInstance = createInstance({ name: '中断任务实例', coreType: 'custom' });
     const interruptedTask = createTask('deploy');
@@ -211,6 +276,14 @@ async function main(): Promise<void> {
     assert.equal(setup.statusCode, 200);
     const accessToken = setup.json<{ token: string }>().token;
     const authorization = { authorization: `Bearer ${accessToken}` };
+
+    const taskList = await app.inject({
+      method: 'GET',
+      url: '/api/tasks',
+      headers: authorization,
+    });
+    assert.equal(taskList.statusCode, 200);
+    assert.equal(Array.isArray(taskList.json<{ tasks: unknown[] }>().tasks), true);
 
     const createWithLegacyField = await app.inject({
       method: 'POST',

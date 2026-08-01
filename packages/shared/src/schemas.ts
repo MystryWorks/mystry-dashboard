@@ -34,6 +34,7 @@ export const createInstanceBodySchema = {
     mcVersion: { type: 'string' },
     acceptEula: { type: 'boolean' },
     nodeId: { type: 'string' },
+    javaRuntimeId: { type: ['string', 'null'] },
   },
 } as const;
 
@@ -45,6 +46,7 @@ export const updateInstanceBodySchema = {
     jarFile: { type: 'string' },
     jvmArgs: { type: 'string' },
     acceptEula: { type: 'boolean' },
+    javaRuntimeId: { type: ['string', 'null'] },
   },
 } as const;
 
@@ -61,6 +63,7 @@ export const deployCoreBodySchema = {
     installerVersion: { type: 'string' },
     jvmArgs: { type: 'string' },
     acceptEula: { type: 'boolean' },
+    javaRuntimeId: { type: ['string', 'null'] },
   },
 } as const;
 

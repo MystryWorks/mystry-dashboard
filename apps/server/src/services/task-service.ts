@@ -87,6 +87,15 @@ export function getTask(id: string): TaskInfo | null {
   return row ? rowToTask(row) : null;
 }
 
+/** 任务中心列表：按创建时间倒序返回最近的任务，limit 由服务端固定边界。 */
+export function listTasks(limit = 50): TaskInfo[] {
+  const safeLimit = Math.min(Math.max(1, Math.floor(limit)), 200);
+  const rows = getDb()
+    .prepare('SELECT * FROM tasks ORDER BY created_at DESC, id DESC LIMIT ?')
+    .all(safeLimit) as TaskRow[];
+  return rows.map(rowToTask);
+}
+
 export function updateTask(
   id: string,
   patch: Partial<Pick<TaskInfo, 'status' | 'progress' | 'message' | 'result' | 'error'>>,

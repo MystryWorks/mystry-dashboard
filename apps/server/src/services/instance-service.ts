@@ -21,6 +21,16 @@ import {
 } from '../utils/path.js';
 import { processManager } from './process-manager.js';
 import { nodeExists } from './node-service.js';
+import { getJavaRuntime } from './java-runtime-service.js';
+
+/** 校验运行时引用：只能引用注册表中已验证的运行时，null 表示 PATH 中的 java。 */
+function assertValidJavaRuntime(javaRuntimeId: string | null | undefined): void {
+  if (javaRuntimeId === null || javaRuntimeId === undefined) return;
+  const runtime = getJavaRuntime(javaRuntimeId);
+  if (!runtime || !runtime.available) {
+    throw new Error('所选 Java 运行时不存在或不可用，请重新探测后再选择');
+  }
+}
 
 function rowToInfo(row: InstanceRow): InstanceInfo {
   const requiresMigration = row.install_path !== null;
@@ -36,6 +46,7 @@ function rowToInfo(row: InstanceRow): InstanceInfo {
     requiresMigration,
     status: processManager.getStatus(row.id) as InstanceStatus,
     nodeId: row.node_id,
+    javaRuntimeId: row.java_runtime_id ?? null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     acceptEula: Boolean(row.accept_eula),
@@ -100,6 +111,8 @@ export function createInstance(input: CreateInstanceInput): InstanceInfo {
   let markerWritten = false;
   let directoryCreatedByCall = false;
 
+  assertValidJavaRuntime(input.javaRuntimeId);
+
   try {
     const existedBefore = fs.existsSync(dir);
     assertSafeDirectoryPath(dir);
@@ -124,8 +137,8 @@ export function createInstance(input: CreateInstanceInput): InstanceInfo {
     const result = getDb()
       .prepare(
         `INSERT INTO instances
-        (id, name, core_type, mc_version, jar_file, java_path, jvm_args, accept_eula, install_path, ownership_marker, node_id, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        (id, name, core_type, mc_version, jar_file, java_path, jvm_args, accept_eula, install_path, ownership_marker, node_id, java_runtime_id, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         id,
@@ -139,6 +152,7 @@ export function createInstance(input: CreateInstanceInput): InstanceInfo {
         null,
         ownershipMarker,
         nodeId,
+        input.javaRuntimeId ?? null,
         now,
         now,
       );
@@ -156,6 +170,7 @@ export function createInstance(input: CreateInstanceInput): InstanceInfo {
 export function updateInstance(id: string, input: UpdateInstanceInput): InstanceInfo {
   const existing = getInstanceRow(id);
   if (!existing) throw new Error('实例不存在');
+  assertValidJavaRuntime(input.javaRuntimeId);
 
   const now = nowIso();
   getDb()
@@ -166,6 +181,7 @@ export function updateInstance(id: string, input: UpdateInstanceInput): Instance
         java_path = ?,
         jvm_args = ?,
         accept_eula = ?,
+        java_runtime_id = ?,
         updated_at = ?
       WHERE id = ?`,
     )
@@ -175,6 +191,7 @@ export function updateInstance(id: string, input: UpdateInstanceInput): Instance
       'java',
       input.jvmArgs ?? existing.jvm_args,
       input.acceptEula !== undefined ? (input.acceptEula ? 1 : 0) : existing.accept_eula,
+      input.javaRuntimeId === undefined ? existing.java_runtime_id : input.javaRuntimeId,
       now,
       id,
     );

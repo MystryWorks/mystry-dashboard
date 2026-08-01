@@ -69,6 +69,8 @@ export interface InstanceInfo {
   status: InstanceStatus;
   /** 所属节点 ID；默认为内置本机节点 LOCAL_NODE_ID */
   nodeId: string;
+  /** 绑定的 Java 运行时 ID；null 表示使用面板 PATH 中的 java */
+  javaRuntimeId: string | null;
   createdAt: string;
   updatedAt: string;
   acceptEula: boolean;
@@ -83,6 +85,8 @@ export interface CreateInstanceInput {
   acceptEula?: boolean;
   /** 所属节点 ID；留空则使用本机节点。非本机节点在 Agent 接入前会创建失败 */
   nodeId?: string;
+  /** Java 运行时 ID（必须来自面板探测清单）；留空/null 使用 PATH 中的 java */
+  javaRuntimeId?: string | null;
 }
 
 export interface UpdateInstanceInput {
@@ -90,6 +94,8 @@ export interface UpdateInstanceInput {
   jarFile?: string;
   jvmArgs?: string;
   acceptEula?: boolean;
+  /** Java 运行时 ID（必须来自面板探测清单）；null 恢复为 PATH 中的 java */
+  javaRuntimeId?: string | null;
 }
 
 export interface FileEntry {
@@ -117,11 +123,51 @@ export interface DeployCoreInput {
   installerVersion?: string;
   jvmArgs?: string;
   acceptEula?: boolean;
+  /** Java 运行时 ID（必须来自面板探测清单）；留空/null 使用 PATH 中的 java */
+  javaRuntimeId?: string | null;
 }
 
 export interface JavaDetectResult {
   available: boolean;
   version: string | null;
+}
+
+/** 面板探测并执行 -version 验证过的 Java 运行时（绝对路径由面板扫描产生，不接受用户提交） */
+export interface JavaRuntimeInfo {
+  /** 稳定 ID：规范化路径的哈希，重扫后不变 */
+  id: string;
+  /** java 可执行文件绝对路径 */
+  path: string;
+  /** -version 输出中的完整版本串，如 "17.0.2" */
+  version: string | null;
+  /** 主版本号，如 8 / 17 / 21 */
+  majorVersion: number | null;
+  /** 探测来源：JAVA_HOME 环境变量或常见安装目录扫描 */
+  source: 'env' | 'scan';
+  verifiedAt: string;
+  /** 最近一次完整扫描是否仍发现并验证此运行时 */
+  available: boolean;
+}
+
+/** GET /api/system/java-runtimes 响应 */
+export interface JavaRuntimeListResult {
+  runtimes: JavaRuntimeInfo[];
+}
+
+/**
+ * 按 Minecraft 版本推荐 Java 主版本号；无法识别版本格式时返回 null。
+ * 1.20.5+ → 21；1.17–1.20.4 → 17；1.16.5 及更早 → 8。
+ */
+export function recommendedJavaMajor(mcVersion: string | null | undefined): number | null {
+  if (!mcVersion) return null;
+  const match = mcVersion.match(/^1\.(\d+)(?:\.(\d+))?/);
+  if (!match) return null;
+  const minor = Number(match[1]);
+  const patch = Number(match[2] ?? 0);
+  if (minor >= 21) return 21;
+  if (minor === 20) return patch >= 5 ? 21 : 17;
+  if (minor >= 17) return 17;
+  return 8;
 }
 
 export interface TaskInfo {
@@ -134,6 +180,11 @@ export interface TaskInfo {
   error?: string;
   createdAt: string;
   updatedAt: string;
+}
+
+/** 任务中心列表响应（GET /api/tasks） */
+export interface TaskListResult {
+  tasks: TaskInfo[];
 }
 
 export interface AuthSetupStatus {

@@ -51,18 +51,13 @@ export async function instanceRoutes(app: FastifyInstance): Promise<void> {
 
   app.patch<{
     Params: { id: string };
-    Body: {
-      name?: string;
-      jarFile?: string;
-      jvmArgs?: string;
-      acceptEula?: boolean;
-    };
+    Body: UpdateInstanceInput;
   }>('/api/instances/:id', { attachValidation: true, schema: { body: updateInstanceBodySchema } }, async (req, reply) => {
     if (req.validationError) {
       return reply.code(400).send({ error: '实例参数包含不支持的字段或格式不正确' });
     }
     try {
-      return updateInstance(req.params.id, req.body as UpdateInstanceInput);
+      return updateInstance(req.params.id, req.body);
     } catch (err) {
       return reply.code(404).send({ error: err instanceof Error ? err.message : String(err) });
     }

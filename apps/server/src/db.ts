@@ -23,8 +23,22 @@ export type InstanceRow = {
   ownership_marker: string | null;
   /** 所属节点 ID，默认为内置本机节点 'local' */
   node_id: string;
+  /** 绑定的 Java 运行时 ID（java_runtimes.id）；NULL 表示使用 PATH 中的 java */
+  java_runtime_id: string | null;
   created_at: string;
   updated_at: string;
+};
+
+/** 面板探测并验证过的 Java 运行时；路径只允许来自面板扫描，不接受请求提交 */
+export type JavaRuntimeRow = {
+  id: string;
+  path: string;
+  version: string | null;
+  major_version: number | null;
+  source: 'env' | 'scan';
+  verified_at: string;
+  /** 最近一次完整扫描是否仍发现并验证此运行时 */
+  available: number;
 };
 
 /** 节点：本机节点（内置，id='local'）或远程 Agent 节点 */
@@ -116,6 +130,16 @@ export function initDb(): void {
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS java_runtimes (
+      id TEXT PRIMARY KEY,
+      path TEXT NOT NULL UNIQUE,
+      version TEXT,
+      major_version INTEGER,
+      source TEXT NOT NULL,
+      verified_at TEXT NOT NULL,
+      available INTEGER NOT NULL DEFAULT 1
+    );
   `);
 
   // 兼容已有数据库：补齐实例目录安全字段
@@ -129,6 +153,13 @@ export function initDb(): void {
   cols = db.prepare(`PRAGMA table_info(instances)`).all() as Array<{ name: string }>;
   if (!cols.some((c) => c.name === 'ownership_marker')) {
     db.exec('ALTER TABLE instances ADD COLUMN ownership_marker TEXT');
+  }
+  if (!cols.some((c) => c.name === 'java_runtime_id')) {
+    db.exec('ALTER TABLE instances ADD COLUMN java_runtime_id TEXT');
+  }
+  const runtimeCols = db.prepare('PRAGMA table_info(java_runtimes)').all() as Array<{ name: string }>;
+  if (!runtimeCols.some((c) => c.name === 'available')) {
+    db.exec('ALTER TABLE java_runtimes ADD COLUMN available INTEGER NOT NULL DEFAULT 1');
   }
 
   ensureLocalNode();

@@ -18,6 +18,7 @@ import { getInstanceDir, resolveSafePath } from '../utils/path.js';
 import { recordTaskInstance, runBackgroundTask } from './task-service.js';
 import { parseJvmArgs, serializeJvmArgFile } from '../utils/jvm-args.js';
 import { getMinecraftChildEnv } from '../utils/child-env.js';
+import { resolveJavaRuntimeCommand } from './java-runtime-service.js';
 
 /** PaperMC 要求 User-Agent 标明软件名与联系方式 */
 const USER_AGENT = 'MinecraftMysteryDashboard/0.1 (https://localhost; contact@localhost)';
@@ -582,6 +583,7 @@ function reportInstallerLine(
 function runInstallerAttempt(
   installerJar: string,
   cwd: string,
+  javaCommand: string,
   signal: AbortSignal,
   progressState: InstallerProgressState,
   report?: (progress: number, message: string) => void,
@@ -591,7 +593,7 @@ function runInstallerAttempt(
       reject(abortError(signal));
       return;
     }
-    const child = spawn('java', ['-jar', installerJar, '--installServer'], {
+    const child = spawn(javaCommand, ['-jar', installerJar, '--installServer'], {
       cwd,
       env: getMinecraftChildEnv(),
       windowsHide: true,
@@ -691,13 +693,14 @@ function runInstallerAttempt(
 async function runInstaller(
   installerJar: string,
   cwd: string,
+  javaCommand: string,
   signal: AbortSignal,
   report?: (progress: number, message: string) => void,
 ): Promise<void> {
   const progressState: InstallerProgressState = { progress: 60, completedDownloads: 0 };
   for (let attempt = 1; attempt <= INSTALLER_MAX_ATTEMPTS; attempt += 1) {
     try {
-      await runInstallerAttempt(installerJar, cwd, signal, progressState, report);
+      await runInstallerAttempt(installerJar, cwd, javaCommand, signal, progressState, report);
       return;
     } catch (error) {
       if (!(error instanceof InstallerProcessError) || signal.aborted) throw error;
@@ -804,6 +807,7 @@ export async function deployCore(input: DeployCoreInput) {
           jarFile: isModLoader ? '@modloader' : 'server.jar',
           jvmArgs: input.jvmArgs,
           acceptEula: input.acceptEula,
+          javaRuntimeId: input.javaRuntimeId ?? null,
         });
         instanceId = instance.id;
         recordTaskInstance(taskId, instance.id);
@@ -856,7 +860,8 @@ export async function deployCore(input: DeployCoreInput) {
         throwIfAborted(signal);
         report(60, '运行 --installServer…');
         writeUserJvmArgs(dir, input.jvmArgs || '-Xms1G -Xmx2G');
-        await runInstaller(installerDest, dir, signal, (progress, message) => {
+        const javaCommand = await resolveJavaRuntimeCommand(input.javaRuntimeId);
+        await runInstaller(installerDest, dir, javaCommand, signal, (progress, message) => {
           report(progress, message);
         });
 

@@ -15,6 +15,7 @@ import {
   getTask,
   isTaskCapacityError,
   isTaskShuttingDownError,
+  listTasks,
 } from '../services/task-service.js';
 import {
   isUploadCapacityError,
@@ -109,6 +110,8 @@ export async function coreRoutes(app: FastifyInstance): Promise<void> {
       return reply.code(400).send({ error: err instanceof Error ? err.message : String(err) });
     }
   });
+
+  app.get('/api/tasks', async () => ({ tasks: listTasks(50) }));
 
   app.get<{ Params: { id: string } }>('/api/tasks/:id', async (req, reply) => {
     const task = getTask(req.params.id);
