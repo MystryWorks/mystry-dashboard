@@ -17,7 +17,7 @@
 ## 路径与文件
 
 - 所有实例文件操作必须走 `file-service` 和 `apps/server/src/utils/path.ts` 的现有校验。
-- 不接受客户端传入的系统绝对路径、Java 可执行路径或任意安装目录。
+- 不接受客户端传入的系统绝对路径、Java 可执行路径或任意安装目录；Java 只可引用面板扫描、注册并复验后的运行时 ID。
 - 不绕过 symlink/junction、实例根目录、ownership marker 和 legacy 迁移保护。
 - 删除、覆盖、解压和接管前必须确认目标位于 `DATA_DIR/instances/<id>`。
 - 大文件下载保持流式传输；浏览器端不得用 `res.blob()` 将完整文件载入内存。

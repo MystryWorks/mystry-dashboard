@@ -10,7 +10,7 @@
 | ID | 状态 | 决策 | 原因与事实源 |
 |---|---|---|---|
 | D-001 | Adopted | 实例目录固定为最终数据根的 `instances/<id>` | 数据根优先取 `MMD_DATA_DIR`，否则取 `DATA_DIR`；收敛文件与删除边界；`utils/path.ts`、`instance-service.ts` |
-| D-002 | Adopted | 所有实例使用面板进程 `PATH` 中的 `java` | 禁止请求控制可执行路径；`process-manager.ts`、`java-detect.ts` |
+| D-002 | Superseded | 所有实例使用面板进程 `PATH` 中的 `java` | 已由 D-014 替代；`process-manager.ts`、`java-detect.ts` |
 | D-003 | Adopted | 当前只开放本机节点 `local` | 远程协议尚未完成；`REMOTE_NODE_CREATION_ENABLED = false` |
 | D-004 | Adopted | 前后端契约由 `@mmd/shared` 优先定义 | 减少类型和 JSON Schema 漂移；`packages/shared/src/` |
 | D-005 | Adopted | PanelManager 使用独立 `LAUNCHER_TOKEN` 调用回环关闭接口 | 与登录/setup 密钥分离并限制本机；`routes/launcher.ts` |
@@ -18,10 +18,11 @@
 | D-007 | Rejected | 提供整机目录浏览和任意安装路径 | 会扩大目录穿越与误删除风险 |
 | D-008 | Superseded | 请求指定 `installPath` 或 `javaPath` | 已由 D-001、D-002 替代；旧字段只保留数据库兼容用途 |
 | D-009 | Adopted | Preview 先发布五目标便携压缩包，系统安装器和服务注册延期 | `scripts/portable/`、`.github/workflows/portable-release.yml` |
-| D-010 | Adopted | 便携包内置固定 Node.js 22，Minecraft Java 继续使用系统 `PATH` | 降低首发安装复杂度，同时保持 D-002 的执行边界 |
+| D-010 | Adopted | 便携包内置固定 Node.js 22，不捆绑 Minecraft Java | 降低首发安装复杂度；实例默认使用 PATH，已绑定实例遵循 D-014 的受扫描注册运行时边界 |
 | D-011 | Adopted | 配置和数据通过 `MMD_HOME`、`MMD_CONFIG_PATH`、`MMD_DATA_DIR` 与源码位置解耦 | `apps/server/src/config.ts`、`scripts/portable/mmdctl.mjs` |
 | D-012 | Adopted | 便携包只能在目标平台原生组装，并从最终压缩包重新解压冒烟验证 | 避免源码目录成功替代真实交付验证；`package-portable.mjs`、`smoke-portable.mjs` |
 | D-013 | Rejected | Preview 使用 Node SEA 代替运行时目录 | 当前 SEA 仍属 Active development，且直接支持单个 CommonJS 主脚本，不适合当前 ESM、多包与静态资源布局 |
+| D-014 | Adopted | 实例可绑定面板探测注册的 Java 运行时；默认仍是 PATH 中的 `java` | 候选路径只来自面板扫描（JAVA_HOME、常见安装目录），扫描与执行前复验均使用脱敏环境；请求只能提交运行时 ID，不能提交路径；`java-runtime-service.ts`、`process-manager.ts` |
 
 ## 更新规则
 

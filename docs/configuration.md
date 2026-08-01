@@ -141,7 +141,7 @@ node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"
 2. 若需远程访问，使用反向代理（Nginx / Caddy）+ HTTPS，并限制 IP 或 VPN。
 3. `JWT_SECRET` 和 `SETUP_TOKEN` 必须使用不同的随机值，setup 成功后移除 `SETUP_TOKEN`。
 4. 管理员密码使用至少 12 位的强密码；面板具备实例文件读写与进程执行能力。
-5. 所有实例进程固定使用 PATH 中的 `java`；先用 `java -version` 检查运行环境。
+5. 实例默认使用 PATH 中的 `java`；也可在部署页或实例设置中绑定面板扫描并验证的运行时 ID。扫描会执行候选的 `-version`，因此 `JAVA_HOME` 与常见安装目录必须由受信任的本机管理员控制；请求不能提交 Java 路径。
 6. Paper 下载请求会附带合规 User-Agent；请遵守各核心分发方的使用条款。
 
 ## 前端开发代理

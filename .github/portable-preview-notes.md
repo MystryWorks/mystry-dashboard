@@ -1,7 +1,7 @@
 ## 便携 Preview 使用说明
 
 - Windows 解压后运行 `mmdctl.cmd start`；Linux / macOS 解压后先执行 `chmod +x mmdctl`，再运行 `./mmdctl start`。
-- 包内已包含 Node.js 和生产依赖；Minecraft 仍需要系统 `PATH` 中可用且版本匹配的 Java。
+- 包内已包含 Node.js 和生产依赖，但不包含 Minecraft Java；默认使用系统 `PATH` 中的 Java，也可在面板中扫描并选择其他已安装运行时。
 - 本版本不提供系统安装器、服务注册、开机启动、原生自动更新、Windows/macOS 代码签名或 macOS 公证。
 
 ## 升级与数据保留

@@ -44,6 +44,7 @@ X-Setup-Token: <SETUP_TOKEN>
 | 方法 | 路径 | 认证 | 响应 |
 |------|------|------|------|
 | GET | `/api/system/java` | 是 | Java 状态对象 |
+| GET | `/api/system/java-runtimes` | 是 | `{ runtimes: JavaRuntimeInfo[] }` |
 
 Java 状态响应准确结构为：
 
@@ -54,7 +55,20 @@ Java 状态响应准确结构为：
 }
 ```
 
-找不到 Java 时返回 `{ "available": false, "version": null }`。探测和所有实例进程都固定执行 PATH 中的 `java`，响应不包含可执行文件路径、候选列表或选择器信息。面板不提供全盘目录浏览接口。
+找不到 Java 时返回 `{ "available": false, "version": null }`。面板不提供全盘目录浏览接口。
+
+`/api/system/java-runtimes` 返回面板探测并验证过的 Java 运行时注册表；带 `?refresh=1` 请求重新扫描。并发扫描会合并为一个任务，连续强制刷新受 30 秒冷却限制；普通读取默认使用 60 秒缓存。候选路径只来自 `JAVA_HOME` 和常见安装目录扫描，且必须文件名为 `java`/`java.exe`、`-version` 输出可解析出版本号才会入表。实例可通过 `javaRuntimeId` 绑定表内条目（创建、更新、部署请求均接受该可选字段；`null` 表示使用 PATH 中的 `java`），请求不能提交任意可执行路径。绑定运行时在启动或 Forge/NeoForge Installer 执行前会再次验证；最近一次扫描未发现的条目会以 `available: false` 返回。
+
+`JavaRuntimeInfo` 字段：
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `id` | string | 运行时注册表 ID；请求仅可提交该值 |
+| `path` | string | 面板扫描到的绝对 Java 可执行路径，仅对已认证用户返回 |
+| `version` / `majorVersion` | string / number | 最近一次验证的完整版本与主版本号 |
+| `source` | `env \| scan` | `JAVA_HOME` 或常见安装目录扫描 |
+| `verifiedAt` | string | 最近一次成功验证时间 |
+| `available` | boolean | 最近一次完整扫描是否仍发现并验证此条目 |
 
 ## 实例 `/api/instances`
 
@@ -100,6 +114,7 @@ Authorization: Bearer <token>
 | `jvmArgs` | string | JVM 参数字符串 |
 | `requiresMigration` | boolean | 是否需要按旧版外部实例流程完成接管 |
 | `nodeId` | string | 执行节点 ID；本机为 `local` |
+| `javaRuntimeId` | string \| null | 绑定的 Java 运行时 ID；`null` 使用 PATH 中的 `java` |
 | `status` | `InstanceStatus` | 运行状态 |
 | `acceptEula` | boolean | 是否写入 `eula=true` |
 | `createdAt` / `updatedAt` | string | ISO 时间 |
@@ -133,10 +148,11 @@ Authorization: Bearer <token>
 | GET | `/api/cores/forge/:version/loaders` | Forge loader 列表 |
 | GET | `/api/cores/neoforge/:version/loaders` | NeoForge loader 列表 |
 | POST | `/api/cores/deploy` | Body：`DeployCoreInput`，返回 `TaskInfo` |
-| POST | `/api/import` | multipart：`name`、`file`（zip）、可选 `jvmArgs`、`acceptEula` |
+| POST | `/api/import` | multipart：`name`、`file`（zip）、可选 `jvmArgs`、`acceptEula`；不接受 `javaRuntimeId` |
 | GET | `/api/tasks/:id` | 查询任务进度 `TaskInfo` |
+| GET | `/api/tasks` | 任务中心列表，按创建时间倒序返回最近 50 条 `{ tasks: TaskInfo[] }` |
 
-部署和导入始终把内容写入新实例的 `DATA_DIR/instances/<id>`，不接收自定义目录或 Java 可执行文件字段。所有实例启动均使用 PATH 中的 `java`。
+部署和导入始终把内容写入新实例的 `DATA_DIR/instances/<id>`，不接收自定义目录或 Java 可执行文件路径。实例默认使用 PATH 中的 `java` 启动，可通过 `javaRuntimeId` 绑定注册表中当前可用的运行时；部署请求中的绑定同样用于 Forge/NeoForge Installer。导入实例初始使用 PATH，完成后可在实例设置中绑定运行时。
 
 核心版本、构建和 loader 元数据受 `MAX_CORE_METADATA_BYTES` 与 `CORE_METADATA_TIMEOUT_MS` 限制；核心文件下载先写入临时文件，完整完成后才原子发布到 `DATA_DIR/cache/cores/`，不复用未完成缓存。队列已满时创建任务返回 **429**。
 

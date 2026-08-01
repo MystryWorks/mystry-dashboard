@@ -10,7 +10,7 @@
 | macOS Intel | `mmd-v0.2.0-preview.1-macos-x64.tar.gz` |
 | macOS Apple Silicon | `mmd-v0.2.0-preview.1-macos-arm64.tar.gz` |
 
-这是 Preview，不是系统安装器。用户无需安装 Node.js 或运行 `npm install`，但 Minecraft 服务端仍使用系统 `PATH` 中的 `java`。本阶段没有采用 [Node SEA](https://nodejs.org/download/release/latest-jod/docs/api/single-executable-applications.html)：该能力仍标为 Active development，且直接面向单个 CommonJS 主脚本，不适合当前 ESM、多包和静态前端资源布局。
+这是 Preview，不是系统安装器。用户无需安装 Node.js 或运行 `npm install`，但仍需自行安装 Minecraft 所需 Java。实例默认使用系统 `PATH` 中的 `java`，也可在面板中选择扫描并验证的本机运行时。本阶段没有采用 [Node SEA](https://nodejs.org/download/release/latest-jod/docs/api/single-executable-applications.html)：该能力仍标为 Active development，且直接面向单个 CommonJS 主脚本，不适合当前 ESM、多包和静态前端资源布局。
 
 ## 下载与校验
 
@@ -108,7 +108,7 @@ minecraft-mystery-dashboard/
 - 不注册 WinSW、systemd、LaunchDaemon，也不会开机自动启动。
 - Windows 和 macOS 产物尚未代码签名或公证；操作系统可能显示来源警告。
 - 不提供原生自动更新、自动回滚和运行中覆盖升级。
-- Java 8/17/21 不随包提供，也不会自动下载；需由用户正确配置系统 `PATH`。
+- Java 8/17/21 不随包提供，也不会自动下载；用户可正确配置系统 `PATH` 作为默认运行时，或启动面板后扫描并选择其他已安装版本。
 - 登录仍使用浏览器本地 JWT；Cookie 会话、CSRF、TOTP 和公网部署向导尚未实现。
 - 默认只监听 `127.0.0.1`。不要把面板端口直接暴露到不可信公网。
 - 2026-07-30 的官方 registry 生产依赖审计结果为 0 critical、0 high、2 moderate。两项 moderate 来自 React Router 6 系公告；当前 SPA 不使用 SSR hydration，导航目标来自固定站内路径或服务端生成的实例 ID，但这些公告仍作为 Preview 残余风险记录，并须在每次发布时重新审计。

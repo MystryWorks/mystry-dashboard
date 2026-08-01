@@ -19,9 +19,9 @@
 - 一键部署 **Vanilla / Paper / Fabric / Forge / NeoForge**
 - 一键导入现有服务端 **zip**（含路径逃逸防护）
 - 首启创建管理员 + JWT 登录
-- 检测 PATH 中 `java` 的可用状态与版本
+- 检测 PATH 中 `java` 的状态，并扫描、验证可选择的 Java 运行时
 
-实例只托管在最终数据根目录的 `instances/<id>`，不支持自定义安装目录，也不提供全盘目录浏览。源码模式默认由 `DATA_DIR` 指定数据根；便携控制器使用优先级更高的 `MMD_DATA_DIR`。所有实例进程固定使用 PATH 中的 `java`。
+实例只托管在最终数据根目录的 `instances/<id>`，不支持自定义安装目录，也不提供全盘目录浏览。源码模式默认由 `DATA_DIR` 指定数据根；便携控制器使用优先级更高的 `MMD_DATA_DIR`。实例默认使用 PATH 中的 `java`，也可在部署页或实例设置中选择面板探测并验证的运行时。
 
 ## 便携预览版
 
@@ -34,14 +34,14 @@ chmod +x mmdctl
 ./mmdctl start
 ```
 
-便携版仍要求系统 `PATH` 中存在适合目标 Minecraft 版本的 `java`。完整下载、校验、升级、数据保留和已知限制见 [便携预览版说明](docs/portable-release.md)。
+便携版不包含 Java。可将适合目标 Minecraft 版本的 `java` 配入系统 PATH 作为默认运行时，或在面板中选择已探测的本机运行时。完整下载、校验、升级、数据保留和已知限制见 [便携预览版说明](docs/portable-release.md)。
 
 ## 源码运行环境要求
 
 | 依赖 | 要求 |
 |------|------|
 | Node.js | **≥ 22**（使用内置 `node:sqlite`，无需原生 SQLite 模块） |
-| Java | PATH 中必须可执行 `java`；面板不接受完整 Java 路径 |
+| Java | 默认使用 PATH 中的 `java`；也可选择面板扫描并验证的本机运行时，面板不接受手填完整路径 |
 | 操作系统 | 源码管理器仅面向 Windows；便携包按五个目标分别构建和验证 |
 
 ## 快速开始

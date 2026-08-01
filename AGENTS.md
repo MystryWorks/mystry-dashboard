@@ -25,7 +25,7 @@
 - Node.js 必须为 22 或更高版本。Windows PowerShell 使用 `npm.cmd`，避免执行策略拦截 `npm.ps1`。
 - 前后端公共请求、响应和字段先修改 `packages/shared`；需要运行时校验时同步 `schemas.ts`，然后先构建 `@mmd/shared`。
 - 实例唯一工作目录是 `DATA_DIR/instances/<id>`。文件操作必须复用 `file-service` 和 `apps/server/src/utils/path.ts` 的校验，不得接受或拼接未验证系统路径。
-- Minecraft 进程只能通过面板进程 `PATH` 中的 `java` 启动。远程节点创建当前关闭，不得宣称远程 Agent 已可用。
+- Minecraft 实例默认通过面板进程 `PATH` 中的 `java` 启动，也可按 `javaRuntimeId` 使用面板扫描、注册并在执行前复验的运行时；请求不得提交可执行路径。远程节点创建当前关闭，不得宣称远程 Agent 已可用。
 - 数据库没有通用迁移框架。任何 schema 变更必须同时设计现有 `panel.db` 的兼容或一次性迁移。
 - 部署/导入任务可能排队并保持 `pending`；前端必须持续显示到 `completed` 或 `failed`。
 - 用户可见文案和新增/修改的代码注释使用中文。

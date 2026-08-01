@@ -9,17 +9,17 @@ chmod +x mmdctl
 ./mmdctl start
 ```
 
-无需执行 `npm install`。仍需先确认 `java -version` 可用；完整平台列表、校验、升级和限制见 [便携预览版](portable-release.md)。
+无需执行 `npm install`。请先安装适配目标服务端的 Java；可用 `java -version` 检查默认 PATH 运行时，或在面板中探测并选择其他已安装运行时。完整平台列表、校验、升级和限制见 [便携预览版](portable-release.md)。
 
 ## 环境要求
 
 | 依赖 | 要求 |
 |------|------|
 | Node.js | **≥ 22**（使用内置 `node:sqlite`，无需编译原生 SQLite 模块） |
-| Java | PATH 中必须可用 `java`；所有实例固定使用该命令 |
+| Java | 默认使用 PATH 中的 `java`；部署页和实例设置可选择面板扫描并验证的本机运行时 |
 | 操作系统 | 源码管理器在 Windows 使用；便携产物由五个目标平台分别构建和冒烟验证 |
 
-面板不接受 Java 完整路径，也不提供选择 Java 安装目录的功能。先在运行面板的同一用户环境中执行 `java -version` 检查 PATH。
+面板不接受手填 Java 完整路径。先在运行面板的同一用户环境中执行 `java -version` 检查默认 PATH；需要其他已安装 Java 时，在部署页或实例设置中使用「重新探测」后的选择器。
 
 ## Windows 一键管理（推荐）
 
@@ -139,7 +139,7 @@ npm start
 
 ## 首次使用检查清单
 
-1. 在运行面板的环境中确认 `java -version` 可执行，并确认版本符合服务端要求。
+1. 安装符合服务端要求的 Java；默认运行时可在面板环境中用 `java -version` 检查，也可稍后在面板内选择扫描到的运行时。
 2. 配置 64 位十六进制 `JWT_SECRET` 与 `SETUP_TOKEN`。
 3. 通过带 `X-Setup-Token` header 的 setup 请求创建管理员并登录；完成后移除 `SETUP_TOKEN`。
 4. 通过「一键部署」或「导入安装包」创建第一个实例。实例会自动使用 `DATA_DIR/instances/<id>`。
@@ -157,7 +157,7 @@ npm start
 | 面板启动失败并提示密钥 | 未配置或格式不是 64 位十六进制 | 为 `JWT_SECRET` 和首次启动所需的 `SETUP_TOKEN` 分别生成随机值 |
 | setup 返回 401 | 缺少或错误的 header | 发送 `X-Setup-Token: <SETUP_TOKEN>`；确认用户表仍为空 |
 | 前端 401 | 未登录或 token 过期 | 重新登录 |
-| 启动实例失败 | jar 不存在，或 PATH 中的 `java` 不可用 / 版本不匹配 | 检查实例根目录、`java -version` 和控制台日志 |
+| 启动实例失败 | jar 不存在，或默认 PATH / 已绑定 Java 运行时不可用、版本不匹配 | 检查实例根目录、实例设置中的运行时状态和控制台日志 |
 | 部署超时 | 网络无法访问 Mojang / Paper / Fabric API，或任务超过执行超时 | 检查防火墙、代理、任务队列和相关超时配置 |
 | 端口占用 | `PORT` 与已有服务冲突，或服务端端口冲突 | 修改 `.env` 中的 `PORT` 或实例 `server.properties` |
 

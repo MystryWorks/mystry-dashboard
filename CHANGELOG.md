@@ -11,14 +11,16 @@
 - 五目标便携包构建：Windows x64、Linux x64 / ARM64、macOS Intel / Apple Silicon。
 - 跨平台 `mmdctl`，提供后台启停、前台运行、PID 指纹、健康检查、状态、日志和浏览器打开命令。
 - 最终压缩包冒烟测试、文件级 `manifest.json`、SHA-256、CycloneDX SBOM 和 GitHub Preview Release 流水线。
+- Java 运行时注册表：扫描 `JAVA_HOME` 与常见安装目录，实例和部署可按 ID 绑定已验证运行时。
+- 任务中心、亮暗主题、窄屏侧栏、配置表单和危险操作确认弹窗。
 
 ### Changed
 
-- 版本进入 `0.2.0-preview.1`；便携包内置固定 Node.js 22 和生产依赖，Java 暂继续使用系统 `PATH`。
+- 版本进入 `0.2.0-preview.1`；便携包内置固定 Node.js 22 和生产依赖，不捆绑 Minecraft Java。
 - 运行布局新增 `MMD_HOME`、`MMD_CONFIG_PATH`、`MMD_DATA_DIR`，配置与数据不再绑定源码仓库目录。
 - 升级生产依赖并移除未使用的 `adm-zip`，公开发布门禁拒绝 high / critical 生产依赖漏洞。
 - 实例统一托管在 `DATA_DIR/instances/<id>`，移除自定义实例目录和全盘目录浏览约定。
-- 所有实例进程固定使用 PATH 中的 `java`；Java 接口仅返回可用状态和版本。
+- 实例默认使用 PATH 中的 `java`，也可按 ID 绑定扫描并验证的运行时；Java 接口提供默认状态和运行时注册表。
 - 首次初始化要求两个互不相同的 64 位十六进制 `JWT_SECRET` 与 `SETUP_TOKEN`，setup 使用 `X-Setup-Token` header，且仅在用户表为空时可用。
 - 增加旧版外部实例的手动接管流程；面板不会自动搬迁、访问或删除旧外部目录。
 - 补充 JSON、上传、任务、下载、Installer、文本、命令和控制台的默认限制配置。

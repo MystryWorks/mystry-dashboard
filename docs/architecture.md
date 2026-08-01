@@ -15,10 +15,10 @@ flowchart LR
     Core[核心部署 / 导入]
     Nodes[节点注册]
     DB[(SQLite panel.db)]
-    JavaStatus[Java 状态检测]
+    JavaStatus[Java 状态与运行时探测]
   end
   subgraph host [本机]
-    Java[PATH 中的 java 进程]
+    Java[PATH java 或已注册运行时]
     Dirs[DATA_DIR/instances/<id>]
   end
   Web -->|REST + Bearer JWT| Fastify
@@ -29,14 +29,14 @@ flowchart LR
   Fastify --> Core
   Fastify --> Nodes
   Fastify --> JavaStatus
-  PM -->|spawn java -jar| Java
+  PM -->|spawn Java -jar| Java
   Java --> Dirs
   FS --> Dirs
   Core --> Dirs
   JavaStatus -->|exec java -version| Java
 ```
 
-核心边界是：实例唯一工作目录为 `DATA_DIR/instances/<id>`。`DATA_DIR` 可相对于项目根目录配置，也可使用绝对路径；实例服务、文件服务、部署和导入都只解析这个托管根目录。不存在用户可指定的安装目录，也不存在面向整台机器的目录浏览能力。所有服务端进程都通过 PATH 中的 `java` 启动。
+核心边界是：实例唯一工作目录为 `DATA_DIR/instances/<id>`。`DATA_DIR` 可相对于项目根目录配置，也可使用绝对路径；实例服务、文件服务、部署和导入都只解析这个托管根目录。不存在用户可指定的安装目录，也不存在面向整台机器的目录浏览能力。实例默认通过 PATH 中的 `java` 启动；也只能按 ID 使用面板扫描、注册并在执行前复验的运行时，客户端不能提交路径。
 
 当前为多机扩展**阶段一**：内置本机节点 `local` 承担全部执行；远程节点创建与 Agent 连接尚未开放（由共享常量 `REMOTE_NODE_CREATION_ENABLED` 控制）。
 
@@ -95,7 +95,7 @@ minecraft-mystery-dashboard/
 | `files.ts` | `/api/instances/:id/files/*` | 实例根目录内的文件与 `server.properties` |
 | `cores.ts` | `/api/cores/*`、`/api/import` | 版本列表、部署、导入 |
 | `console.ts` | `/api/instances/:id/console-ticket`、`/ws/console/:id` | 控制台 ticket 与 WebSocket |
-| `system.ts` | `/api/system/java` | PATH `java` 状态检测 |
+| `system.ts` | `/api/system/java`、`/api/system/java-runtimes` | PATH `java` 状态和本机运行时探测 |
 | `nodes.ts` | `/api/nodes/*` | 本机/远程节点列表与管理（阶段一） |
 | `launcher.ts` | `/api/launcher/shutdown` | PanelManager 本机令牌关闭通道 |
 
@@ -107,13 +107,14 @@ minecraft-mystery-dashboard/
 |------|------|
 | `auth-service` | bcrypt 密码、单用户 setup |
 | `instance-service` | 实例 CRUD、托管目录接管，与 DB 同步 |
-| `process-manager` | 使用 PATH `java` 的 `spawn`、参数解析、缓冲输出、启停重启与终态快照 |
+| `process-manager` | 解析 PATH 或已绑定运行时、参数解析、缓冲输出、启停重启与终态快照 |
 | `file-service` | 实例根目录路径规范化、防目录逃逸 |
 | `config-service` | `server.properties` 解析与写入 |
 | `core-depot` | Vanilla / Paper / Fabric 下载与部署任务 |
 | `import-service` | zip 解压导入到托管实例目录 |
 | `task-service` | 内存任务调度、持久化状态、启动中断收敛与半成品清理 |
 | `java-detect` | 执行 `java -version` 并返回可用状态与版本 |
+| `java-runtime-service` | 扫描、验证、注册 Java 运行时，合并刷新并在执行前复验绑定条目 |
 | `node-service` | 节点 CRUD、密钥哈希；远程创建受 `REMOTE_NODE_CREATION_ENABLED` 控制 |
 | `node-registry` | 节点在线态 / 心跳（内存；Agent 接入前本机恒为 online） |
 
@@ -122,9 +123,10 @@ minecraft-mystery-dashboard/
 SQLite 表：
 
 - `users` — 管理员
-- `instances` — 实例元数据、jar、JVM 参数、托管状态、`node_id` 等
+- `instances` — 实例元数据、jar、JVM 参数、托管状态、`node_id`、`java_runtime_id` 等
 - `tasks` — 部署 / 导入任务
 - `nodes` — 执行节点元数据与密钥哈希（含内置 `local`）
+- `java_runtimes` — 面板扫描、验证过的 Java 运行时及当前可用状态
 
 使用 `node:sqlite` 的 `DatabaseSync`，WAL 模式。实例文件不存入数据库，统一位于 `DATA_DIR/instances/<id>`。
 
@@ -160,10 +162,10 @@ DATA_DIR/
 普通 jar 的启动命令形态：
 
 ```text
-java <jvmArgs...> -jar <jarFile> nogui
+<PATH java 或已绑定运行时> <jvmArgs...> -jar <jarFile> nogui
 ```
 
-工作目录固定为 `DATA_DIR/instances/<id>`。`java` 由运行面板的进程环境通过 PATH 解析，数据库和请求均不能替换为其他可执行路径。
+工作目录固定为 `DATA_DIR/instances/<id>`。未绑定时 `java` 由运行面板的进程环境通过 PATH 解析；绑定时只允许使用注册表 ID 对应、且执行前重新通过 `-version` 验证的运行时。数据库和请求均不能替换为任意可执行路径。
 
 ## 前端结构
 

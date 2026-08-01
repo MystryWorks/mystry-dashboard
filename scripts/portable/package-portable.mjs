@@ -217,7 +217,7 @@ Linux / macOS：
 
 重要说明：
 1. 本包自带 Node.js，不需要安装 Node 或运行 npm install。
-2. Minecraft 仍使用系统 PATH 中的 java；启动时会检测并提示。
+2. 本包不含 Minecraft Java；默认使用系统 PATH 中的 java，也可在面板中扫描并选择其他已安装运行时。
 3. 本预览版不会注册系统服务，也不会开机自动启动。
 4. config、data、logs 由首次启动创建。升级时请停止面板，并保留这些目录。
 5. 默认只监听 127.0.0.1。不要把面板端口直接暴露到不可信公网。

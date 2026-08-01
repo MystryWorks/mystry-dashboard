@@ -371,7 +371,7 @@ function checkJava() {
     timeout: 10_000,
   });
   if (result.error || result.status !== 0) {
-    console.warn('警告：PATH 中未找到可用 Java。面板可以启动，但 Minecraft 实例无法启动。');
+    console.warn('警告：PATH 中未找到可用 Java。面板可以启动；默认实例无法启动，但可在面板中探测并选择其他已安装运行时。');
     return;
   }
   const line = `${result.stderr || result.stdout}`.split(/\r?\n/).find(Boolean)?.trim();
@@ -379,11 +379,11 @@ function checkJava() {
   const versionMatch = `${result.stderr || result.stdout}`.match(/\bversion\s+"(?:1\.)?(\d+)/i);
   const major = versionMatch ? Number(versionMatch[1]) : null;
   if (major === null) {
-    console.warn('警告：无法识别 Java 主版本，请在启动 Minecraft 实例前确认兼容性。');
+    console.warn('警告：无法识别默认 PATH Java 主版本，请在启动 Minecraft 实例前确认兼容性。');
   } else if (![8, 17, 21].includes(major)) {
     console.warn(
       `警告：检测到 Java ${major}；当前常见 Minecraft 服务端通常需要 Java 8、17 或 21，`
-        + '请按服务端版本确认兼容性。',
+        + '请按服务端版本确认兼容性；已绑定实例以所选运行时为准。',
     );
   }
 }
