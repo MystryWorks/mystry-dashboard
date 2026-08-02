@@ -10,9 +10,9 @@ import { config } from '../config.js';
 import {
   createInstance,
   deleteInstance,
-  detectJarFile,
   updateInstanceMeta,
 } from './instance-service.js';
+import { detectJarFile, findModLoaderArgsFile } from './server-launch-detect.js';
 import { ensureEula } from './config-service.js';
 import { getInstanceDir, resolveSafePath } from '../utils/path.js';
 import { recordTaskInstance, runBackgroundTask } from './task-service.js';
@@ -718,64 +718,6 @@ async function runInstaller(
       throw error;
     }
   }
-}
-
-/**
- * 查找 Forge/NeoForge 的 args 启动文件（现代版本）。
- * 返回相对实例根目录的路径。
- */
-export function findModLoaderArgsFile(
-  dir: string,
-  kind: 'forge' | 'neoforge',
-): string | null {
-  const base = resolveSafePath(
-    dir,
-    kind === 'forge'
-      ? 'libraries/net/minecraftforge/forge'
-      : 'libraries/net/neoforged/neoforge',
-  );
-  if (!fs.existsSync(base)) return null;
-
-  const argsName = process.platform === 'win32' ? 'win_args.txt' : 'unix_args.txt';
-  const stack = [base];
-  while (stack.length) {
-    const current = stack.pop()!;
-    let entries: fs.Dirent[];
-    try {
-      entries = fs.readdirSync(current, { withFileTypes: true });
-    } catch {
-      continue;
-    }
-    for (const ent of entries) {
-      const full = path.join(current, ent.name);
-      if (ent.isDirectory()) stack.push(full);
-      else if (ent.name === argsName || ent.name === 'unix_args.txt' || ent.name === 'win_args.txt') {
-        if (ent.name === argsName) {
-          return path.relative(dir, full).replace(/\\/g, '/');
-        }
-      }
-    }
-  }
-
-  // 回退：任意平台 args
-  const stack2 = [base];
-  while (stack2.length) {
-    const current = stack2.pop()!;
-    let entries: fs.Dirent[];
-    try {
-      entries = fs.readdirSync(current, { withFileTypes: true });
-    } catch {
-      continue;
-    }
-    for (const ent of entries) {
-      const full = path.join(current, ent.name);
-      if (ent.isDirectory()) stack2.push(full);
-      else if (ent.name.endsWith('_args.txt')) {
-        return path.relative(dir, full).replace(/\\/g, '/');
-      }
-    }
-  }
-  return null;
 }
 
 /**

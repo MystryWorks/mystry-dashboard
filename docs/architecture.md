@@ -20,6 +20,7 @@ flowchart LR
   subgraph host [本机]
     Java[PATH java 或已注册运行时]
     Dirs[DATA_DIR/instances/<id>]
+    Imports[DATA_DIR/imports/<目录名>]
   end
   Web -->|REST + Bearer JWT| Fastify
   Web -->|WS + 一次性 ticket| WS
@@ -33,10 +34,11 @@ flowchart LR
   Java --> Dirs
   FS --> Dirs
   Core --> Dirs
+  Imports -->|只读扫描并流式复制| Core
   JavaStatus -->|exec java -version| Java
 ```
 
-核心边界是：实例唯一工作目录为 `DATA_DIR/instances/<id>`。`DATA_DIR` 可相对于项目根目录配置，也可使用绝对路径；实例服务、文件服务、部署和导入都只解析这个托管根目录。不存在用户可指定的安装目录，也不存在面向整台机器的目录浏览能力。实例默认通过 PATH 中的 `java` 启动；也只能按 ID 使用面板扫描、注册并在执行前复验的运行时，客户端不能提交路径。
+核心边界是：实例唯一工作目录为 `DATA_DIR/instances/<id>`。`DATA_DIR` 可相对于项目根目录配置，也可使用绝对路径；实例服务、文件服务、部署和导入目标都只解析这个托管根目录。同机已有服务端只能先放到固定 `DATA_DIR/imports/<目录名>` 交接区，客户端只提交单层目录 ID，服务端只读扫描后复制到新托管实例。不存在用户可指定的安装目录，也不存在面向整台机器的目录浏览能力。实例默认通过 PATH 中的 `java` 启动；也只能按 ID 使用面板扫描、注册并在执行前复验的运行时，客户端不能提交路径。
 
 当前为多机扩展**阶段一**：内置本机节点 `local` 承担全部执行；远程节点创建与 Agent 连接尚未开放（由共享常量 `REMOTE_NODE_CREATION_ENABLED` 控制）。
 
@@ -93,7 +95,7 @@ minecraft-mystery-dashboard/
 | `auth.ts` | `/api/auth/*` | 初始化、登录、当前用户 |
 | `instances.ts` | `/api/instances/*` | CRUD、接管、启停、控制台命令 |
 | `files.ts` | `/api/instances/:id/files/*` | 实例根目录内的文件与 `server.properties` |
-| `cores.ts` | `/api/cores/*`、`/api/import` | 版本列表、部署、导入 |
+| `cores.ts` | `/api/cores/*`、`/api/import*` | 版本列表、部署、ZIP 导入和同机目录交接 |
 | `console.ts` | `/api/instances/:id/console-ticket`、`/ws/console/:id` | 控制台 ticket 与 WebSocket |
 | `system.ts` | `/api/system/java`、`/api/system/java-runtimes` | PATH `java` 状态和本机运行时探测 |
 | `nodes.ts` | `/api/nodes/*` | 本机/远程节点列表与管理（阶段一） |
@@ -112,6 +114,8 @@ minecraft-mystery-dashboard/
 | `config-service` | `server.properties` 解析与写入 |
 | `core-depot` | Vanilla / Paper / Fabric 下载与部署任务 |
 | `import-service` | zip 解压导入到托管实例目录 |
+| `existing-server-import-service` | 枚举固定交接区，只读校验并流式复制已有服务端 |
+| `server-launch-detect` | 探测普通 jar 与现代 Forge/NeoForge args 启动目标 |
 | `task-service` | 内存任务调度、持久化状态、启动中断收敛与半成品清理 |
 | `java-detect` | 执行 `java -version` 并返回可用状态与版本 |
 | `java-runtime-service` | 扫描、验证、注册 Java 运行时，合并刷新并在执行前复验绑定条目 |
@@ -139,11 +143,15 @@ DATA_DIR/
 ├── panel.db
 ├── instances/
 │   └── <id>/
+├── imports/
+│   └── <目录名>/
 ├── cache/cores/
 └── uploads/
 ```
 
 `defaultInstanceDir(id)` 将实例 ID 解析为 `DATA_DIR/instances/<id>`；文件读写和进程工作目录都必须经过实例根目录校验。文件 API 接收的 `path` 是相对实例根目录的逻辑路径，并拒绝 `..` 逃逸。
+
+`DATA_DIR/imports` 不是实例根目录，而是管理员通过系统工具放入已有服务端副本的固定交接区。接口不接受绝对路径，只列出直接子目录；复制任务拒绝 symlink/junction、特殊文件、ownership marker、超配额目录和磁盘空间不足。源目录从不由面板删除，任务失败时只清理带有效 ownership marker 的新托管半成品实例。
 
 ### 旧版外部实例接管
 
@@ -182,7 +190,7 @@ DATA_DIR/
 - `/login` — 登录 / 初始化
 - `/` — 实例总览
 - `/deploy` — 一键部署
-- `/import` — zip 导入
+- `/import` — 同机目录交接或 zip 导入
 - `/nodes` — 节点管理（当前以本机节点为主）
 - `/instances/:id/*` — 实例详情 Tab
 

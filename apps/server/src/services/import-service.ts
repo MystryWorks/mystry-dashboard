@@ -3,13 +3,14 @@ import path from 'node:path';
 import { createInflateRaw } from 'node:zlib';
 import { pipeline } from 'node:stream/promises';
 import { Readable, Transform } from 'node:stream';
+import type { CoreType } from '@mmd/shared';
 import { config } from '../config.js';
 import {
   createInstance,
   deleteInstance,
-  detectJarFile,
   updateInstanceMeta,
 } from './instance-service.js';
+import { detectServerLaunchTarget } from './server-launch-detect.js';
 import {
   assertSafeInstanceRoot,
   getInstanceDir,
@@ -290,8 +291,11 @@ function moveExtractedContents(sourceDir: string, instanceDir: string, signal: A
 export async function importZipPackage(options: {
   name: string;
   zipPath: string;
+  coreType?: CoreType;
+  mcVersion?: string;
   jvmArgs?: string;
   acceptEula?: boolean;
+  javaRuntimeId?: string | null;
 }) {
   const zipPath = assertUploadPath(options.zipPath);
   return runBackgroundTask('import', '正在导入安装包…', async (taskId, signal, report) => {
@@ -302,9 +306,11 @@ export async function importZipPackage(options: {
       throwIfAborted(signal);
       const instance = createInstance({
         name: options.name,
-        coreType: 'custom',
+        coreType: options.coreType ?? 'custom',
+        mcVersion: options.mcVersion?.trim() || undefined,
         jvmArgs: options.jvmArgs,
         acceptEula: options.acceptEula,
+        javaRuntimeId: options.javaRuntimeId ?? null,
       });
       instanceId = instance.id;
       recordTaskInstance(taskId, instance.id);
@@ -321,15 +327,16 @@ export async function importZipPackage(options: {
       moveExtractedContents(staging, dir, signal);
 
       throwIfAborted(signal);
-      report(80, '探测服务端 jar…');
-      const jar = detectJarFile(dir);
-      if (!jar) {
-        throw new Error('安装包中未找到可用的 .jar 服务端文件');
+      report(80, '探测服务端启动文件…');
+      const launchTarget = detectServerLaunchTarget(dir);
+      if (!launchTarget) {
+        throw new Error('安装包中未找到可用的服务端 jar 或 ModLoader args 文件');
       }
 
       updateInstanceMeta(instance.id, {
-        core_type: 'custom',
-        jar_file: jar,
+        core_type: options.coreType ?? launchTarget.coreType,
+        mc_version: options.mcVersion?.trim() || null,
+        jar_file: launchTarget.value,
         accept_eula: options.acceptEula ? 1 : 0,
       });
 

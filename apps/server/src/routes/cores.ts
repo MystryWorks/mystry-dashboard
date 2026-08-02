@@ -1,6 +1,10 @@
 import type { FastifyInstance } from 'fastify';
-import type { DeployCoreInput } from '@mmd/shared';
-import { deployCoreBodySchema } from '@mmd/shared';
+import type { CoreType, DeployCoreInput, ImportExistingServerInput } from '@mmd/shared';
+import {
+  CORE_TYPE_ENUM,
+  deployCoreBodySchema,
+  importExistingServerBodySchema,
+} from '@mmd/shared';
 import {
   deployCore,
   listCoreVersions,
@@ -11,6 +15,10 @@ import {
   listPaperBuilds,
 } from '../services/core-depot.js';
 import { importZipPackage } from '../services/import-service.js';
+import {
+  importExistingServerDirectory,
+  listExistingServerSources,
+} from '../services/existing-server-import-service.js';
 import {
   getTask,
   isTaskCapacityError,
@@ -119,11 +127,52 @@ export async function coreRoutes(app: FastifyInstance): Promise<void> {
     return task;
   });
 
+  app.get('/api/import/sources', async (_req, reply) => {
+    try {
+      return { sources: listExistingServerSources() };
+    } catch (err) {
+      return reply.code(500).send({ error: err instanceof Error ? err.message : String(err) });
+    }
+  });
+
+  app.post<{
+    Body: ImportExistingServerInput;
+  }>(
+    '/api/import/existing',
+    { attachValidation: true, schema: { body: importExistingServerBodySchema } },
+    async (req, reply) => {
+      if (req.validationError) {
+        return reply.code(400).send({ error: '已有服务端导入参数包含不支持的字段或格式不正确' });
+      }
+      if (!req.body?.name?.trim() || !req.body.sourceId) {
+        return reply.code(400).send({ error: '实例名称和交接目录不能为空' });
+      }
+      try {
+        return await importExistingServerDirectory({
+          ...req.body,
+          name: req.body.name.trim(),
+        });
+      } catch (err) {
+        if (isTaskShuttingDownError(err)) {
+          return reply.code(503).send({ error: err.message });
+        }
+        if (isCapacityError(err)) {
+          return reply.code(429).send({ error: err instanceof Error ? err.message : String(err) });
+        }
+        return reply.code(400).send({ error: err instanceof Error ? err.message : String(err) });
+      }
+    },
+  );
+
   app.post('/api/import', async (req, reply) => {
     const parts = req.parts();
     let name = '';
+    let coreType: CoreType | undefined;
+    let mcVersion: string | undefined;
     let jvmArgs = '-Xms1G -Xmx2G';
     let acceptEula = false;
+    let javaRuntimeId: string | null | undefined;
+    let invalidCoreType = false;
     let removedField: 'javaPath' | 'installPath' | null = null;
     let zipPath: string | null = null;
     let handedOff = false;
@@ -151,20 +200,30 @@ export async function coreRoutes(app: FastifyInstance): Promise<void> {
           }
           if (part.fieldname === 'jvmArgs') jvmArgs = value || '-Xms1G -Xmx2G';
           if (part.fieldname === 'acceptEula') acceptEula = value === 'true' || value === '1';
+          if (part.fieldname === 'coreType') {
+            if ((CORE_TYPE_ENUM as readonly string[]).includes(value)) coreType = value as CoreType;
+            else invalidCoreType = true;
+          }
+          if (part.fieldname === 'mcVersion') mcVersion = value.trim() || undefined;
+          if (part.fieldname === 'javaRuntimeId') javaRuntimeId = value.trim() || null;
         }
       }
 
       if (removedField) {
         return reply.code(400).send({ error: `不支持已移除的字段：${removedField}` });
       }
+      if (invalidCoreType) return reply.code(400).send({ error: '核心类型不受支持' });
       if (!name.trim()) return reply.code(400).send({ error: '名称不能为空' });
       if (!zipPath) return reply.code(400).send({ error: '请上传 zip 安装包' });
 
       const task = await importZipPackage({
         name: name.trim(),
         zipPath,
+        coreType,
+        mcVersion,
         jvmArgs,
         acceptEula,
+        javaRuntimeId,
       });
       handedOff = true;
       return task;

@@ -2,7 +2,7 @@
 
 单机一体的 Minecraft **服务端** Web 管理面板。
 
-用浏览器管理本机上的多个 Java 版服务端：启停、实时控制台、文件与配置、一键部署核心、导入现有 zip 安装包。
+用浏览器管理本机上的多个 Java 版服务端：启停、实时控制台、文件与配置、一键部署核心、接管面板外已有服务端。
 
 > **不是** Minecraft 客户端模组，也无需 Fabric / Forge 作为模组加载。本仓库是独立的 Node.js 面板程序。
 
@@ -17,11 +17,11 @@
 - 实例根目录内的文件管理与文本编辑
 - `server.properties` 可视化编辑与 EULA 确认
 - 一键部署 **Vanilla / Paper / Fabric / Forge / NeoForge**
-- 一键导入现有服务端 **zip**（含路径逃逸防护）
+- 从固定 `DATA_DIR/imports` 交接区复制接管同机已有服务端，或上传现有服务端 **zip**
 - 首启创建管理员 + JWT 登录
 - 检测 PATH 中 `java` 的状态，并扫描、验证可选择的 Java 运行时
 
-实例只托管在最终数据根目录的 `instances/<id>`，不支持自定义安装目录，也不提供全盘目录浏览。源码模式默认由 `DATA_DIR` 指定数据根；便携控制器使用优先级更高的 `MMD_DATA_DIR`。实例默认使用 PATH 中的 `java`，也可在部署页或实例设置中选择面板探测并验证的运行时。
+实例只托管在最终数据根目录的 `instances/<id>`，不支持自定义安装目录，也不提供全盘目录浏览。同机交接时先停止原服务器，再把完整目录复制到 `DATA_DIR/imports/<目录名>`；面板只读该候选目录并再次复制到新实例，原目录不会移动或删除。源码模式默认由 `DATA_DIR` 指定数据根；便携控制器使用优先级更高的 `MMD_DATA_DIR`。实例默认使用 PATH 中的 `java`，也可在部署、导入或实例设置中选择面板探测并验证的运行时。
 
 ## 便携预览版
 
@@ -129,6 +129,7 @@ minecraft-mystery-dashboard/
 | 路径 | 说明 |
 |------|------|
 | `DATA_DIR/instances/<id>/` | 实例唯一工作目录 |
+| `DATA_DIR/imports/<目录名>/` | 同机已有服务端交接区；导入后原目录仍保留 |
 | `DATA_DIR/cache/cores/` | 核心 jar 下载缓存 |
 | `DATA_DIR/panel.db` | SQLite 元数据库 |
 

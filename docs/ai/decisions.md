@@ -23,6 +23,7 @@
 | D-012 | Adopted | 便携包只能在目标平台原生组装，并从最终压缩包重新解压冒烟验证 | 避免源码目录成功替代真实交付验证；`package-portable.mjs`、`smoke-portable.mjs` |
 | D-013 | Rejected | Preview 使用 Node SEA 代替运行时目录 | 当前 SEA 仍属 Active development，且直接支持单个 CommonJS 主脚本，不适合当前 ESM、多包与静态资源布局 |
 | D-014 | Adopted | 实例可绑定面板探测注册的 Java 运行时；默认仍是 PATH 中的 `java` | 候选路径只来自面板扫描（JAVA_HOME、常见安装目录），扫描与执行前复验均使用脱敏环境；请求只能提交运行时 ID，不能提交路径；`java-runtime-service.ts`、`process-manager.ts` |
+| D-015 | Adopted | 面板外已有服务端通过固定 `DATA_DIR/imports` 交接区复制接管，不直接绑定原目录 | 保持 D-001/D-007 的托管与目录浏览边界；客户端只提交单层目录 ID，源目录只读并保留，复制任务拒绝链接、特殊文件、ownership marker、超配额与空间不足；`existing-server-import-service.ts` |
 
 ## 更新规则
 

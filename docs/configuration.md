@@ -88,7 +88,7 @@ node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"
 
 核心下载先写入临时文件，只有校验并完整完成后才以原子方式发布到 `DATA_DIR/cache/cores/` 的最终缓存路径。中断、超时或进程崩溃留下的未完成文件不会作为可用缓存复用。
 
-### 上传与 ZIP 解压
+### 上传、ZIP 解压与同机目录交接
 
 以下现有上传 / ZIP 参数继续有效：
 
@@ -99,8 +99,12 @@ node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"
 | `MAX_ZIP_ENTRY_BYTES` | `1073741824` | 单个解压条目上限，1 GiB |
 | `MAX_ZIP_UNCOMPRESSED_BYTES` | `2147483648` | ZIP 解压后总大小上限，2 GiB |
 | `MAX_ZIP_CENTRAL_DIRECTORY_BYTES` | `33554432` | ZIP central directory 上限，32 MiB |
+| `MAX_EXISTING_IMPORT_ENTRIES` | `200000` | `DATA_DIR/imports` 单次目录交接的文件和目录条目上限 |
+| `MAX_EXISTING_IMPORT_BYTES` | `107374182400` | `DATA_DIR/imports` 单次目录交接的文件总大小上限，100 GiB |
 
 普通文件或 zip 上传超过 `MAX_UPLOAD_BYTES` 时返回 **413**；上传并发槽位已满时返回 **429**。ZIP 还会继续执行条目数、单条目、总解压大小和 central directory 配额校验。
+
+同机已有服务端只能从 `DATA_DIR/imports/<目录名>` 的直接子目录读取，API 只接收目录名而不是系统路径。复制任务会拒绝 symlink/junction、特殊文件和面板 ownership marker，并检查条目数、总字节数、任务超时与目标磁盘剩余空间。源目录只读且在成功后仍保留；确认实例可用后由管理员自行处理交接副本。
 
 ### 数据目录
 
@@ -118,6 +122,7 @@ node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"
 | `panel.db` | SQLite 数据库（用户、实例、任务） |
 | `instances/` | 实例唯一托管根目录 |
 | `instances/<id>/` | 对应实例的全部文件、jar 和工作目录 |
+| `imports/<目录名>/` | 同机已有服务端交接区；只作为复制源，不是实例工作目录 |
 | `cache/cores/` | 核心 jar 下载缓存 |
 | `uploads/` | 上传临时目录 |
 

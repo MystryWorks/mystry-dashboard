@@ -148,11 +148,47 @@ Authorization: Bearer <token>
 | GET | `/api/cores/forge/:version/loaders` | Forge loader 列表 |
 | GET | `/api/cores/neoforge/:version/loaders` | NeoForge loader 列表 |
 | POST | `/api/cores/deploy` | Body：`DeployCoreInput`，返回 `TaskInfo` |
-| POST | `/api/import` | multipart：`name`、`file`（zip）、可选 `jvmArgs`、`acceptEula`；不接受 `javaRuntimeId` |
+| GET | `/api/import/sources` | 列出 `DATA_DIR/imports` 的直接子目录及启动文件探测结果 |
+| POST | `/api/import/existing` | Body：`ImportExistingServerInput`，复制交接目录并返回 `TaskInfo` |
+| POST | `/api/import` | multipart：`name`、`file`（zip），可选 `coreType`、`mcVersion`、`jvmArgs`、`acceptEula`、`javaRuntimeId` |
 | GET | `/api/tasks/:id` | 查询任务进度 `TaskInfo` |
 | GET | `/api/tasks` | 任务中心列表，按创建时间倒序返回最近 50 条 `{ tasks: TaskInfo[] }` |
 
-部署和导入始终把内容写入新实例的 `DATA_DIR/instances/<id>`，不接收自定义目录或 Java 可执行文件路径。实例默认使用 PATH 中的 `java` 启动，可通过 `javaRuntimeId` 绑定注册表中当前可用的运行时；部署请求中的绑定同样用于 Forge/NeoForge Installer。导入实例初始使用 PATH，完成后可在实例设置中绑定运行时。
+部署和导入始终把内容写入新实例的 `DATA_DIR/instances/<id>`，不接收自定义目录或 Java 可执行文件路径。实例默认使用 PATH 中的 `java` 启动，可通过 `javaRuntimeId` 绑定注册表中当前可用的运行时；部署请求中的绑定同样用于 Forge/NeoForge Installer。
+
+### 同机已有服务端交接
+
+`GET /api/import/sources` 返回：
+
+```json
+{
+  "sources": [
+    {
+      "id": "paper-survival",
+      "launchTarget": "paper.jar",
+      "coreType": "paper",
+      "modifiedAt": "2026-08-02T10:00:00.000Z",
+      "ready": true
+    }
+  ]
+}
+```
+
+`id` 只是 `DATA_DIR/imports` 下的单层目录名，不是系统路径。创建任务示例：
+
+```json
+{
+  "name": "生存服",
+  "sourceId": "paper-survival",
+  "coreType": "paper",
+  "mcVersion": "1.20.1",
+  "jvmArgs": "-Xms2G -Xmx4G",
+  "acceptEula": true,
+  "javaRuntimeId": null
+}
+```
+
+提交前应停止原服务器。任务会只读扫描交接源，拒绝路径逃逸、symlink/junction、特殊文件和 ownership marker，并按 `MAX_EXISTING_IMPORT_ENTRIES`、`MAX_EXISTING_IMPORT_BYTES`、`TASK_TIMEOUT_MS` 与目标磁盘空间执行复制。成功或失败都不会删除源目录；失败时会清理新建的半成品托管实例。
 
 核心版本、构建和 loader 元数据受 `MAX_CORE_METADATA_BYTES` 与 `CORE_METADATA_TIMEOUT_MS` 限制；核心文件下载先写入临时文件，完整完成后才原子发布到 `DATA_DIR/cache/cores/`，不复用未完成缓存。队列已满时创建任务返回 **429**。
 

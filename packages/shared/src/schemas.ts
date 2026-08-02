@@ -67,6 +67,21 @@ export const deployCoreBodySchema = {
   },
 } as const;
 
+export const importExistingServerBodySchema = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['name', 'sourceId'],
+  properties: {
+    name: { type: 'string', minLength: 1, maxLength: 128 },
+    sourceId: { type: 'string', minLength: 1, maxLength: 255 },
+    coreType: { type: 'string', enum: [...CORE_TYPE_ENUM] },
+    mcVersion: { type: 'string', maxLength: 64 },
+    jvmArgs: { type: 'string', maxLength: 8192 },
+    acceptEula: { type: 'boolean' },
+    javaRuntimeId: { type: ['string', 'null'] },
+  },
+} as const;
+
 export const setupBodySchema = {
   type: 'object',
   additionalProperties: false,

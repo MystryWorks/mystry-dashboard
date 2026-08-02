@@ -8,7 +8,7 @@ const typeLabel: Record<TaskInfo['type'], string> = {
   download: '下载核心',
   extract: '解压文件',
   deploy: '部署实例',
-  import: '导入安装包',
+  import: '导入服务端',
 };
 
 const statusLabel: Record<TaskInfo['status'], string> = {

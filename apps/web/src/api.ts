@@ -1,4 +1,8 @@
-import type { JavaRuntimeListResult, TaskListResult } from '@mmd/shared';
+import type {
+  ExistingServerSourceListResult,
+  JavaRuntimeListResult,
+  TaskListResult,
+} from '@mmd/shared';
 
 const TOKEN_KEY = 'mmd_token';
 
@@ -105,6 +109,12 @@ export async function listJavaRuntimes(refresh = false) {
     `/api/system/java-runtimes${refresh ? '?refresh=1' : ''}`,
   );
   return res.runtimes;
+}
+
+/** 固定 DATA_DIR/imports 交接区中的已有服务端候选。 */
+export async function listExistingServerSources() {
+  const res = await api<ExistingServerSourceListResult>('/api/import/sources');
+  return res.sources;
 }
 
 export async function pollTask(

@@ -92,6 +92,7 @@ export const config = {
   processFingerprint: process.env['MMD_PROCESS_FINGERPRINT']?.trim() || null,
   dbPath: path.join(dataDir, 'panel.db'),
   instancesDir: path.join(dataDir, 'instances'),
+  existingServerImportDir: path.join(dataDir, 'imports'),
   cacheDir: path.join(dataDir, 'cache', 'cores'),
   uploadDir: path.join(dataDir, 'uploads'),
   maxJsonBodyBytes: parsePositiveInt('MAX_JSON_BODY_BYTES', 1048576),
@@ -132,6 +133,12 @@ export const config = {
   maxZipCentralDirectoryBytes: parsePositiveInt(
     'MAX_ZIP_CENTRAL_DIRECTORY_BYTES',
     32 * 1024 * 1024,
+  ),
+  /** 同机已有服务端交接区的扫描与复制配额。 */
+  maxExistingImportEntries: parsePositiveInt('MAX_EXISTING_IMPORT_ENTRIES', 200_000),
+  maxExistingImportBytes: parsePositiveInt(
+    'MAX_EXISTING_IMPORT_BYTES',
+    100 * 1024 * 1024 * 1024,
   ),
   consoleTicketTtlSeconds: parsePositiveInt('CONSOLE_TICKET_TTL_SECONDS', 60),
   rateLimitMax: parsePositiveInt('RATE_LIMIT_MAX', 120),

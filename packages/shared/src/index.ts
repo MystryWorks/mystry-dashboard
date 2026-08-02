@@ -127,6 +127,35 @@ export interface DeployCoreInput {
   javaRuntimeId?: string | null;
 }
 
+/** DATA_DIR/imports 下可交给面板复制接管的已有服务端目录。 */
+export interface ExistingServerSourceInfo {
+  /** 交接区内的单层目录名，不是系统绝对路径。 */
+  id: string;
+  /** 自动探测到的 jar 或 Forge/NeoForge args 启动目标。 */
+  launchTarget: string | null;
+  /** 根据启动文件推断的核心类型；无法识别时为 custom。 */
+  coreType: CoreType;
+  modifiedAt: string;
+  ready: boolean;
+  error?: string;
+}
+
+export interface ExistingServerSourceListResult {
+  sources: ExistingServerSourceInfo[];
+}
+
+/** 从固定交接区复制已有服务端并创建面板托管实例。 */
+export interface ImportExistingServerInput {
+  name: string;
+  sourceId: string;
+  coreType?: CoreType;
+  mcVersion?: string;
+  jvmArgs?: string;
+  acceptEula?: boolean;
+  /** Java 运行时 ID（必须来自面板探测清单）；留空/null 使用 PATH 中的 java。 */
+  javaRuntimeId?: string | null;
+}
+
 export interface JavaDetectResult {
   available: boolean;
   version: string | null;
@@ -218,6 +247,7 @@ export {
   createInstanceBodySchema,
   updateInstanceBodySchema,
   deployCoreBodySchema,
+  importExistingServerBodySchema,
   setupBodySchema,
   loginBodySchema,
   createNodeBodySchema,

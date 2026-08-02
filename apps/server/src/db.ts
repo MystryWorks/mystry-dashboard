@@ -78,6 +78,7 @@ export function getDb(): DatabaseSync {
 export function initDb(): void {
   fs.mkdirSync(config.dataDir, { recursive: true });
   fs.mkdirSync(config.instancesDir, { recursive: true });
+  fs.mkdirSync(config.existingServerImportDir, { recursive: true });
   fs.mkdirSync(config.cacheDir, { recursive: true });
   fs.mkdirSync(config.uploadDir, { recursive: true });
 

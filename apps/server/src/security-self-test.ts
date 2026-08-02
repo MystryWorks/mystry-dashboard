@@ -285,6 +285,90 @@ async function main(): Promise<void> {
     assert.equal(taskList.statusCode, 200);
     assert.equal(Array.isArray(taskList.json<{ tasks: unknown[] }>().tasks), true);
 
+    const existingSourceDir = path.join(config.existingServerImportDir, 'paper-existing');
+    fs.mkdirSync(path.join(existingSourceDir, 'world'), { recursive: true });
+    fs.writeFileSync(path.join(existingSourceDir, 'paper.jar'), 'existing-paper');
+    fs.writeFileSync(path.join(existingSourceDir, 'world', 'level.dat'), 'world-data');
+    const reservedSourceDir = path.join(config.existingServerImportDir, 'managed-copy');
+    fs.mkdirSync(reservedSourceDir, { recursive: true });
+    fs.writeFileSync(path.join(reservedSourceDir, 'server.jar'), 'managed');
+    fs.writeFileSync(
+      path.join(reservedSourceDir, '.mmd-instance.json'),
+      `${JSON.stringify({ version: 1, instanceId: 'managed', marker: 'reserved' })}\n`,
+    );
+
+    const existingSources = await app.inject({
+      method: 'GET',
+      url: '/api/import/sources',
+      headers: authorization,
+    });
+    assert.equal(existingSources.statusCode, 200);
+    const sourceItems = existingSources.json<{
+      sources: Array<{
+        id: string;
+        launchTarget: string | null;
+        coreType: string;
+        modifiedAt: string;
+        ready: boolean;
+        error?: string;
+      }>;
+    }>().sources;
+    assert.deepEqual(
+      sourceItems.find((source) => source.id === 'paper-existing'),
+      {
+        id: 'paper-existing',
+        launchTarget: 'paper.jar',
+        coreType: 'paper',
+        modifiedAt: sourceItems.find((source) => source.id === 'paper-existing')!.modifiedAt,
+        ready: true,
+      },
+    );
+    assert.equal(sourceItems.find((source) => source.id === 'managed-copy')?.ready, false);
+    assert.match(sourceItems.find((source) => source.id === 'managed-copy')?.error ?? '', /实例标记/);
+
+    const rejectedExistingTraversal = await app.inject({
+      method: 'POST',
+      url: '/api/import/existing',
+      headers: authorization,
+      payload: { name: '越界目录', sourceId: '../outside' },
+    });
+    assert.equal(rejectedExistingTraversal.statusCode, 400);
+
+    const existingImport = await app.inject({
+      method: 'POST',
+      url: '/api/import/existing',
+      headers: authorization,
+      payload: {
+        name: '接管的 Paper',
+        sourceId: 'paper-existing',
+        mcVersion: '1.20.1',
+        jvmArgs: '-Xms512M -Xmx1G',
+        acceptEula: true,
+      },
+    });
+    assert.equal(existingImport.statusCode, 200);
+    const existingTaskId = existingImport.json<{ id: string }>().id;
+    let existingTask = getTask(existingTaskId);
+    for (let attempt = 0; attempt < 200 && existingTask?.status !== 'completed' && existingTask?.status !== 'failed'; attempt += 1) {
+      // 后台复制任务应很快完成；短轮询只用于等待测试夹具进入终态。
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      existingTask = getTask(existingTaskId);
+    }
+    assert.equal(existingTask?.status, 'completed', existingTask?.error);
+    const importedInstanceId = existingTask?.result?.instanceId;
+    assert.equal(typeof importedInstanceId, 'string');
+    const importedRow = getInstanceRow(importedInstanceId!);
+    assert.equal(importedRow?.core_type, 'paper');
+    assert.equal(importedRow?.mc_version, '1.20.1');
+    assert.equal(importedRow?.jar_file, 'paper.jar');
+    assert.equal(importedRow?.java_runtime_id, null);
+    assert.equal(
+      fs.readFileSync(path.join(defaultInstanceDir(importedInstanceId!), 'world', 'level.dat'), 'utf8'),
+      'world-data',
+    );
+    assert.equal(fs.readFileSync(path.join(existingSourceDir, 'paper.jar'), 'utf8'), 'existing-paper');
+    assert.equal(fs.readFileSync(path.join(defaultInstanceDir(importedInstanceId!), 'eula.txt'), 'utf8'), 'eula=true\n');
+
     const createWithLegacyField = await app.inject({
       method: 'POST',
       url: '/api/instances',

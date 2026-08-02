@@ -49,7 +49,7 @@ function Shell({ children }: { children: React.ReactNode }) {
             一键部署
           </NavLink>
           <NavLink to="/import" className={({ isActive }) => (isActive ? 'active' : undefined)}>
-            导入安装包
+            导入已有服务端
           </NavLink>
           <NavLink to="/nodes" className={({ isActive }) => (isActive ? 'active' : undefined)}>
             节点管理

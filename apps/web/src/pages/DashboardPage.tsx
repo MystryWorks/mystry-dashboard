@@ -92,8 +92,8 @@ export function DashboardPage() {
           <Link className="quick-action" to="/import">
             <span className="quick-action-icon" aria-hidden="true">⇩</span>
             <span className="quick-action-copy">
-              <strong>导入安装包</strong>
-              <small>从本地 ZIP 创建实例</small>
+              <strong>导入已有服务端</strong>
+              <small>接管同机目录或上传 ZIP</small>
             </span>
             <span className="quick-action-arrow" aria-hidden="true">›</span>
           </Link>
@@ -104,7 +104,7 @@ export function DashboardPage() {
 
       <div className="panel">
         {instances.length === 0 ? (
-          <p className="muted">暂无实例。可从「一键部署」下载 Paper / Fabric / Vanilla，或导入现有 zip。</p>
+          <p className="muted">暂无实例。可从「一键部署」下载核心，或导入面板外已有的服务端。</p>
         ) : (
           <table className="table">
             <thead>

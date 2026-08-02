@@ -1,5 +1,4 @@
 import fs from 'node:fs';
-import path from 'node:path';
 import { nanoid } from 'nanoid';
 import type {
   CreateInstanceInput,
@@ -311,16 +310,4 @@ export function updateInstanceMeta(
       nowIso(),
       id,
     );
-}
-
-/** 探测目录中可用的服务端 jar */
-export function detectJarFile(dir: string): string | null {
-  const preferred = ['server.jar', 'paper.jar', 'fabric-server-launch.jar', 'minecraft_server.jar'];
-  for (const name of preferred) {
-    if (fs.existsSync(path.join(dir, name))) return name;
-  }
-  const jars = fs
-    .readdirSync(dir)
-    .filter((f) => f.endsWith('.jar') && !f.includes('installer'));
-  return jars[0] ?? null;
 }
