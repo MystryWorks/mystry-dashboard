@@ -26,6 +26,25 @@ export function isFileDownloadCapacityError(error: unknown): error is FileDownlo
       && error.code === 'FILE_DOWNLOAD_CAPACITY');
 }
 
+export class FileRenameConflictError extends Error {
+  readonly code = 'FILE_RENAME_CONFLICT' as const;
+  readonly httpStatus = 409 as const;
+
+  constructor(message = '目标路径已存在，无法重命名') {
+    super(message);
+    this.name = 'FileRenameConflictError';
+  }
+}
+
+export function isFileRenameConflictError(error: unknown): error is FileRenameConflictError {
+  return error instanceof FileRenameConflictError;
+}
+
+export function fileServiceErrorHttpStatus(error: unknown): number {
+  if (isFileRenameConflictError(error)) return 409;
+  return 400;
+}
+
 let activeFileDownloads = 0;
 
 export function acquireFileDownloadSlot(): () => void {
@@ -167,13 +186,23 @@ export function deletePath(instanceId: string, relativePath: string): void {
 }
 
 export function renamePath(instanceId: string, from: string, to: string): void {
+  const fromNorm = from.replace(/\\/g, '/');
+  const toNorm = to.replace(/\\/g, '/');
+  const fromDir = path.posix.dirname(fromNorm);
+  const toDir = path.posix.dirname(toNorm);
+  if (fromDir !== toDir) {
+    throw new Error('重命名只能在同一目录内进行');
+  }
+
   const root = getInstanceDir(instanceId);
   const src = resolveSafePath(root, from);
   const dest = resolveSafePath(root, to);
   assertMutableTarget(root, src);
   assertMutableTarget(root, dest);
   if (!fs.existsSync(src)) throw new Error('源路径不存在');
-  fs.mkdirSync(path.dirname(dest), { recursive: true });
+  if (fs.existsSync(dest)) {
+    throw new FileRenameConflictError();
+  }
   fs.renameSync(src, dest);
 }
 

@@ -6,22 +6,50 @@ import type {
   ExistingServerSourceInfo,
   ImportExistingServerInput,
 } from '@mmd/shared';
+import { nanoid } from 'nanoid';
 import { config } from '../config.js';
 import {
   OWNERSHIP_MARKER_FILE,
   assertSafeInstanceRoot,
-  getInstanceDir,
   resolveSafePath,
 } from '../utils/path.js';
-import { ensureEula } from './config-service.js';
-import { createInstance, deleteInstance, updateInstanceMeta } from './instance-service.js';
-import { detectServerLaunchTarget } from './server-launch-detect.js';
-import { recordTaskInstance, runBackgroundTask } from './task-service.js';
+import { registerPromotedInstance, updateInstanceMeta } from './instance-service.js';
+import { detectJarFile, detectServerLaunchTarget, isModLoaderScanLimitError, type ModLoaderScanBudget } from './server-launch-detect.js';
+import { recordTaskStaging, runBackgroundTask } from './task-service.js';
+import {
+  prepareTaskStaging,
+  promoteTaskStagingToInstance,
+  removeTaskStagingTree,
+} from './task-staging-service.js';
 
 type SourceScan = {
   entries: number;
   bytes: number;
 };
+
+type PrecheckCacheEntry = {
+  mtimeMs: number;
+  info: ExistingServerSourceInfo;
+};
+
+const sourcePrecheckCache = new Map<string, PrecheckCacheEntry>();
+
+function modLoaderPrecheckBudget(): ModLoaderScanBudget {
+  return {
+    maxDepth: config.modLoaderPrecheckMaxDepth,
+    maxEntries: config.modLoaderPrecheckMaxEntries,
+    deadlineMs: config.modLoaderPrecheckTimeoutMs,
+  };
+}
+
+function modLoaderFullScanBudget(signal: AbortSignal): ModLoaderScanBudget {
+  return {
+    maxDepth: config.modLoaderScanMaxDepth,
+    maxEntries: config.modLoaderScanMaxEntries,
+    deadlineMs: config.modLoaderScanTimeoutMs,
+    signal,
+  };
+}
 
 function throwIfAborted(signal: AbortSignal): void {
   if (!signal.aborted) return;
@@ -54,31 +82,77 @@ export function resolveExistingServerSource(sourceId: string): string {
   return assertSafeInstanceRoot(sourceDir);
 }
 
-function inspectSource(sourceId: string): ExistingServerSourceInfo {
+async function inspectSource(sourceId: string): Promise<ExistingServerSourceInfo> {
   try {
     const sourceDir = resolveExistingServerSource(sourceId);
+    const stat = fs.statSync(sourceDir);
+    const cached = sourcePrecheckCache.get(sourceId);
+    if (cached && cached.mtimeMs === stat.mtimeMs) {
+      return cached.info;
+    }
+
     if (fs.existsSync(resolveSafePath(sourceDir, OWNERSHIP_MARKER_FILE))) {
       throw new Error('目录包含面板实例标记，不能作为交接源');
     }
-    const launchTarget = detectServerLaunchTarget(sourceDir);
-    const stat = fs.statSync(sourceDir);
-    if (!launchTarget) {
-      return {
+
+    const jarFile = detectJarFile(sourceDir);
+    if (jarFile) {
+      const info: ExistingServerSourceInfo = {
         id: sourceId,
-        launchTarget: null,
-        coreType: 'custom',
+        launchTarget: jarFile,
+        coreType: jarFile.toLowerCase().includes('paper')
+          ? 'paper'
+          : jarFile.toLowerCase().includes('fabric')
+            ? 'fabric'
+            : jarFile === 'server.jar'
+              ? 'vanilla'
+              : 'custom',
         modifiedAt: stat.mtime.toISOString(),
-        ready: false,
-        error: '未找到服务端 jar 或 ModLoader args 文件',
+        ready: true,
       };
+      sourcePrecheckCache.set(sourceId, { mtimeMs: stat.mtimeMs, info });
+      return info;
     }
-    return {
+
+    try {
+      const launchTarget = await detectServerLaunchTarget(sourceDir, modLoaderPrecheckBudget());
+      if (launchTarget) {
+        const info: ExistingServerSourceInfo = {
+          id: sourceId,
+          launchTarget: launchTarget.value,
+          coreType: launchTarget.coreType,
+          modifiedAt: stat.mtime.toISOString(),
+          ready: true,
+        };
+        sourcePrecheckCache.set(sourceId, { mtimeMs: stat.mtimeMs, info });
+        return info;
+      }
+    } catch (error) {
+      if (isModLoaderScanLimitError(error)) {
+        const info: ExistingServerSourceInfo = {
+          id: sourceId,
+          launchTarget: null,
+          coreType: 'custom',
+          modifiedAt: stat.mtime.toISOString(),
+          ready: false,
+          error: '快速预检未找到启动文件；请提交导入任务进行完整校验',
+        };
+        sourcePrecheckCache.set(sourceId, { mtimeMs: stat.mtimeMs, info });
+        return info;
+      }
+      throw error;
+    }
+
+    const info: ExistingServerSourceInfo = {
       id: sourceId,
-      launchTarget: launchTarget.value,
-      coreType: launchTarget.coreType,
+      launchTarget: null,
+      coreType: 'custom',
       modifiedAt: stat.mtime.toISOString(),
-      ready: true,
+      ready: false,
+      error: '未找到服务端 jar 或 ModLoader args 文件',
     };
+    sourcePrecheckCache.set(sourceId, { mtimeMs: stat.mtimeMs, info });
+    return info;
   } catch (error) {
     return {
       id: sourceId,
@@ -91,13 +165,19 @@ function inspectSource(sourceId: string): ExistingServerSourceInfo {
   }
 }
 
-export function listExistingServerSources(): ExistingServerSourceInfo[] {
+export async function listExistingServerSources(): Promise<ExistingServerSourceInfo[]> {
   const importRoot = assertSafeInstanceRoot(config.existingServerImportDir);
-  return fs
+  const entries = fs
     .readdirSync(importRoot, { withFileTypes: true })
     .filter((entry) => entry.isDirectory() || entry.isSymbolicLink())
-    .map((entry) => inspectSource(entry.name))
-    .sort((left, right) => left.id.localeCompare(right.id, 'zh-CN'));
+    .map((entry) => entry.name)
+    .sort((left, right) => left.localeCompare(right, 'zh-CN'));
+
+  const sources: ExistingServerSourceInfo[] = [];
+  for (const sourceId of entries) {
+    sources.push(await inspectSource(sourceId));
+  }
+  return sources;
 }
 
 function checkScanLimits(scan: SourceScan): void {
@@ -252,57 +332,71 @@ export async function importExistingServerDirectory(input: ImportExistingServerI
 
   return runBackgroundTask('import', '等待复制已有服务端…', async (taskId, signal, report) => {
     let instanceId: string | null = null;
+    let stagingToken: string | null = null;
     let completed = false;
     try {
       throwIfAborted(signal);
       const sourceRoot = resolveExistingServerSource(input.sourceId);
       report(5, '正在校验已有服务端目录…');
       const scan = await scanSourceDirectory(sourceRoot, signal);
-      const sourceLaunchTarget = detectServerLaunchTarget(sourceRoot);
+      const sourceLaunchTarget = await detectServerLaunchTarget(
+        sourceRoot,
+        modLoaderFullScanBudget(signal),
+      );
       if (!sourceLaunchTarget) {
         throw new Error('交接目录中未找到可用的服务端 jar 或 ModLoader args 文件');
       }
 
       throwIfAborted(signal);
-      const instance = createInstance({
+      instanceId = nanoid(12);
+      stagingToken = nanoid(32);
+      recordTaskStaging(taskId, instanceId, stagingToken);
+      const stagingRoot = prepareTaskStaging(taskId, instanceId, stagingToken);
+      assertEnoughDiskSpace(stagingRoot, scan.bytes);
+
+      report(20, '开始复制已有服务端…');
+      await copySourceDirectory(sourceRoot, stagingRoot, scan, signal, report);
+
+      throwIfAborted(signal);
+      report(92, '正在确认启动文件…');
+      const copiedLaunchTarget = await detectServerLaunchTarget(
+        stagingRoot,
+        modLoaderFullScanBudget(signal),
+      );
+      if (!copiedLaunchTarget) {
+        throw new Error('复制完成后未找到可用的服务端启动文件');
+      }
+
+      report(95, '写入实例目录…');
+      promoteTaskStagingToInstance(taskId, instanceId);
+      registerPromotedInstance(instanceId, {
         name: input.name.trim(),
-        coreType: input.coreType ?? sourceLaunchTarget.coreType,
+        coreType: input.coreType ?? copiedLaunchTarget.coreType,
         mcVersion: input.mcVersion?.trim() || undefined,
-        jarFile: sourceLaunchTarget.value,
+        jarFile: copiedLaunchTarget.value,
         jvmArgs: input.jvmArgs,
         acceptEula: input.acceptEula,
         javaRuntimeId: input.javaRuntimeId ?? null,
       });
-      instanceId = instance.id;
-      recordTaskInstance(taskId, instance.id);
-      const instanceRoot = getInstanceDir(instance.id);
-      assertEnoughDiskSpace(instanceRoot, scan.bytes);
-
-      report(20, '开始复制已有服务端…');
-      await copySourceDirectory(sourceRoot, instanceRoot, scan, signal, report);
-
-      throwIfAborted(signal);
-      report(92, '正在确认启动文件…');
-      const copiedLaunchTarget = detectServerLaunchTarget(instanceRoot);
-      if (!copiedLaunchTarget) {
-        throw new Error('复制完成后未找到可用的服务端启动文件');
-      }
-      updateInstanceMeta(instance.id, {
+      updateInstanceMeta(instanceId, {
         core_type: input.coreType ?? copiedLaunchTarget.coreType,
         mc_version: input.mcVersion?.trim() || null,
         jar_file: copiedLaunchTarget.value,
         accept_eula: input.acceptEula ? 1 : 0,
       });
-      if (input.acceptEula) ensureEula(instance.id, true);
+      if (input.acceptEula) {
+        const instanceRoot = path.join(config.instancesDir, instanceId);
+        fs.writeFileSync(resolveSafePath(instanceRoot, 'eula.txt'), 'eula=true\n', 'utf8');
+      }
 
       report(100, '已有服务端已复制到面板托管目录');
       throwIfAborted(signal);
       completed = true;
-      return { instanceId: instance.id };
+      return { instanceId };
     } finally {
       if (!completed && instanceId) {
         try {
-          deleteInstance(instanceId);
+          removeTaskStagingTree(taskId, instanceId);
         } catch {
           /* 清理失败不覆盖原始错误 */
         }

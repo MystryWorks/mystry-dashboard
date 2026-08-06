@@ -2,6 +2,13 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import dotenv from 'dotenv';
 
+for (const arg of process.argv) {
+  const match = /^--mmd-fingerprint=(.+)$/.exec(arg);
+  if (match?.[1]) {
+    process.env.MMD_PROCESS_FINGERPRINT = match[1].trim();
+  }
+}
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, '../../..');
 
@@ -19,8 +26,10 @@ const configPath = configuredConfigPath
 // 开发模式默认读取仓库 .env；便携包由 mmdctl 指向 config/panel.env。
 dotenv.config({ path: configPath });
 
-const configuredDataDir = process.env.MMD_DATA_DIR?.trim() || process.env.DATA_DIR?.trim() || 'data';
-const dataDir = resolveFromHome(configuredDataDir, homeDir);
+function resolveDataDir(): string {
+  const configured = process.env.MMD_DATA_DIR?.trim() || process.env.DATA_DIR?.trim() || 'data';
+  return resolveFromHome(configured, homeDir);
+}
 
 function parsePositiveInt(name: string, fallback: number): number {
   const value = Number(process.env[name] || fallback);
@@ -88,13 +97,25 @@ export const config = {
   repoRoot,
   homeDir,
   configPath,
-  dataDir,
+  get dataDir() {
+    return resolveDataDir();
+  },
   processFingerprint: process.env['MMD_PROCESS_FINGERPRINT']?.trim() || null,
-  dbPath: path.join(dataDir, 'panel.db'),
-  instancesDir: path.join(dataDir, 'instances'),
-  existingServerImportDir: path.join(dataDir, 'imports'),
-  cacheDir: path.join(dataDir, 'cache', 'cores'),
-  uploadDir: path.join(dataDir, 'uploads'),
+  get dbPath() {
+    return path.join(resolveDataDir(), 'panel.db');
+  },
+  get instancesDir() {
+    return path.join(resolveDataDir(), 'instances');
+  },
+  get existingServerImportDir() {
+    return path.join(resolveDataDir(), 'imports');
+  },
+  get cacheDir() {
+    return path.join(resolveDataDir(), 'cache', 'cores');
+  },
+  get uploadDir() {
+    return path.join(resolveDataDir(), 'uploads');
+  },
   maxJsonBodyBytes: parsePositiveInt('MAX_JSON_BODY_BYTES', 1048576),
   maxTextFileBytes: parsePositiveInt('MAX_TEXT_FILE_BYTES', 1048576),
   maxCommandBytes: parsePositiveInt('MAX_COMMAND_BYTES', 4096),
@@ -140,7 +161,17 @@ export const config = {
     'MAX_EXISTING_IMPORT_BYTES',
     100 * 1024 * 1024 * 1024,
   ),
+  /** 已有服务端列表接口中的 ModLoader 预检预算 */
+  modLoaderPrecheckMaxDepth: parsePositiveInt('MOD_LOADER_PRECHECK_MAX_DEPTH', 4),
+  modLoaderPrecheckMaxEntries: parsePositiveInt('MOD_LOADER_PRECHECK_MAX_ENTRIES', 200),
+  modLoaderPrecheckTimeoutMs: parsePositiveInt('MOD_LOADER_PRECHECK_TIMEOUT_MS', 250),
+  /** 导入/部署任务中的 ModLoader 深度扫描预算 */
+  modLoaderScanMaxDepth: parsePositiveInt('MOD_LOADER_SCAN_MAX_DEPTH', 64),
+  modLoaderScanMaxEntries: parsePositiveInt('MOD_LOADER_SCAN_MAX_ENTRIES', 50_000),
+  modLoaderScanTimeoutMs: parsePositiveInt('MOD_LOADER_SCAN_TIMEOUT_MS', 30_000),
   consoleTicketTtlSeconds: parsePositiveInt('CONSOLE_TICKET_TTL_SECONDS', 60),
+  /** 文件下载一次性 ticket 有效期（秒） */
+  fileDownloadTicketTtlSeconds: parsePositiveInt('FILE_DOWNLOAD_TICKET_TTL_SECONDS', 60),
   rateLimitMax: parsePositiveInt('RATE_LIMIT_MAX', 120),
   rateLimitWindowMs: parsePositiveInt('RATE_LIMIT_WINDOW_MS', 60_000),
   authRateLimitMax: parsePositiveInt('AUTH_RATE_LIMIT_MAX', 5),

@@ -11,13 +11,23 @@ import { DeployPage } from './pages/DeployPage';
 import { ImportPage } from './pages/ImportPage';
 import { NodesPage } from './pages/NodesPage';
 
+const FOCUSABLE =
+  'a[href], button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])';
+
 function Shell({ children }: { children: React.ReactNode }) {
   const { user, logout } = useAuth();
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const toggleRef = useRef<HTMLButtonElement>(null);
+  const sidebarRef = useRef<HTMLElement>(null);
+  const firstNavRef = useRef<HTMLAnchorElement>(null);
+  const mainRef = useRef<HTMLElement>(null);
+  const topbarRef = useRef<HTMLDivElement>(null);
 
-  const closeSidebar = useCallback(() => setSidebarOpen(false), []);
+  const closeSidebar = useCallback(() => {
+    setSidebarOpen(false);
+    toggleRef.current?.focus();
+  }, []);
 
   useEffect(() => {
     closeSidebar();
@@ -25,24 +35,55 @@ function Shell({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (!sidebarOpen) return;
+    firstNavRef.current?.focus();
     function onKeyDown(event: KeyboardEvent) {
-      if (event.key !== 'Escape') return;
-      setSidebarOpen(false);
-      toggleRef.current?.focus();
+      if (event.key === 'Escape') {
+        closeSidebar();
+        return;
+      }
+      if (event.key !== 'Tab' || !sidebarRef.current) return;
+      const focusables = [...sidebarRef.current.querySelectorAll<HTMLElement>(FOCUSABLE)].filter(
+        (el) => !el.hasAttribute('disabled') && el.tabIndex !== -1,
+      );
+      if (focusables.length === 0) return;
+      const first = focusables[0]!;
+      const last = focusables[focusables.length - 1]!;
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
     }
     document.addEventListener('keydown', onKeyDown);
     return () => document.removeEventListener('keydown', onKeyDown);
+  }, [sidebarOpen, closeSidebar]);
+
+  useEffect(() => {
+    mainRef.current?.toggleAttribute('inert', sidebarOpen);
+    const topbarExtras = topbarRef.current?.querySelector('.topbar-task-center');
+    topbarExtras?.toggleAttribute('inert', sidebarOpen);
   }, [sidebarOpen]);
 
   return (
     <div className={`app-shell${sidebarOpen ? ' sidebar-open' : ''}`}>
-      <aside id="app-sidebar" className={`sidebar${sidebarOpen ? ' sidebar-open' : ''}`}>
+      <aside
+        id="app-sidebar"
+        ref={sidebarRef}
+        className={`sidebar${sidebarOpen ? ' sidebar-open' : ''}`}
+      >
         <div className="brand">
           Mystery Dashboard
           <span>Minecraft 服务端管理</span>
         </div>
         <nav className="nav" onClick={closeSidebar}>
-          <NavLink to="/" end className={({ isActive }) => (isActive ? 'active' : undefined)}>
+          <NavLink
+            ref={firstNavRef}
+            to="/"
+            end
+            className={({ isActive }) => (isActive ? 'active' : undefined)}
+          >
             实例总览
           </NavLink>
           <NavLink to="/deploy" className={({ isActive }) => (isActive ? 'active' : undefined)}>
@@ -64,7 +105,7 @@ function Shell({ children }: { children: React.ReactNode }) {
           </button>
         </div>
       </aside>
-      <div className="app-topbar">
+      <div className="app-topbar" ref={topbarRef}>
         <button
           ref={toggleRef}
           type="button"
@@ -82,8 +123,12 @@ function Shell({ children }: { children: React.ReactNode }) {
           <TaskCenter placement="topbar" />
         </div>
       </div>
-      {sidebarOpen && <div className="sidebar-backdrop" onClick={closeSidebar} aria-hidden="true" />}
-      <main className="main">{children}</main>
+      {sidebarOpen && (
+        <div className="sidebar-backdrop" onClick={closeSidebar} aria-hidden="true" tabIndex={-1} />
+      )}
+      <main className="main" ref={mainRef}>
+        {children}
+      </main>
     </div>
   );
 }

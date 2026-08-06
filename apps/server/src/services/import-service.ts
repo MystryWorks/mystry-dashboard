@@ -3,20 +3,24 @@ import path from 'node:path';
 import { createInflateRaw } from 'node:zlib';
 import { pipeline } from 'node:stream/promises';
 import { Readable, Transform } from 'node:stream';
+import { nanoid } from 'nanoid';
 import type { CoreType } from '@mmd/shared';
 import { config } from '../config.js';
 import {
-  createInstance,
-  deleteInstance,
+  registerPromotedInstance,
   updateInstanceMeta,
 } from './instance-service.js';
 import { detectServerLaunchTarget } from './server-launch-detect.js';
 import {
   assertSafeInstanceRoot,
-  getInstanceDir,
   resolveSafePath,
 } from '../utils/path.js';
-import { recordTaskInstance, runBackgroundTask } from './task-service.js';
+import { recordTaskStaging, runBackgroundTask } from './task-service.js';
+import {
+  prepareTaskStaging,
+  promoteTaskStagingToInstance,
+  removeTaskStagingTree,
+} from './task-staging-service.js';
 import { assertUploadPath } from './upload-service.js';
 import { removeUploadTemp } from './upload-service.js';
 
@@ -300,44 +304,47 @@ export async function importZipPackage(options: {
   const zipPath = assertUploadPath(options.zipPath);
   return runBackgroundTask('import', '正在导入安装包…', async (taskId, signal, report) => {
     let instanceId: string | null = null;
-    let staging: string | null = null;
+    let stagingToken: string | null = null;
     let completed = false;
     try {
       throwIfAborted(signal);
-      const instance = createInstance({
-        name: options.name,
-        coreType: options.coreType ?? 'custom',
-        mcVersion: options.mcVersion?.trim() || undefined,
-        jvmArgs: options.jvmArgs,
-        acceptEula: options.acceptEula,
-        javaRuntimeId: options.javaRuntimeId ?? null,
-      });
-      instanceId = instance.id;
-      recordTaskInstance(taskId, instance.id);
-      const dir = getInstanceDir(instance.id);
-      staging = path.join(config.uploadDir, `.extract-${Date.now()}-${instance.id}`);
-      fs.mkdirSync(staging, { recursive: true });
+      instanceId = nanoid(12);
+      stagingToken = nanoid(32);
+      recordTaskStaging(taskId, instanceId, stagingToken);
+      const staging = prepareTaskStaging(taskId, instanceId, stagingToken);
       throwIfAborted(signal);
       report(20, '流式解压安装包…');
       await safeExtract(zipPath, staging, signal);
       flattenSingleRoot(staging, signal);
 
       throwIfAborted(signal);
-      report(70, '整理实例文件…');
-      moveExtractedContents(staging, dir, signal);
-
-      throwIfAborted(signal);
-      report(80, '探测服务端启动文件…');
-      const launchTarget = detectServerLaunchTarget(dir);
+      report(70, '校验实例文件…');
+      const launchTarget = await detectServerLaunchTarget(staging, {
+        maxDepth: config.modLoaderScanMaxDepth,
+        maxEntries: config.modLoaderScanMaxEntries,
+        deadlineMs: config.modLoaderScanTimeoutMs,
+        signal,
+      });
       if (!launchTarget) {
         throw new Error('安装包中未找到可用的服务端 jar 或 ModLoader args 文件');
       }
 
-      updateInstanceMeta(instance.id, {
-        core_type: options.coreType ?? launchTarget.coreType,
-        mc_version: options.mcVersion?.trim() || null,
-        jar_file: launchTarget.value,
-        accept_eula: options.acceptEula ? 1 : 0,
+      throwIfAborted(signal);
+      report(85, '写入实例目录…');
+      promoteTaskStagingToInstance(taskId, instanceId);
+      const dir = path.join(config.instancesDir, instanceId);
+      assertSafeInstanceRoot(dir);
+
+      throwIfAborted(signal);
+      report(90, '注册实例…');
+      registerPromotedInstance(instanceId, {
+        name: options.name,
+        coreType: options.coreType ?? launchTarget.coreType,
+        mcVersion: options.mcVersion?.trim() || undefined,
+        jarFile: launchTarget.value,
+        jvmArgs: options.jvmArgs,
+        acceptEula: options.acceptEula,
+        javaRuntimeId: options.javaRuntimeId ?? null,
       });
 
       if (options.acceptEula) {
@@ -345,15 +352,21 @@ export async function importZipPackage(options: {
         fs.writeFileSync(resolveSafePath(dir, 'eula.txt'), 'eula=true\n', 'utf8');
       }
 
+      updateInstanceMeta(instanceId, {
+        core_type: options.coreType ?? launchTarget.coreType,
+        mc_version: options.mcVersion?.trim() || null,
+        jar_file: launchTarget.value,
+        accept_eula: options.acceptEula ? 1 : 0,
+      });
+
       report(100, '导入完成');
       throwIfAborted(signal);
       completed = true;
-      return { instanceId: instance.id };
+      return { instanceId };
     } finally {
-      if (staging && fs.existsSync(staging)) fs.rmSync(staging, { recursive: true, force: true });
-      if (!completed && instanceId) {
+      if (!completed && instanceId && stagingToken) {
         try {
-          deleteInstance(instanceId);
+          removeTaskStagingTree(taskId, instanceId);
         } catch {
           /* 清理失败不覆盖原始错误 */
         }

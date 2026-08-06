@@ -11,6 +11,7 @@ npm.cmd run portable:test
 npm.cmd run windows:test
 npm.cmd run typecheck
 npm.cmd run test:security -w @mmd/server
+npm.cmd run test:regression -w @mmd/server
 npm.cmd run test:static
 npm.cmd run build
 npm.cmd run audit:production
@@ -21,6 +22,14 @@ npm.cmd run audit:production
 ```powershell
 npm.cmd run verify
 ```
+
+Beta 修复批次额外回归（**尚未**并入根 `verify`，发布前建议与 `verify` 同跑）：
+
+```powershell
+npm.cmd run test:regression -w @mmd/server
+```
+
+2026-08-07 本机 Windows：`verify` exit 0；`test:regression` 18 pass / 2 skip（R1-02 Unix 权限）；`audit:production` critical=0 high=0 moderate=2。
 
 Linux/macOS 和 CI 使用相同脚本名，但命令入口为 `npm run ...`。
 
@@ -58,6 +67,6 @@ Linux/macOS 和 CI 使用相同脚本名，但命令入口为 `npm run ...`。
 - build 通过：只证明生产产物可生成；大 chunk 警告应单独报告。
 - 人工流程通过：只证明本次环境和路径下的可见行为。
 - `npm audit` 结果会随时间变化；只有当前执行结果才能支持当前结论。
-- 本机单平台便携 smoke 通过不能代表其他四个平台；五目标结论必须来自 Actions 矩阵。
+- 本机单平台便携 smoke 通过不能代表另一发布目标；Windows x64 与 Linux x64 结论必须来自 Actions 矩阵。
 
 受限沙箱中若 Vite/esbuild 报父目录 `Access is denied`，先确认错误与权限相关，再在获准环境重跑完整构建；不要把环境限制误报为代码构建失败。

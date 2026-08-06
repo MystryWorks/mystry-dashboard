@@ -166,6 +166,66 @@ export function createInstance(input: CreateInstanceInput): InstanceInfo {
   return getInstance(id)!;
 }
 
+/** 将已 promote 到 instances/<id> 的目录注册进数据库（部署/导入任务完成时调用）。 */
+export function registerPromotedInstance(id: string, input: CreateInstanceInput): InstanceInfo {
+  const now = nowIso();
+  const nodeId = input.nodeId?.trim() || LOCAL_NODE_ID;
+  if (!nodeExists(nodeId)) {
+    throw new Error('所选节点不存在');
+  }
+  if (nodeId !== LOCAL_NODE_ID) {
+    throw new Error('远程节点暂不支持创建实例，敬请期待后续版本');
+  }
+  assertValidJavaRuntime(input.javaRuntimeId);
+
+  const dir = defaultInstanceDir(id);
+  if (!fs.existsSync(dir)) {
+    throw new Error('实例目录不存在，无法注册实例');
+  }
+  assertSafeInstanceRoot(dir);
+  const entries = fs.readdirSync(dir);
+  if (entries.length === 0) {
+    throw new Error('实例目录为空，无法注册实例');
+  }
+
+  const ownershipMarker = nanoid(32);
+  writeOwnershipMarker(id, dir, ownershipMarker);
+  fs.accessSync(dir, fs.constants.W_OK);
+
+  try {
+    const result = getDb()
+      .prepare(
+        `INSERT INTO instances
+        (id, name, core_type, mc_version, jar_file, java_path, jvm_args, accept_eula, install_path, ownership_marker, node_id, java_runtime_id, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        id,
+        input.name,
+        input.coreType ?? 'custom',
+        input.mcVersion ?? null,
+        input.jarFile ?? 'server.jar',
+        'java',
+        input.jvmArgs ?? '-Xms1G -Xmx2G',
+        input.acceptEula ? 1 : 0,
+        null,
+        ownershipMarker,
+        nodeId,
+        input.javaRuntimeId ?? null,
+        now,
+        now,
+      );
+    if (Number(result.changes) !== 1) {
+      throw new Error('创建实例失败：数据库未写入实例记录');
+    }
+  } catch (err) {
+    removeOwnershipMarker(id, dir, ownershipMarker);
+    throw err;
+  }
+
+  return getInstance(id)!;
+}
+
 export function updateInstance(id: string, input: UpdateInstanceInput): InstanceInfo {
   const existing = getInstanceRow(id);
   if (!existing) throw new Error('实例不存在');

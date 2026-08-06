@@ -1,6 +1,27 @@
 /** 实例运行状态 */
 export type InstanceStatus = 'stopped' | 'starting' | 'running' | 'stopping' | 'crashed';
 
+/** 实例生命周期操作冲突（HTTP 409） */
+export interface InstanceOperationConflictResult {
+  code: 'INSTANCE_OPERATION_CONFLICT';
+  error: string;
+}
+
+/** 普通停止宽限期过后进程仍在退出（HTTP 202） */
+export interface InstanceStopPendingResult {
+  code: 'INSTANCE_STOP_PENDING';
+  error: string;
+  status: 'stopping';
+  stillStopping: true;
+}
+
+export function isInstanceStopPendingResult(value: unknown): value is InstanceStopPendingResult {
+  return value !== null
+    && typeof value === 'object'
+    && 'stillStopping' in value
+    && (value as InstanceStopPendingResult).stillStopping === true;
+}
+
 /** 服务端核心类型 */
 export type CoreType = 'vanilla' | 'paper' | 'fabric' | 'forge' | 'neoforge' | 'custom';
 
@@ -106,6 +127,34 @@ export interface FileEntry {
   modifiedAt: string;
 }
 
+/** POST /api/instances/:id/files/download-ticket 请求体 */
+export interface FileDownloadTicketInput {
+  path: string;
+}
+
+/** 一次性文件下载 ticket；随后用 query 参数访问 GET .../files/download */
+export interface FileDownloadTicketResult {
+  ticket: string;
+  expiresIn: number;
+}
+
+/**
+ * 下载 ticket 生命周期状态（R1-06 状态查询 API）。
+ */
+export type FileDownloadTicketStatus =
+  | 'reserved'
+  | 'streaming'
+  | 'failed'
+  | 'expired'
+  | 'consumed';
+
+/** GET /api/instances/:id/files/download-ticket/:ticket/status 响应 */
+export interface FileDownloadTicketStatusResult {
+  status: FileDownloadTicketStatus;
+  /** 占槽或开流失败时的中文说明 */
+  error?: string;
+}
+
 export interface CoreVersionInfo {
   version: string;
   builds?: number[];
@@ -205,7 +254,7 @@ export interface TaskInfo {
   status: 'pending' | 'running' | 'completed' | 'failed';
   progress: number;
   message: string;
-  result?: { instanceId?: string };
+  result?: { instanceId?: string; stagingToken?: string };
   error?: string;
   createdAt: string;
   updatedAt: string;
@@ -252,4 +301,6 @@ export {
   loginBodySchema,
   createNodeBodySchema,
   updateNodeBodySchema,
+  fileDownloadTicketBodySchema,
+  fileDownloadQuerySchema,
 } from './schemas.js';

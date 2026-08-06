@@ -373,6 +373,28 @@ function New-RandomHex {
   return ([BitConverter]::ToString($bytes)).Replace('-', '').ToLowerInvariant()
 }
 
+function New-ProcessFingerprint {
+  $bytes = New-Object byte[] 16
+  $generator = [Security.Cryptography.RandomNumberGenerator]::Create()
+  try {
+    $generator.GetBytes($bytes)
+  } finally {
+    $generator.Dispose()
+  }
+  return ([BitConverter]::ToString($bytes)).Replace('-', '').ToLowerInvariant()
+}
+
+function Test-ManagedPanelProcessAlive {
+  param([int]$ProcessId)
+  if ($ProcessId -le 0) { return $false }
+  try {
+    $process = Get-Process -Id $ProcessId -ErrorAction Stop
+    return -not $process.HasExited
+  } catch {
+    return $false
+  }
+}
+
 function Test-ValidSecret {
   param([AllowEmptyString()][string]$Value)
   return $Value -match '^[0-9a-fA-F]{64}$'
@@ -660,16 +682,34 @@ function Get-PanelConnection {
 }
 
 function Get-PanelHealth {
+  param([string]$ExpectedFingerprint)
   try {
     $connection = Get-PanelConnection
     $response = Invoke-RestMethod -Uri $connection.HealthUrl -Method Get -TimeoutSec 2
     if ($response.ok -eq $true -and $response.service -eq 'minecraft-mystery-dashboard') {
+      if (
+        $ExpectedFingerprint `
+        -and ([string]$response.processFingerprint -ne [string]$ExpectedFingerprint)
+      ) {
+        return $null
+      }
       return $response
     }
   } catch {
     return $null
   }
   return $null
+}
+
+function Test-ManagedPanelRunning {
+  $state = Read-JsonMap $script:StatePath
+  if (-not $state.ContainsKey('fingerprint') -or -not $state.ContainsKey('pid')) {
+    return $false
+  }
+  $processId = 0
+  if (-not [int]::TryParse([string]$state.pid, [ref]$processId)) { return $false }
+  if (-not (Test-ManagedPanelProcessAlive $processId)) { return $false }
+  return $null -ne (Get-PanelHealth -ExpectedFingerprint ([string]$state.fingerprint))
 }
 
 function Test-PortOpen {
@@ -695,11 +735,15 @@ function Open-PanelBrowser {
 }
 
 function Save-ProcessState {
-  param([Diagnostics.Process]$Process)
+  param(
+    [Diagnostics.Process]$Process,
+    [Parameter(Mandatory = $true)][string]$Fingerprint
+  )
   $state = Read-JsonMap $script:StatePath
   $state['pid'] = $Process.Id
   $state['startedAt'] = [DateTime]::UtcNow.ToString('o')
   $state['url'] = (Get-PanelConnection).Url
+  $state['fingerprint'] = $Fingerprint
   Write-JsonMap -Path $script:StatePath -Value $state
 }
 
@@ -708,6 +752,7 @@ function Clear-ProcessState {
   $state.Remove('pid')
   $state.Remove('startedAt')
   $state.Remove('url')
+  $state.Remove('fingerprint')
   Write-JsonMap -Path $script:StatePath -Value $state
 }
 
@@ -745,13 +790,14 @@ function Copy-SetupToken {
 function Wait-ForPanelStart {
   param(
     [Parameter(Mandatory = $true)][Diagnostics.Process]$Process,
+    [Parameter(Mandatory = $true)][string]$ExpectedFingerprint,
     [int]$TimeoutSeconds = 60
   )
   $deadline = [DateTime]::UtcNow.AddSeconds($TimeoutSeconds)
   while ([DateTime]::UtcNow -lt $deadline) {
     $Process.Refresh()
     if ($Process.HasExited) { return $false }
-    if ($null -ne (Get-PanelHealth)) { return $true }
+    if ($null -ne (Get-PanelHealth -ExpectedFingerprint $ExpectedFingerprint)) { return $true }
     Start-Sleep -Milliseconds 500
   }
   return $false
@@ -766,10 +812,13 @@ function Show-StartupFailure {
 
 function Start-PanelBackground {
   param([hashtable]$Configuration)
-  if ($null -ne (Get-PanelHealth)) {
+  if (Test-ManagedPanelRunning) {
     Write-Manager 'AlreadyRunning'
     Open-PanelBrowser
     return
+  }
+  if ($null -ne (Get-PanelHealth)) {
+    throw (Get-Message 'PortBusy' (Get-PanelConnection).Port)
   }
   $connection = Get-PanelConnection
   if (Test-PortOpen $connection.Port) {
@@ -778,19 +827,30 @@ function Start-PanelBackground {
 
   Rotate-Logs
   Write-Manager 'StartingBackground'
+  $fingerprint = New-ProcessFingerprint
   $nodePath = (Get-Command node.exe).Source
   $entryArgument = '"' + $script:ServerEntry.Replace('"', '\"') + '"'
-  $process = Start-Process `
-    -FilePath $nodePath `
-    -ArgumentList @('--experimental-sqlite', $entryArgument) `
-    -WorkingDirectory $script:ProjectRoot `
-    -WindowStyle Hidden `
-    -RedirectStandardOutput $script:StdoutLog `
-    -RedirectStandardError $script:StderrLog `
-    -PassThru
-  Save-ProcessState $process
+  $previousFingerprint = $env:MMD_PROCESS_FINGERPRINT
+  $env:MMD_PROCESS_FINGERPRINT = $fingerprint
+  try {
+    $process = Start-Process `
+      -FilePath $nodePath `
+      -ArgumentList @('--experimental-sqlite', $entryArgument, "--mmd-fingerprint=$fingerprint") `
+      -WorkingDirectory $script:ProjectRoot `
+      -WindowStyle Hidden `
+      -RedirectStandardOutput $script:StdoutLog `
+      -RedirectStandardError $script:StderrLog `
+      -PassThru
+  } finally {
+    if ($null -eq $previousFingerprint) {
+      Remove-Item Env:MMD_PROCESS_FINGERPRINT -ErrorAction SilentlyContinue
+    } else {
+      $env:MMD_PROCESS_FINGERPRINT = $previousFingerprint
+    }
+  }
+  Save-ProcessState -Process $process -Fingerprint $fingerprint
 
-  if (-not (Wait-ForPanelStart -Process $process)) {
+  if (-not (Wait-ForPanelStart -Process $process -ExpectedFingerprint $fingerprint)) {
     $process.Refresh()
     if (-not $process.HasExited) { Stop-Process -Id $process.Id -Force }
     Clear-ProcessState
@@ -804,10 +864,23 @@ function Start-PanelBackground {
 }
 
 function Invoke-SafeShutdown {
-  if ($null -eq (Get-PanelHealth)) {
+  $state = Read-JsonMap $script:StatePath
+  $expectedFingerprint = if ($state.ContainsKey('fingerprint')) {
+    [string]$state.fingerprint
+  } else {
+    $null
+  }
+  $processId = 0
+  if ($state.ContainsKey('pid')) {
+    [void][int]::TryParse([string]$state.pid, [ref]$processId)
+  }
+  if (-not (Test-ManagedPanelProcessAlive $processId)) {
     Clear-ProcessState
     Write-Manager 'NotRunning'
     return
+  }
+  if (-not $expectedFingerprint -or $null -eq (Get-PanelHealth -ExpectedFingerprint $expectedFingerprint)) {
+    throw (Get-Message 'StopFailed' 'PID 或进程指纹与健康检查不匹配，拒绝发送关闭令牌')
   }
   $connection = Get-PanelConnection
   $environment = $connection.Environment
@@ -834,7 +907,7 @@ function Invoke-SafeShutdown {
   )
   $deadline = [DateTime]::UtcNow.AddSeconds($timeoutSeconds)
   while ([DateTime]::UtcNow -lt $deadline) {
-    if ($null -eq (Get-PanelHealth)) {
+    if ($null -eq (Get-PanelHealth -ExpectedFingerprint $expectedFingerprint)) {
       Clear-ProcessState
       Write-Manager 'Stopped'
       return
@@ -846,10 +919,13 @@ function Invoke-SafeShutdown {
 
 function Start-PanelForeground {
   param([hashtable]$Configuration)
-  if ($null -ne (Get-PanelHealth)) {
+  if (Test-ManagedPanelRunning) {
     Write-Manager 'AlreadyRunning'
     Open-PanelBrowser
     return
+  }
+  if ($null -ne (Get-PanelHealth)) {
+    throw (Get-Message 'PortBusy' (Get-PanelConnection).Port)
   }
   $connection = Get-PanelConnection
   if (Test-PortOpen $connection.Port) {
@@ -857,17 +933,28 @@ function Start-PanelForeground {
   }
 
   Write-Manager 'StartingForeground'
+  $fingerprint = New-ProcessFingerprint
   $nodePath = (Get-Command node.exe).Source
   $entryArgument = '"' + $script:ServerEntry.Replace('"', '\"') + '"'
-  $process = Start-Process `
-    -FilePath $nodePath `
-    -ArgumentList @('--experimental-sqlite', $entryArgument) `
-    -WorkingDirectory $script:ProjectRoot `
-    -NoNewWindow `
-    -PassThru
-  Save-ProcessState $process
+  $previousFingerprint = $env:MMD_PROCESS_FINGERPRINT
+  $env:MMD_PROCESS_FINGERPRINT = $fingerprint
   try {
-    if (-not (Wait-ForPanelStart -Process $process)) {
+    $process = Start-Process `
+      -FilePath $nodePath `
+      -ArgumentList @('--experimental-sqlite', $entryArgument, "--mmd-fingerprint=$fingerprint") `
+      -WorkingDirectory $script:ProjectRoot `
+      -NoNewWindow `
+      -PassThru
+  } finally {
+    if ($null -eq $previousFingerprint) {
+      Remove-Item Env:MMD_PROCESS_FINGERPRINT -ErrorAction SilentlyContinue
+    } else {
+      $env:MMD_PROCESS_FINGERPRINT = $previousFingerprint
+    }
+  }
+  Save-ProcessState -Process $process -Fingerprint $fingerprint
+  try {
+    if (-not (Wait-ForPanelStart -Process $process -ExpectedFingerprint $fingerprint)) {
       throw (Get-Message 'StartupFailed')
     }
     Write-Manager 'Started' $connection.Url
@@ -875,7 +962,7 @@ function Start-PanelForeground {
     if ($Configuration.NeedsSetup) { Copy-SetupToken }
     Wait-Process -Id $process.Id
   } finally {
-    if ($null -ne (Get-PanelHealth)) {
+    if (Test-ManagedPanelRunning) {
       try { Invoke-SafeShutdown } catch { Write-Warning $_.Exception.Message }
     }
     Clear-ProcessState
@@ -957,14 +1044,16 @@ function Invoke-TailLogs {
 }
 
 function Show-Status {
-  $health = Get-PanelHealth
-  $connection = Get-PanelConnection
-  if ($null -ne $health) {
+  if (Test-ManagedPanelRunning) {
+    $connection = Get-PanelConnection
     Write-Manager 'StateRunning' $connection.Url
     $state = Read-JsonMap $script:StatePath
     if ($state.ContainsKey('pid')) { Write-Manager 'StatusPid' $state.pid }
-  } else {
-    Write-Manager 'StateStopped'
+    return
+  }
+  Write-Manager 'StateStopped'
+  if ($null -ne (Get-PanelHealth)) {
+    Write-Warning '配置端口存在面板服务，但 PID 或进程指纹与 state.json 不匹配；不会发送关闭令牌。'
   }
 }
 
@@ -984,15 +1073,15 @@ function Invoke-Command {
     }
     'restart' {
       Write-Manager 'Restarting'
-      if ($null -ne (Get-PanelHealth)) { Invoke-SafeShutdown }
+      if (Test-ManagedPanelRunning) { Invoke-SafeShutdown }
       $configuration = Prepare-Project
       Start-PanelBackground $configuration
     }
     'logs' {
-      if ($null -ne (Get-PanelHealth)) { Open-LiveLogs } else { Show-RecentLogs }
+      if (Test-ManagedPanelRunning) { Open-LiveLogs } else { Show-RecentLogs }
     }
     'rebuild' {
-      $wasRunning = $null -ne (Get-PanelHealth)
+      $wasRunning = Test-ManagedPanelRunning
       if ($wasRunning) { Invoke-SafeShutdown }
       $configuration = Prepare-Project -ForceInstall -ForceBuild
       if ($wasRunning) {
@@ -1016,7 +1105,7 @@ function Show-InteractiveMenu {
     Write-Host '============================================================'
     Write-Host (Get-Message 'Title')
     Write-Host '============================================================'
-    $running = $null -ne (Get-PanelHealth)
+    $running = Test-ManagedPanelRunning
     $connection = Get-PanelConnection
     if ($running) {
       Write-Manager 'StateRunning' $connection.Url

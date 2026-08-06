@@ -25,7 +25,8 @@ const statusBadge: Record<TaskInfo['status'], string> = {
   failed: 'crashed',
 };
 
-function formatTime(iso: string): string {
+function formatTime(iso: string | null): string {
+  if (!iso) return '';
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return '';
   return date.toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
@@ -36,7 +37,7 @@ function formatTime(iso: string): string {
  * placement 控制面板展开方向（侧边栏向上、顶栏向下）。
  */
 export function TaskCenter({ placement }: { placement: 'sidebar' | 'topbar' }) {
-  const { tasks, error, activeCount } = useTaskCenter();
+  const { tasks, error, activeCount, lastSuccessAt, retry } = useTaskCenter();
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   // 面板用 fixed 定位并跟随按钮坐标：侧边栏有 overflow:auto，
@@ -86,6 +87,8 @@ export function TaskCenter({ placement }: { placement: 'sidebar' | 'topbar' }) {
     };
   }, [open]);
 
+  const stale = Boolean(error);
+
   return (
     <div className={`task-center task-center-${placement}`} ref={rootRef}>
       <button
@@ -105,8 +108,23 @@ export function TaskCenter({ placement }: { placement: 'sidebar' | 'topbar' }) {
             <h2>任务中心</h2>
             {activeCount > 0 && <span className="muted">{activeCount} 个进行中</span>}
           </header>
-          {error && tasks.length === 0 && <p className="error">任务列表加载失败：{error}</p>}
-          {!error && tasks.length === 0 && <p className="muted">暂无任务。部署或导入实例后会显示在这里。</p>}
+          {stale && (
+            <div className="task-panel-stale" role="status">
+              <p className="error">状态可能已过期：{error}</p>
+              {lastSuccessAt && (
+                <p className="muted">上次成功刷新：{formatTime(lastSuccessAt)}</p>
+              )}
+              <button className="btn btn-ghost" type="button" onClick={() => retry()}>
+                重试刷新
+              </button>
+            </div>
+          )}
+          {!stale && error && tasks.length === 0 && (
+            <p className="error">任务列表加载失败：{error}</p>
+          )}
+          {!error && tasks.length === 0 && (
+            <p className="muted">暂无任务。部署或导入实例后会显示在这里。</p>
+          )}
           <ul className="task-list">
             {tasks.map((task) => (
               <li key={task.id} className="task-item">

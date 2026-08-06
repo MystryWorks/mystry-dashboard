@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useId } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { TaskInfo } from '@mmd/shared';
 import { api, pollTask } from '../api';
@@ -47,6 +47,11 @@ export function DeployPage() {
   const [showErrorDetails, setShowErrorDetails] = useState(false);
   const [copyStatus, setCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const errorDialogRef = useRef<HTMLDialogElement>(null);
+  const metadataGenerationRef = useRef(0);
+  const nameFieldId = useId();
+  const coreTypeFieldId = useId();
+  const jvmArgsFieldId = useId();
+  const eulaFieldId = useId();
   const errorPreview = useMemo(() => createErrorPreview(error), [error]);
   const hasErrorDetails = error.includes('\n') || error.length > ERROR_PREVIEW_MAX_LENGTH;
 
@@ -94,12 +99,14 @@ export function DeployPage() {
   }
 
   function handleCoreTypeChange(next: CoreType | '') {
+    metadataGenerationRef.current += 1;
     setCoreType(next);
     setError('');
     resetDependentFields();
   }
 
   function handleMcVersionChange(next: string) {
+    metadataGenerationRef.current += 1;
     setMcVersion(next);
     setBuilds([]);
     setBuildsLoadedFor('');
@@ -115,16 +122,19 @@ export function DeployPage() {
   const loadVersions = useCallback(async () => {
     if (!coreType) return;
     if (versionsLoadedFor === coreType) return;
+    const generation = metadataGenerationRef.current;
     setVersionsLoading(true);
     setError('');
     try {
       const res = await api<{ versions: string[] }>(`/api/cores/${coreType}/versions`);
+      if (generation !== metadataGenerationRef.current) return;
       setVersions(res.versions);
       setVersionsLoadedFor(coreType);
     } catch (err) {
+      if (generation !== metadataGenerationRef.current) return;
       setError(err instanceof Error ? err.message : String(err));
     } finally {
-      setVersionsLoading(false);
+      if (generation === metadataGenerationRef.current) setVersionsLoading(false);
     }
   }, [coreType, versionsLoadedFor]);
 
@@ -132,16 +142,19 @@ export function DeployPage() {
     if (coreType !== 'paper' || !mcVersion) return;
     const key = `${coreType}:${mcVersion}`;
     if (buildsLoadedFor === key) return;
+    const generation = metadataGenerationRef.current;
     setBuildsLoading(true);
     setError('');
     try {
       const res = await api<{ builds: number[] }>(`/api/cores/paper/${mcVersion}/builds`);
+      if (generation !== metadataGenerationRef.current) return;
       setBuilds(res.builds);
       setBuildsLoadedFor(key);
     } catch (err) {
+      if (generation !== metadataGenerationRef.current) return;
       setError(err instanceof Error ? err.message : String(err));
     } finally {
-      setBuildsLoading(false);
+      if (generation === metadataGenerationRef.current) setBuildsLoading(false);
     }
   }, [coreType, mcVersion, buildsLoadedFor]);
 
@@ -150,6 +163,7 @@ export function DeployPage() {
     if (coreType !== 'fabric' && coreType !== 'forge' && coreType !== 'neoforge') return;
     const key = `${coreType}:${mcVersion}`;
     if (loadersLoadedFor === key) return;
+    const generation = metadataGenerationRef.current;
     setLoadersLoading(true);
     setError('');
     try {
@@ -157,19 +171,22 @@ export function DeployPage() {
         const res = await api<{ loaders: string[]; installers: string[] }>(
           `/api/cores/fabric/${mcVersion}/loaders`,
         );
+        if (generation !== metadataGenerationRef.current) return;
         setLoaders(res.loaders);
         setInstallers(res.installers);
         setLoadersLoadedFor(key);
         setInstallersLoadedFor(key);
       } else {
         const res = await api<{ loaders: string[] }>(`/api/cores/${coreType}/${mcVersion}/loaders`);
+        if (generation !== metadataGenerationRef.current) return;
         setLoaders(res.loaders);
         setLoadersLoadedFor(key);
       }
     } catch (err) {
+      if (generation !== metadataGenerationRef.current) return;
       setError(err instanceof Error ? err.message : String(err));
     } finally {
-      setLoadersLoading(false);
+      if (generation === metadataGenerationRef.current) setLoadersLoading(false);
     }
   }, [coreType, mcVersion, loadersLoadedFor]);
 
@@ -228,13 +245,14 @@ export function DeployPage() {
 
       <div className="panel" style={{ maxWidth: 640 }}>
         <div className="field">
-          <label>实例名称</label>
-          <input value={name} onChange={(e) => setName(e.target.value)} />
+          <label htmlFor={nameFieldId}>实例名称</label>
+          <input id={nameFieldId} value={name} onChange={(e) => setName(e.target.value)} />
         </div>
         <div className="managed-note"><strong>实例目录由面板托管</strong><span>面板会使用 data/instances/&lt;实例 ID&gt;，不接受外部安装路径。</span></div>
         <div className="field">
-          <label>核心类型</label>
+          <label htmlFor={coreTypeFieldId}>核心类型</label>
           <select
+            id={coreTypeFieldId}
             value={coreType}
             onChange={(e) => handleCoreTypeChange(e.target.value as CoreType | '')}
           >
@@ -247,8 +265,9 @@ export function DeployPage() {
           </select>
         </div>
         <div className="field">
-          <label>游戏版本</label>
+          <label id={`${nameFieldId}-mc-version-label`}>游戏版本</label>
           <LazyScrollSelect
+            ariaLabel="游戏版本"
             value={mcVersion}
             options={versions}
             onChange={handleMcVersionChange}
@@ -261,8 +280,9 @@ export function DeployPage() {
         </div>
         {coreType === 'paper' && (
           <div className="field">
-            <label>Paper Build</label>
+            <label id={`${nameFieldId}-paper-build-label`}>Paper Build</label>
             <LazyScrollSelect
+              ariaLabel="Paper Build"
               value={build}
               options={builds}
               onChange={setBuild}
@@ -277,8 +297,9 @@ export function DeployPage() {
         )}
         {(coreType === 'fabric' || coreType === 'forge' || coreType === 'neoforge') && (
           <div className="field">
-            <label>{loaderLabel}</label>
+            <label id={`${nameFieldId}-loader-label`}>{loaderLabel}</label>
             <LazyScrollSelect
+              ariaLabel={loaderLabel}
               value={loaderVersion}
               options={loaders}
               onChange={setLoaderVersion}
@@ -292,8 +313,9 @@ export function DeployPage() {
         )}
         {coreType === 'fabric' && (
           <div className="field">
-            <label>Installer 版本</label>
+            <label id={`${nameFieldId}-installer-label`}>Installer 版本</label>
             <LazyScrollSelect
+              ariaLabel="Fabric Installer 版本"
               value={installerVersion}
               options={installers}
               onChange={setInstallerVersion}
@@ -318,11 +340,15 @@ export function DeployPage() {
           disabled={busy}
         />
         <div className="field">
-          <label>JVM 参数</label>
-          <input value={jvmArgs} onChange={(e) => setJvmArgs(e.target.value)} />
+          <label htmlFor={jvmArgsFieldId}>JVM 参数</label>
+          <input id={jvmArgsFieldId} value={jvmArgs} onChange={(e) => setJvmArgs(e.target.value)} />
         </div>
-        <label style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginBottom: '1rem' }}>
+        <label
+          htmlFor={eulaFieldId}
+          style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginBottom: '1rem' }}
+        >
           <input
+            id={eulaFieldId}
             type="checkbox"
             checked={acceptEula}
             onChange={(e) => setAcceptEula(e.target.checked)}

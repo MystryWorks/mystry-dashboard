@@ -1,10 +1,13 @@
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import fs from 'node:fs';
+import path from 'node:path';
+import { fileDownloadQuerySchema, fileDownloadTicketBodySchema } from '@mmd/shared';
 import { config } from '../config.js';
 import {
   acquireFileDownloadSlot,
   assertTextFileWithinLimit,
   deletePath,
+  fileServiceErrorHttpStatus,
   getAbsoluteFilePath,
   isFileDownloadCapacityError,
   listFiles,
@@ -14,8 +17,19 @@ import {
   saveUploadedFile,
   writeTextFile,
 } from '../services/file-service.js';
+import {
+  beginDownloadStream,
+  completeDownloadStream,
+  failDownloadStream,
+  getDownloadTicketStatus,
+  reserveDownloadTicket,
+} from '../services/download-ticket-service.js';
 import { getInstance } from '../services/instance-service.js';
-import { readServerProperties, stringifyProperties, writeServerProperties } from '../services/config-service.js';
+import {
+  previewServerPropertiesWrite,
+  writeServerProperties,
+  readServerProperties,
+} from '../services/config-service.js';
 import { isUploadCapacityError, isUploadTooLargeError } from '../services/upload-service.js';
 
 type ResourceLimits = { maxTextFileBytes: number };
@@ -75,8 +89,33 @@ function validationMessage(reply: { code: (statusCode: number) => { send: (paylo
   return reply.code(400).send({ error: message });
 }
 
+/** 仅用 basename，附带 RFC 5987 filename*，禁止路径注入。 */
+function contentDispositionAttachment(fileName: string): string {
+  const basename = path.basename(fileName);
+  const asciiFallback = basename
+    .replace(/[^\x20-\x7E]/g, '_')
+    .replace(/["\\]/g, '_');
+  const encoded = encodeURIComponent(basename).replace(
+    /[!'()*]/g,
+    (char) => `%${char.charCodeAt(0).toString(16).toUpperCase()}`,
+  );
+  return `attachment; filename="${asciiFallback}"; filename*=UTF-8''${encoded}`;
+}
+
+function isDownloadRoute(req: FastifyRequest): boolean {
+  const routePath = req.routeOptions.url;
+  return routePath === '/api/instances/:id/files/download';
+}
+
 export async function fileRoutes(app: FastifyInstance): Promise<void> {
-  app.addHook('preHandler', app.authenticate);
+  // 下载可用一次性 ticket 代替 JWT（浏览器原生导航无法带 Authorization）
+  app.addHook('preHandler', async (req: FastifyRequest, reply: FastifyReply) => {
+    if (isDownloadRoute(req)) {
+      const ticket = (req.query as { ticket?: string }).ticket;
+      if (typeof ticket === 'string' && ticket.length > 0) return;
+    }
+    return app.authenticate(req, reply);
+  });
 
   app.get<{ Params: { id: string }; Querystring: { path?: string } }>(
     '/api/instances/:id/files',
@@ -159,46 +198,112 @@ export async function fileRoutes(app: FastifyInstance): Promise<void> {
         renamePath(req.params.id, req.body.from, req.body.to);
         return { ok: true };
       } catch (err) {
-        return reply.code(400).send({ error: err instanceof Error ? err.message : String(err) });
+        return reply.code(fileServiceErrorHttpStatus(err)).send({
+          error: err instanceof Error ? err.message : String(err),
+        });
       }
     },
   );
 
-  app.get<{ Params: { id: string }; Querystring: { path: string } }>(
+  app.post<{ Params: { id: string }; Body: { path: string } }>(
+    '/api/instances/:id/files/download-ticket',
+    { attachValidation: true, schema: { body: fileDownloadTicketBodySchema } },
+    async (req, reply) => {
+      if (req.validationError) return validationMessage(reply, '文件路径过长或包含不支持的字段');
+      if (!getInstance(req.params.id)) return reply.code(404).send({ error: '实例不存在' });
+      let releaseDownload: (() => void) | null = null;
+      try {
+        getAbsoluteFilePath(req.params.id, req.body.path);
+        releaseDownload = acquireFileDownloadSlot();
+        return reserveDownloadTicket(
+          req.user.id,
+          req.params.id,
+          req.body.path,
+          releaseDownload,
+        );
+      } catch (err) {
+        releaseDownload?.();
+        if (isFileDownloadCapacityError(err)) {
+          return reply.code(429).send({ error: err.message });
+        }
+        const message = err instanceof Error && /^(文件不存在|目标不是普通文件)$/.test(err.message)
+          ? err.message
+          : '文件打开失败';
+        return reply.code(400).send({ error: message });
+      }
+    },
+  );
+
+  app.get<{ Params: { id: string; ticket: string } }>(
+    '/api/instances/:id/files/download-ticket/:ticket/status',
+    async (req, reply) => {
+      if (!getInstance(req.params.id)) return reply.code(404).send({ error: '实例不存在' });
+      const status = getDownloadTicketStatus(req.params.ticket, req.user.id);
+      if (!status) return reply.code(404).send({ error: '下载票据不存在或无权查看' });
+      return status;
+    },
+  );
+
+  app.get<{ Params: { id: string }; Querystring: { path: string; ticket?: string } }>(
     '/api/instances/:id/files/download',
-    { attachValidation: true, schema: { querystring: requiredPathQuerySchema } },
+    { attachValidation: true, schema: { querystring: fileDownloadQuerySchema } },
     async (req, reply) => {
       if (req.validationError) return validationMessage(reply, '文件路径过长或格式不正确');
+      const ticketParam = req.query.ticket;
+      const hasTicket = typeof ticketParam === 'string' && ticketParam.length > 0;
+      let activeTicket: string | null = hasTicket ? ticketParam : null;
+      if (hasTicket) {
+        const began = beginDownloadStream(ticketParam, req.params.id, req.query.path);
+        if (!began) return reply.code(401).send({ error: '未授权' });
+      }
       let releaseDownload: (() => void) | null = null;
       try {
         const abs = getAbsoluteFilePath(req.params.id, req.query.path);
-        const release = acquireFileDownloadSlot();
-        releaseDownload = release;
+        if (!hasTicket) {
+          releaseDownload = acquireFileDownloadSlot();
+        }
         const stream = fs.createReadStream(abs);
         let responseStarted = false;
         let cleaned = false;
-        const cleanup = () => {
-          if (cleaned) return;
-          cleaned = true;
-          release();
+        const releaseResources = () => {
           try {
             reply.raw.setTimeout(0);
           } catch {
             // 响应可能已经关闭。
           }
           if (!stream.destroyed) stream.destroy();
-          reply.raw.off('close', cleanup);
+          reply.raw.off('close', releaseResources);
+        };
+        const finishSuccess = () => {
+          if (cleaned) return;
+          cleaned = true;
+          releaseDownload?.();
+          if (activeTicket) {
+            completeDownloadStream(activeTicket);
+            activeTicket = null;
+          }
+          releaseResources();
+        };
+        const finishFailure = (errorMessage: string) => {
+          if (cleaned) return;
+          cleaned = true;
+          releaseDownload?.();
+          if (activeTicket) {
+            failDownloadStream(activeTicket, errorMessage);
+            activeTicket = null;
+          }
+          releaseResources();
         };
         const onStreamError = (error: Error) => {
-          cleanup();
+          finishFailure(error.message || '文件读取失败');
           if (responseStarted && !reply.sent) {
             void reply.code(400).send({ error: '文件读取失败' });
           }
         };
-        stream.once('end', cleanup);
-        stream.once('close', cleanup);
+        stream.once('end', finishSuccess);
+        stream.once('close', finishSuccess);
         stream.once('error', onStreamError);
-        reply.raw.once('close', cleanup);
+        reply.raw.once('close', finishSuccess);
         reply.raw.setTimeout(config.fileDownloadIdleTimeoutMs, () => {
           stream.destroy(new Error('文件下载空闲超时'));
           if (!reply.raw.destroyed) reply.raw.destroy();
@@ -216,8 +321,16 @@ export async function fileRoutes(app: FastifyInstance): Promise<void> {
           stream.once('error', onError);
         });
         responseStarted = true;
-        return reply.type('application/octet-stream').send(stream);
+        return reply
+          .header('Content-Disposition', contentDispositionAttachment(path.basename(abs)))
+          .type('application/octet-stream')
+          .send(stream);
       } catch (err) {
+        if (activeTicket) {
+          const message = err instanceof Error ? err.message : '文件打开失败';
+          failDownloadStream(activeTicket, message);
+          activeTicket = null;
+        }
         releaseDownload?.();
         if (isFileDownloadCapacityError(err)) {
           return reply.code(429).send({ error: err.message });
@@ -276,7 +389,8 @@ export async function fileRoutes(app: FastifyInstance): Promise<void> {
       if (req.validationError) return validationMessage(reply, 'server.properties 键数量、文本长度或格式不正确');
       try {
         assertTextFileWithinLimit(req.params.id, 'server.properties');
-        if (Buffer.byteLength(stringifyProperties(req.body), 'utf8') > maxTextFileBytes) {
+        const preview = previewServerPropertiesWrite(req.params.id, req.body);
+        if (Buffer.byteLength(preview, 'utf8') > maxTextFileBytes) {
           return reply.code(400).send({ error: `server.properties 超过大小限制（${maxTextFileBytes} 字节）` });
         }
         writeServerProperties(req.params.id, req.body);

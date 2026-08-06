@@ -1,9 +1,16 @@
+import fs from 'node:fs';
 import { nanoid } from 'nanoid';
 import type { TaskInfo } from '@mmd/shared';
 import { config } from '../config.js';
 import { getDb, type TaskRow } from '../db.js';
 import { nowIso } from '../utils/path.js';
-import { deleteInstance, getInstanceRow } from './instance-service.js';
+import { getInstanceRow } from './instance-service.js';
+import {
+  readTaskStagingMarker,
+  removeTaskStagingTree,
+  stagingMarkerMatches,
+  taskStagingDir,
+} from './task-staging-service.js';
 
 export class TaskCapacityError extends Error {
   readonly code = 'TASK_CAPACITY';
@@ -56,6 +63,11 @@ let shuttingDown = false;
 const runningControllers = new Map<string, AbortController>();
 const runningExecutions = new Map<string, Promise<void>>();
 
+type TaskResultPayload = {
+  instanceId?: string;
+  stagingToken?: string;
+};
+
 function rowToTask(row: TaskRow): TaskInfo {
   return {
     id: row.id,
@@ -70,13 +82,22 @@ function rowToTask(row: TaskRow): TaskInfo {
   };
 }
 
+function parseTaskResult(row: TaskRow): TaskResultPayload | null {
+  if (!row.result_json) return null;
+  try {
+    return JSON.parse(row.result_json) as TaskResultPayload;
+  } catch {
+    return null;
+  }
+}
+
 export function createTask(type: TaskInfo['type'], message = '排队中'): TaskInfo {
   const id = nanoid(12);
   const now = nowIso();
   getDb()
     .prepare(
-      `INSERT INTO tasks (id, type, status, progress, message, result_json, error, created_at, updated_at)
-       VALUES (?, ?, 'pending', 0, ?, NULL, NULL, ?, ?)`,
+      `INSERT INTO tasks (id, type, status, phase, progress, message, result_json, error, created_at, updated_at)
+       VALUES (?, ?, 'pending', NULL, 0, ?, NULL, NULL, ?, ?)`,
     )
     .run(id, type, message, now, now);
   return getTask(id)!;
@@ -99,14 +120,18 @@ export function listTasks(limit = 50): TaskInfo[] {
 export function updateTask(
   id: string,
   patch: Partial<Pick<TaskInfo, 'status' | 'progress' | 'message' | 'result' | 'error'>>,
+  options?: { phase?: string | null },
 ): TaskInfo {
   const existing = getTask(id);
   if (!existing) throw new Error('任务不存在');
+  const row = getDb().prepare('SELECT * FROM tasks WHERE id = ?').get(id) as TaskRow;
   const now = nowIso();
+  const phase = options?.phase !== undefined ? options.phase : row.phase;
   getDb()
     .prepare(
       `UPDATE tasks SET
         status = ?,
+        phase = ?,
         progress = ?,
         message = ?,
         result_json = ?,
@@ -116,6 +141,7 @@ export function updateTask(
     )
     .run(
       patch.status ?? existing.status,
+      phase,
       patch.progress ?? existing.progress,
       patch.message ?? existing.message,
       patch.result !== undefined
@@ -130,64 +156,99 @@ export function updateTask(
   return getTask(id)!;
 }
 
-/** 记录任务创建的实例，使面板重启后可以清理未完成的部署或导入。 */
+/** 记录任务 staging 资源，供崩溃后仅清理半成品目录。 */
+export function recordTaskStaging(taskId: string, instanceId: string, stagingToken: string): TaskInfo {
+  return updateTask(
+    taskId,
+    { result: { instanceId, stagingToken } },
+    { phase: 'staging' },
+  );
+}
+
+/**
+ * @deprecated 保留兼容旧调用；新任务应使用 recordTaskStaging，且不得在文件落地前写入最终实例。
+ */
 export function recordTaskInstance(taskId: string, instanceId: string): TaskInfo {
-  return updateTask(taskId, { result: { instanceId } });
+  return updateTask(taskId, { result: { instanceId } }, { phase: 'staging' });
 }
 
 export type InterruptedTaskRecovery = {
   interrupted: number;
-  cleanedInstances: number;
-  cleanupFailures: number;
+  cleanedStaging: number;
+  stagingCleanupFailures: number;
 };
 
+function tryCleanInterruptedStaging(row: TaskRow): { cleaned: boolean; cleanupError: string | null } {
+  const result = parseTaskResult(row);
+  if (!result?.instanceId || !result.stagingToken) {
+    return { cleaned: false, cleanupError: null };
+  }
+  const stagingPath = taskStagingDir(row.id, result.instanceId, config.dataDir);
+  if (!fs.existsSync(stagingPath)) {
+    return { cleaned: false, cleanupError: null };
+  }
+  const marker = {
+    version: 1 as const,
+    taskId: row.id,
+    instanceId: result.instanceId,
+    token: result.stagingToken,
+  };
+  if (!stagingMarkerMatches(stagingPath, marker)) {
+    return { cleaned: false, cleanupError: 'staging marker 与任务记录不匹配，已跳过自动清理' };
+  }
+  try {
+    removeTaskStagingTree(row.id, result.instanceId, config.dataDir);
+    return { cleaned: true, cleanupError: null };
+  } catch (error) {
+    return {
+      cleaned: false,
+      cleanupError: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
 /**
- * 内存 worker 无法跨面板进程恢复；启动时把遗留任务收敛为失败终态，
- * 并尽可能清理任务已经创建的半成品实例。
+ * 内存 worker 无法跨面板进程恢复；启动时把遗留任务收敛为失败终态。
+ * 仅清理可证明位于 .mmd-staging 的半成品，绝不删除已注册实例或最终 instances 目录。
  */
 export function recoverInterruptedTasks(): InterruptedTaskRecovery {
   const rows = getDb()
     .prepare("SELECT * FROM tasks WHERE status IN ('pending', 'running') ORDER BY created_at")
     .all() as TaskRow[];
-  let cleanedInstances = 0;
-  let cleanupFailures = 0;
+  let cleanedStaging = 0;
+  let stagingCleanupFailures = 0;
   const update = getDb().prepare(
     `UPDATE tasks
-     SET status = 'failed', message = '已中断', error = ?, result_json = ?, updated_at = ?
+     SET status = 'failed', phase = 'failed', message = '已中断', error = ?, result_json = ?, updated_at = ?
      WHERE id = ?`,
   );
 
   for (const row of rows) {
-    let instanceId: string | null = null;
-    if (row.result_json) {
-      try {
-        const result = JSON.parse(row.result_json) as { instanceId?: unknown };
-        if (typeof result.instanceId === 'string' && result.instanceId) {
-          instanceId = result.instanceId;
-        }
-      } catch {
-        // 无效的旧结果不阻止任务状态恢复，原始内容会保留以便排查。
-      }
+    const result = parseTaskResult(row);
+    const instanceId = result?.instanceId;
+    const stagingCleanup = tryCleanInterruptedStaging(row);
+    if (stagingCleanup.cleaned) {
+      cleanedStaging += 1;
+    } else if (stagingCleanup.cleanupError) {
+      stagingCleanupFailures += 1;
     }
 
-    let cleanupError: string | null = null;
+    // 最终实例目录或数据库记录一律保留，即使任务未完成。
     if (instanceId && getInstanceRow(instanceId)) {
-      try {
-        deleteInstance(instanceId);
-        cleanedInstances += 1;
-      } catch (error) {
-        cleanupFailures += 1;
-        cleanupError = error instanceof Error ? error.message : String(error);
-      }
+      const error = stagingCleanup.cleanupError
+        ? `面板重启，内存任务无法恢复；staging 清理异常：${stagingCleanup.cleanupError}`
+        : '面板重启，内存任务无法恢复；已保留实例目录，请重新提交或手动检查任务状态';
+      update.run(error, row.result_json, nowIso(), row.id);
+      continue;
     }
 
-    const error = cleanupError
-      ? `面板重启，内存任务无法恢复；半成品实例清理失败：${cleanupError}`
+    const error = stagingCleanup.cleanupError
+      ? `面板重启，内存任务无法恢复；staging 清理异常：${stagingCleanup.cleanupError}`
       : '面板重启，内存任务无法恢复，请重新提交';
-    update.run(error, cleanupError ? row.result_json : null, nowIso(), row.id);
+    update.run(error, stagingCleanup.cleaned ? null : row.result_json, nowIso(), row.id);
   }
 
-  return { interrupted: rows.length, cleanedInstances, cleanupFailures };
+  return { interrupted: rows.length, cleanedStaging, stagingCleanupFailures };
 }
 
 function abortError(signal: AbortSignal): Error {
@@ -220,7 +281,7 @@ async function executeTask(item: QueuedTask, controller: AbortController): Promi
   let failed = false;
 
   try {
-    updateTask(item.task.id, { status: 'running', message: item.task.message });
+    updateTask(item.task.id, { status: 'running', message: item.task.message }, { phase: 'staging' });
     const timeout = setTimeout(() => {
       timedOut = true;
       controller.abort(new Error('任务执行超时'));
@@ -252,7 +313,7 @@ async function executeTask(item: QueuedTask, controller: AbortController): Promi
       : failure instanceof Error
         ? failure.message
         : String(failure);
-    updateTask(item.task.id, { status: 'failed', message: '失败', error });
+    updateTask(item.task.id, { status: 'failed', message: '失败', error }, { phase: 'failed' });
     return;
   }
 
@@ -261,7 +322,7 @@ async function executeTask(item: QueuedTask, controller: AbortController): Promi
     progress: 100,
     message: '完成',
     result: result ?? undefined,
-  });
+  }, { phase: 'completed' });
 }
 
 export async function runBackgroundTask(
@@ -297,7 +358,7 @@ export async function shutdownTasks(): Promise<void> {
       status: 'failed',
       message: '已取消',
       error: '面板正在关闭，任务已取消',
-    });
+    }, { phase: 'failed' });
   }
 
   for (const controller of runningControllers.values()) {
@@ -308,3 +369,5 @@ export async function shutdownTasks(): Promise<void> {
 
   await Promise.allSettled([...runningExecutions.values()]);
 }
+
+export { readTaskStagingMarker };

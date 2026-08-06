@@ -11,7 +11,11 @@ import {
   listInstances,
   updateInstance,
 } from '../services/instance-service.js';
-import { processManager } from '../services/process-manager.js';
+import {
+  isInstanceOperationConflictError,
+  isInstanceStopPendingError,
+  processManager,
+} from '../services/process-manager.js';
 
 const commandBodySchema = {
   type: 'object',
@@ -21,6 +25,27 @@ const commandBodySchema = {
     command: { type: 'string', minLength: 1, maxLength: config.maxCommandBytes },
   },
 } as const;
+
+function replyProcessManagerError(
+  reply: { code: (status: number) => { send: (body: unknown) => unknown } },
+  err: unknown,
+) {
+  if (isInstanceStopPendingError(err)) {
+    return reply.code(202).send({
+      code: 'INSTANCE_STOP_PENDING',
+      error: err.message,
+      status: 'stopping',
+      stillStopping: true as const,
+    });
+  }
+  if (isInstanceOperationConflictError(err)) {
+    return reply.code(409).send({
+      code: 'INSTANCE_OPERATION_CONFLICT',
+      error: err.message,
+    });
+  }
+  return reply.code(400).send({ error: err instanceof Error ? err.message : String(err) });
+}
 
 export async function instanceRoutes(app: FastifyInstance): Promise<void> {
   app.addHook('preHandler', app.authenticate);
@@ -90,7 +115,7 @@ export async function instanceRoutes(app: FastifyInstance): Promise<void> {
       await processManager.start(row);
       return getInstance(row.id);
     } catch (err) {
-      return reply.code(400).send({ error: err instanceof Error ? err.message : String(err) });
+      return replyProcessManagerError(reply, err);
     }
   });
 
@@ -101,7 +126,7 @@ export async function instanceRoutes(app: FastifyInstance): Promise<void> {
         await processManager.stop(req.params.id, req.query.force === '1');
         return getInstance(req.params.id);
       } catch (err) {
-        return reply.code(400).send({ error: err instanceof Error ? err.message : String(err) });
+        return replyProcessManagerError(reply, err);
       }
     },
   );
@@ -113,7 +138,7 @@ export async function instanceRoutes(app: FastifyInstance): Promise<void> {
       await processManager.restart(row);
       return getInstance(row.id);
     } catch (err) {
-      return reply.code(400).send({ error: err instanceof Error ? err.message : String(err) });
+      return replyProcessManagerError(reply, err);
     }
   });
 

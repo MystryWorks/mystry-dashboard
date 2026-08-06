@@ -129,7 +129,7 @@ export async function coreRoutes(app: FastifyInstance): Promise<void> {
 
   app.get('/api/import/sources', async (_req, reply) => {
     try {
-      return { sources: listExistingServerSources() };
+      return { sources: await listExistingServerSources() };
     } catch (err) {
       return reply.code(500).send({ error: err instanceof Error ? err.message : String(err) });
     }

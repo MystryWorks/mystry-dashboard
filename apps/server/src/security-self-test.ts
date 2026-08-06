@@ -194,11 +194,11 @@ async function main(): Promise<void> {
     });
     const queuedTask = createTask('import');
     const recovery = recoverInterruptedTasks();
-    assert.deepEqual(recovery, { interrupted: 2, cleanedInstances: 1, cleanupFailures: 0 });
+    assert.deepEqual(recovery, { interrupted: 2, cleanedStaging: 0, stagingCleanupFailures: 0 });
     assert.equal(getTask(interruptedTask.id)?.status, 'failed');
     assert.equal(getTask(queuedTask.id)?.status, 'failed');
-    assert.equal(getInstanceRow(interruptedInstance.id), null);
-    assert.equal(fs.existsSync(defaultInstanceDir(interruptedInstance.id)), false);
+    assert.notEqual(getInstanceRow(interruptedInstance.id), null);
+    assert.equal(fs.existsSync(defaultInstanceDir(interruptedInstance.id)), true);
 
     const lockedInstance = createInstance({ name: '模拟文件锁实例', coreType: 'custom' });
     const lockedDirectory = defaultInstanceDir(lockedInstance.id);
@@ -476,6 +476,32 @@ async function main(): Promise<void> {
     const ticket = issueConsoleTicket('user', 'instance');
     assert.equal(consumeConsoleTicket(ticket.ticket, 'instance')?.userId, 'user');
     assert.equal(consumeConsoleTicket(ticket.ticket, 'instance'), null);
+
+    const {
+      claimDownloadTicket,
+      consumeDownloadTicket,
+      issueDownloadTicket,
+      restoreDownloadTicket,
+    } = await import('./services/download-ticket-service.js');
+    const downloadTicket = issueDownloadTicket('user', 'instance', 'logs/latest.log');
+    assert.equal(
+      consumeDownloadTicket(downloadTicket.ticket, 'instance', 'logs/latest.log')?.userId,
+      'user',
+    );
+    assert.equal(consumeDownloadTicket(downloadTicket.ticket, 'instance', 'logs/latest.log'), null);
+    const mismatched = issueDownloadTicket('user', 'instance', 'server.properties');
+    assert.equal(consumeDownloadTicket(mismatched.ticket, 'instance', 'eula.txt'), null);
+    // 领取后占槽/开流失败应能归还，供客户端重试
+    const restorable = issueDownloadTicket('user', 'instance', 'ops.txt');
+    const claimed = claimDownloadTicket(restorable.ticket, 'instance', 'ops.txt');
+    assert.ok(claimed);
+    assert.equal(claimed.userId, 'user');
+    assert.equal(claimDownloadTicket(restorable.ticket, 'instance', 'ops.txt'), null);
+    restoreDownloadTicket(claimed);
+    assert.equal(
+      consumeDownloadTicket(restorable.ticket, 'instance', 'ops.txt')?.userId,
+      'user',
+    );
 
     const uploaded = await streamToUploadTemp(Readable.from([Buffer.from('streamed')]), 'test');
     assert.equal(fs.readFileSync(uploaded, 'utf8'), 'streamed');

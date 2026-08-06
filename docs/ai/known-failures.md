@@ -7,7 +7,7 @@
 - 历史现象：提交标题声称完成强杀、文件下载和重命名，但下载调用和重命名 UI 缺失。
 - 快速核对：搜索 `downloadAuthenticated|files/rename|files/download|force-stop|force=1`，同时检查前端调用和可见入口。
 - 预防：按共享契约、服务端、前端调用、UI、文档、验证六段链路验收。
-- 当前含义：文件重命名和下载仍只有后端接口，不得宣称 Web UI 已完成。
+- 当前含义：文件下载（`downloadAuthenticated` + 可见「下载」）、同目录重命名（可见「重命名」）与强制停止（总览/详情「强制停止」+ `ConfirmDialog` + `force=1`）均已补齐 Web 入口；仍须按六段链路验收，不得只凭后端路由宣称完成。
 
 ## KF-002 大文件被整体载入内存
 

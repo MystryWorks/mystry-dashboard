@@ -118,3 +118,28 @@ export const updateNodeBodySchema = {
     name: { type: 'string', minLength: 1, maxLength: 128 },
   },
 } as const;
+
+/** 实例内相对路径最大长度（与 file 路由一致） */
+const maxInstanceRelativePathLength = 1024;
+
+/** POST /api/instances/:id/files/download-ticket 请求体 */
+export const fileDownloadTicketBodySchema = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['path'],
+  properties: {
+    path: { type: 'string', maxLength: maxInstanceRelativePathLength },
+  },
+} as const;
+
+/** GET /api/instances/:id/files/download 查询参数 */
+export const fileDownloadQuerySchema = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['path'],
+  properties: {
+    path: { type: 'string', maxLength: maxInstanceRelativePathLength },
+    /** 一次性下载 ticket；有 ticket 时可不带 JWT */
+    ticket: { type: 'string', minLength: 1, maxLength: 128 },
+  },
+} as const;

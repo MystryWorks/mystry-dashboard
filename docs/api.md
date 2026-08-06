@@ -129,12 +129,13 @@ Authorization: Bearer <token>
 | DELETE | `/files?path=` | 删除实例根目录内的文件或目录 |
 | POST | `/files/mkdir` | Body：`{ path }` |
 | POST | `/files/rename` | Body：`{ from, to }` |
-| GET | `/files/download?path=` | 二进制流 |
+| GET | `/files/download?path=` | 二进制流；可选 `ticket=` 一次性下载票据；响应含 `Content-Disposition: attachment` |
+| POST | `/files/download-ticket` | Body：`{ path }`；签发短生命周期一次性下载 ticket |
 | POST | `/files/upload?path=` | multipart 单文件 |
 | GET | `/config/server.properties` | 键值对象 |
 | PUT | `/config/server.properties` | Body：`Record<string, string>` |
 
-所有 `path` 均为**相对于 `DATA_DIR/instances/<id>` 的逻辑路径**，服务端会校验并拒绝 `..` 逃逸；这些接口不能访问实例根目录以外的文件。
+所有 `path` 均为**相对于 `DATA_DIR/instances/<id>` 的逻辑路径**，服务端会校验并拒绝 `..` 逃逸；这些接口不能访问实例根目录以外的文件。下载仅允许普通文件；`Content-Disposition` 仅使用 basename（含 RFC 5987 `filename*`）。浏览器原生下载可先 `POST .../download-ticket` 取得 ticket，再以 `GET .../download?path=&ticket=` 触发（无需 Authorization header）；无 ticket 时仍可用 Bearer JWT。ticket 在请求受理时即从池中取出以防重放；若随后因路径无效、并发容量耗尽（429）或开流失败而未能开始传输，服务端会归还未过期 ticket 供重试。过期或 path/instance 不匹配的 ticket 不会归还。带 ticket 的下载会先领取票据以防重放；若随后路径校验失败或下载并发容量耗尽（429），未过期 ticket 会归还以便重试；过期或 `path`/`instance` 不匹配的 ticket 仍立即销毁。
 
 上传文件超过 `MAX_UPLOAD_BYTES` 时返回 **413**；上传并发容量已满时返回 **429**。HTTP 请求、连接和上传空闲超时分别由 `HTTP_REQUEST_TIMEOUT_MS`、`HTTP_CONNECTION_TIMEOUT_MS` 和 `UPLOAD_IDLE_TIMEOUT_MS` 控制。文件下载受 `MAX_CONCURRENT_FILE_DOWNLOADS` 限制，并发容量已满时返回 **429**；下载在 `FILE_DOWNLOAD_IDLE_TIMEOUT_MS` 内无数据活动会被关闭并释放下载并发资源。
 

@@ -6,16 +6,20 @@ import { randomBytes } from 'node:crypto';
 import { pipeline } from 'node:stream/promises';
 import { Readable, Transform } from 'node:stream';
 import type { CoreType, DeployCoreInput } from '@mmd/shared';
+import { nanoid } from 'nanoid';
 import { config } from '../config.js';
 import {
-  createInstance,
-  deleteInstance,
+  registerPromotedInstance,
   updateInstanceMeta,
 } from './instance-service.js';
 import { detectJarFile, findModLoaderArgsFile } from './server-launch-detect.js';
-import { ensureEula } from './config-service.js';
-import { getInstanceDir, resolveSafePath } from '../utils/path.js';
-import { recordTaskInstance, runBackgroundTask } from './task-service.js';
+import { resolveSafePath } from '../utils/path.js';
+import { recordTaskStaging, runBackgroundTask } from './task-service.js';
+import {
+  prepareTaskStaging,
+  promoteTaskStagingToInstance,
+  removeTaskStagingTree,
+} from './task-staging-service.js';
 import { parseJvmArgs, serializeJvmArgFile } from '../utils/jvm-args.js';
 import { getMinecraftChildEnv } from '../utils/child-env.js';
 import { resolveJavaRuntimeCommand } from './java-runtime-service.js';
@@ -468,6 +472,17 @@ async function resolvePaperDownload(
   return { url: file.url, build: selected.id, filename: file.name || 'server.jar' };
 }
 
+/** 基于解析后的不可变版本生成核心缓存文件名（不含目录）。 */
+export function buildResolvedCoreCacheBasename(
+  coreType: 'vanilla' | 'paper' | 'fabric',
+  mcVersion: string,
+  resolved: { build?: number; loader?: string; installer?: string },
+): string {
+  if (coreType === 'vanilla') return `vanilla-${mcVersion}.jar`;
+  if (coreType === 'paper') return `paper-${mcVersion}-build-${resolved.build!}.jar`;
+  return `fabric-${mcVersion}-loader-${resolved.loader!}-installer-${resolved.installer!}.jar`;
+}
+
 async function resolveFabricJarUrl(
   gameVersion: string,
   loaderVersion?: string,
@@ -733,28 +748,24 @@ export function writeUserJvmArgs(dir: string, jvmArgs: string): void {
  * 创建实例并后台下载核心。
  */
 export async function deployCore(input: DeployCoreInput) {
-  const isModLoader = input.coreType === 'forge' || input.coreType === 'neoforge';
   return runBackgroundTask(
     'deploy',
     `正在部署 ${input.coreType} ${input.mcVersion}`,
     async (taskId, signal, report) => {
       let instanceId: string | null = null;
+      let stagingToken: string | null = null;
       let completed = false;
       try {
         throwIfAborted(signal);
-        const instance = createInstance({
-          name: input.name,
-          coreType: input.coreType,
-          mcVersion: input.mcVersion,
-          jarFile: isModLoader ? '@modloader' : 'server.jar',
-          jvmArgs: input.jvmArgs,
-          acceptEula: input.acceptEula,
-          javaRuntimeId: input.javaRuntimeId ?? null,
-        });
-        instanceId = instance.id;
-        recordTaskInstance(taskId, instance.id);
-        if (input.acceptEula) ensureEula(instance.id, true);
-        const dir = getInstanceDir(instance.id);
+        instanceId = nanoid(12);
+        stagingToken = nanoid(32);
+        recordTaskStaging(taskId, instanceId, stagingToken);
+        const dir = prepareTaskStaging(taskId, instanceId, stagingToken);
+        const writeEulaIfNeeded = () => {
+          if (input.acceptEula) {
+            fs.writeFileSync(resolveSafePath(dir, 'eula.txt'), 'eula=true\n', 'utf8');
+          }
+        };
 
         if (input.coreType === 'forge' || input.coreType === 'neoforge') {
           throwIfAborted(signal);
@@ -816,7 +827,12 @@ export async function deployCore(input: DeployCoreInput) {
 
         throwIfAborted(signal);
         report(85, '探测启动文件…');
-        const argsFile = findModLoaderArgsFile(dir, input.coreType);
+        const argsFile = await findModLoaderArgsFile(dir, input.coreType, {
+          maxDepth: config.modLoaderScanMaxDepth,
+          maxEntries: config.modLoaderScanMaxEntries,
+          deadlineMs: config.modLoaderScanTimeoutMs,
+          signal,
+        });
         let jarFile = '@modloader';
         if (argsFile) {
           jarFile = `@args:${argsFile}`;
@@ -828,33 +844,45 @@ export async function deployCore(input: DeployCoreInput) {
           jarFile = jar;
         }
 
-        updateInstanceMeta(instance.id, {
+        writeEulaIfNeeded();
+        report(95, '写入实例目录…');
+        promoteTaskStagingToInstance(taskId, instanceId);
+        registerPromotedInstance(instanceId, {
+          name: input.name,
+          coreType: input.coreType,
+          mcVersion: input.mcVersion,
+          jarFile,
+          jvmArgs: input.jvmArgs,
+          acceptEula: input.acceptEula,
+          javaRuntimeId: input.javaRuntimeId ?? null,
+        });
+        updateInstanceMeta(instanceId, {
           core_type: input.coreType,
           mc_version: input.mcVersion,
           jar_file: jarFile,
           accept_eula: input.acceptEula ? 1 : 0,
         });
-        if (input.acceptEula) ensureEula(instance.id, true);
         report(100, '部署完成');
         throwIfAborted(signal);
         completed = true;
-        return { instanceId: instance.id };
+        return { instanceId };
         }
 
         // Vanilla / Paper / Fabric：直接下载 jar
         throwIfAborted(signal);
         const destJar = resolveSafePath(dir, 'server.jar');
-        const cacheKey = `${input.coreType}-${input.mcVersion}-${input.build ?? 'latest'}-${input.loaderVersion ?? ''}-${input.installerVersion ?? ''}.jar`;
-        const cachePath = path.join(config.cacheDir, cacheKey.replace(/[^\w.-]+/g, '_'));
 
         report(5, '解析下载地址…');
 
         let downloadUrl: string;
+        let cacheBasename: string;
         if (input.coreType === 'vanilla') {
           downloadUrl = await resolveVanillaServerUrl(input.mcVersion, signal);
+          cacheBasename = buildResolvedCoreCacheBasename('vanilla', input.mcVersion, {});
         } else if (input.coreType === 'paper') {
           const paper = await resolvePaperDownload(input.mcVersion, input.build, signal);
           downloadUrl = paper.url;
+          cacheBasename = buildResolvedCoreCacheBasename('paper', input.mcVersion, { build: paper.build });
         } else {
           const fabric = await resolveFabricJarUrl(
             input.mcVersion,
@@ -863,7 +891,12 @@ export async function deployCore(input: DeployCoreInput) {
             signal,
           );
           downloadUrl = fabric.url;
+          cacheBasename = buildResolvedCoreCacheBasename('fabric', input.mcVersion, {
+            loader: fabric.loader,
+            installer: fabric.installer,
+          });
         }
+        const cachePath = path.join(config.cacheDir, cacheBasename.replace(/[^\w.-]+/g, '_'));
 
         if (isUsableCoreCache(cachePath)) {
           throwIfAborted(signal);
@@ -881,21 +914,32 @@ export async function deployCore(input: DeployCoreInput) {
 
         throwIfAborted(signal);
         report(95, '写入启动配置…');
-        updateInstanceMeta(instance.id, {
+        writeEulaIfNeeded();
+        report(97, '写入实例目录…');
+        promoteTaskStagingToInstance(taskId, instanceId);
+        registerPromotedInstance(instanceId, {
+          name: input.name,
+          coreType: input.coreType,
+          mcVersion: input.mcVersion,
+          jarFile: 'server.jar',
+          jvmArgs: input.jvmArgs,
+          acceptEula: input.acceptEula,
+          javaRuntimeId: input.javaRuntimeId ?? null,
+        });
+        updateInstanceMeta(instanceId, {
           core_type: input.coreType,
           mc_version: input.mcVersion,
           jar_file: 'server.jar',
           accept_eula: input.acceptEula ? 1 : 0,
         });
-        if (input.acceptEula) ensureEula(instance.id, true);
 
         throwIfAborted(signal);
         completed = true;
-        return { instanceId: instance.id };
+        return { instanceId };
       } finally {
         if (!completed && instanceId) {
           try {
-            deleteInstance(instanceId);
+            removeTaskStagingTree(taskId, instanceId);
           } catch {
             /* 清理失败不覆盖原始错误 */
           }

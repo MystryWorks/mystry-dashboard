@@ -6,17 +6,34 @@
 
 ### Added
 
+- Web 文件页：普通文件流式下载（一次性 download ticket + `Content-Disposition`）与同目录重命名入口
+- 实例详情与总览操作栏：强制停止（`ConfirmDialog` + `stop?force=1`）
+- 总览「创建空实例」入口：创建 custom 实例并跳转文件页上传 Jar
+- `server.properties` 保留式文档模型与原子写入；Paper/Fabric 核心缓存键基于解析后的不可变版本
+
+### Fixed
+
+- 文件下载：占槽/开流失败时归还未过期 download ticket；前端用新标签页触发下载，避免错误 JSON 冲掉 SPA
+- 已有服务端来源列表改为有界 ModLoader 预检；任务中心轮询失败时标注状态可能已过期
+- 部署表单与移动抽屉可访问性（标签关联、LazyScrollSelect 键盘、焦点陷阱）
+- `mmdctl` 包装脚本尊重用户已设置的 `MMD_HOME`
+
+## [0.2.0-preview.1] - 2026-08-06
+
+### Added
+
 - 开源仓库文档：`LICENSE`、`CONTRIBUTING.md`、`SECURITY.md`、`CODE_OF_CONDUCT.md`
 - GitHub Issue / Pull Request 模板
-- 五目标便携包构建：Windows x64、Linux x64 / ARM64、macOS Intel / Apple Silicon。
-- 跨平台 `mmdctl`，提供后台启停、前台运行、PID 指纹、健康检查、状态、日志和浏览器打开命令。
+- Windows x64 与 Linux x64 便携包构建，以及跨平台 `mmdctl`（后台启停、前台运行、PID 指纹、健康检查、状态、日志和浏览器打开）。打包脚本仍可本地组装 Linux ARM64 / macOS，但不纳入本 Preview 公开发布。
 - 最终压缩包冒烟测试、文件级 `manifest.json`、SHA-256、CycloneDX SBOM 和 GitHub Preview Release 流水线。
 - Java 运行时注册表：扫描 `JAVA_HOME` 与常见安装目录，实例和部署可按 ID 绑定已验证运行时。
 - 任务中心、亮暗主题、窄屏侧栏、配置表单和危险操作确认弹窗。
+- 从固定 `DATA_DIR/imports` 交接区复制接管同机已有服务端。
 
 ### Changed
 
 - 版本进入 `0.2.0-preview.1`；便携包内置固定 Node.js 22 和生产依赖，不捆绑 Minecraft Java。
+- Preview 公开发布矩阵收窄为 Windows x64 与 Linux x64；Linux ARM64 与 macOS 不纳入本版本 Release。
 - 运行布局新增 `MMD_HOME`、`MMD_CONFIG_PATH`、`MMD_DATA_DIR`，配置与数据不再绑定源码仓库目录。
 - 升级生产依赖并移除未使用的 `adm-zip`，公开发布门禁拒绝 high / critical 生产依赖漏洞。
 - 实例统一托管在 `DATA_DIR/instances/<id>`，移除自定义实例目录和全盘目录浏览约定。
@@ -28,19 +45,21 @@
 - 上传超限返回 413，上传容量耗尽返回 429；核心缓存改为完整文件校验后原子发布，任务支持排队并受执行超时保护。
 - 文件下载增加 `MAX_CONCURRENT_FILE_DOWNLOADS=4` 与 `FILE_DOWNLOAD_IDLE_TIMEOUT_MS=60000`；并发容量耗尽返回 429，下载空闲超时会释放下载资源。
 - 控制台增加 `MAX_CONSOLE_CONNECTIONS=20`、每 `CONSOLE_COMMAND_WINDOW_MS=60000` 毫秒最多 `MAX_CONSOLE_COMMANDS_PER_WINDOW=60` 条命令、`MAX_CONSOLE_INCOMING_BYTES=4352` 字节入站消息和 `MAX_CONSOLE_STDIN_BYTES=65536` 字节 stdin 缓冲限制；Installer 取消后按 `INSTALLER_KILL_GRACE_MS=5000` 毫秒宽限期再强制结束。
+- 澄清用户可见能力：Web UI 提供实例创建（含空实例上传 Jar）、启停与重启、强制停止、文件下载与重命名；控制台与任务中心提供异步操作反馈。
 
 ### Security
 
-- 2026-07-30 官方 registry 生产依赖审计为 0 critical、0 high、2 moderate；React Router 6 的两项 moderate 公告已作为 Preview 残余风险记录。
+- 2026-08-06 官方 registry 生产依赖审计为 0 critical、0 high、2 moderate；React Router 6 的两项 moderate 公告仍作为 Preview 残余风险记录。
+- 升级传递依赖 `brace-expansion`（至 5.0.9）与 `fast-uri`（至 3.1.5 / 4.1.2），消除此前阻断公开发布的 high 公告。
 
 ## [0.1.0] - 2026-07-26
 
 ### Added
 
 - 单机一体 Minecraft 服务端管理面板（Fastify + React）
-- 实例 CRUD、启停 / 重启 / 强杀
+- 实例 CRUD、启停 / 重启；强杀 API（`?force=1`）
 - WebSocket 实时控制台（xterm.js）
-- 实例根目录内的文件浏览、上传、下载、编辑
+- 实例根目录内的文件浏览、上传、文本编辑；下载与重命名后端接口
 - `server.properties` 编辑与 EULA 确认
 - 一键部署 Vanilla / Paper / Fabric / Forge / NeoForge
 - 导入服务端 zip 安装包（路径逃逸防护）

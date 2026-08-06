@@ -1,6 +1,11 @@
-import fs from 'node:fs';
+import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { config } from './config.js';
+import { STAGING_ROOT_DIR } from './services/task-staging-service.js';
+import {
+  finalizeSensitiveDataFiles,
+  prepareSecureDataLayout,
+} from './utils/data-dir-permissions.js';
 
 export type UserRow = {
   id: string;
@@ -58,6 +63,8 @@ export type TaskRow = {
   id: string;
   type: string;
   status: string;
+  /** 任务文件阶段：staging / finalizing / completed / failed；旧库可为 NULL */
+  phase: string | null;
   progress: number;
   message: string;
   result_json: string | null;
@@ -66,7 +73,14 @@ export type TaskRow = {
   updated_at: string;
 };
 
-let db: DatabaseSync;
+let db: DatabaseSync | undefined;
+
+export function closeDb(): void {
+  if (db) {
+    db.close();
+    db = undefined;
+  }
+}
 
 export function getDb(): DatabaseSync {
   if (!db) {
@@ -76,15 +90,19 @@ export function getDb(): DatabaseSync {
 }
 
 export function initDb(): void {
-  fs.mkdirSync(config.dataDir, { recursive: true });
-  fs.mkdirSync(config.instancesDir, { recursive: true });
-  fs.mkdirSync(config.existingServerImportDir, { recursive: true });
-  fs.mkdirSync(config.cacheDir, { recursive: true });
-  fs.mkdirSync(config.uploadDir, { recursive: true });
+  prepareSecureDataLayout(config.dataDir, [
+    'instances',
+    'imports',
+    path.join('cache', 'cores'),
+    'uploads',
+    STAGING_ROOT_DIR,
+    '.mmd-panel-lock',
+  ]);
 
   db = new DatabaseSync(config.dbPath);
   db.exec('PRAGMA journal_mode = WAL');
   db.exec('PRAGMA foreign_keys = ON');
+  finalizeSensitiveDataFiles(config.dbPath);
 
   db.exec(`
     CREATE TABLE IF NOT EXISTS users (
@@ -163,6 +181,13 @@ export function initDb(): void {
     db.exec('ALTER TABLE java_runtimes ADD COLUMN available INTEGER NOT NULL DEFAULT 1');
   }
 
+  let taskCols = db.prepare('PRAGMA table_info(tasks)').all() as Array<{ name: string }>;
+  if (!taskCols.some((c) => c.name === 'phase')) {
+    db.exec('ALTER TABLE tasks ADD COLUMN phase TEXT');
+  }
+  taskCols = db.prepare('PRAGMA table_info(tasks)').all() as Array<{ name: string }>;
+  migrateLegacyTaskPhases(taskCols);
+
   ensureLocalNode();
 
   const userCount = db.prepare('SELECT COUNT(*) as c FROM users').get() as { c: number };
@@ -171,12 +196,25 @@ export function initDb(): void {
   }
 }
 
+/** 为旧任务行补齐 phase，幂等且可重复执行。 */
+function migrateLegacyTaskPhases(taskCols: Array<{ name: string }>): void {
+  if (!taskCols.some((c) => c.name === 'phase')) return;
+  getDb().exec(`
+    UPDATE tasks SET phase = 'completed'
+    WHERE phase IS NULL AND status = 'completed';
+    UPDATE tasks SET phase = 'failed'
+    WHERE phase IS NULL AND status = 'failed';
+    UPDATE tasks SET phase = 'staging'
+    WHERE phase IS NULL AND status IN ('pending', 'running');
+  `);
+}
+
 /** 确保内置本机节点存在（面板自身，代表当前直接 spawn 的本机执行能力） */
 function ensureLocalNode(): void {
-  const row = db.prepare('SELECT id FROM nodes WHERE id = ?').get('local');
+  const row = getDb().prepare('SELECT id FROM nodes WHERE id = ?').get('local');
   if (row) return;
   const now = new Date().toISOString();
-  db.prepare(
+  getDb().prepare(
     `INSERT INTO nodes (id, name, secret_hash, is_local, host_info, created_at, updated_at)
      VALUES ('local', '本机节点', '', 1, NULL, ?, ?)`,
   ).run(now, now);

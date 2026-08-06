@@ -12,9 +12,9 @@
 
 ## 功能
 
-- 多实例启停 / 重启 / 强杀
+- 多实例启停 / 重启 / 强制停止（确认后 `POST .../stop?force=1`）
 - 实时控制台（WebSocket + xterm.js）
-- 实例根目录内的文件管理与文本编辑
+- 实例根目录内的文件列表、上传、文本编辑、删除、同目录重命名与流式下载（一次性 download ticket）
 - `server.properties` 可视化编辑与 EULA 确认
 - 一键部署 **Vanilla / Paper / Fabric / Forge / NeoForge**
 - 从固定 `DATA_DIR/imports` 交接区复制接管同机已有服务端，或上传现有服务端 **zip**
@@ -25,9 +25,9 @@
 
 ## 便携预览版
 
-GitHub Release 提供 Windows x64、Linux x64 / ARM64、macOS Intel / Apple Silicon 五个便携包。包内已包含固定版本的 Node.js 22、生产依赖和前后端构建物；用户无需安装 Node.js 或运行 `npm install`。
+GitHub Release 提供 Windows x64 与 Linux x64 两个便携包。包内已包含固定版本的 Node.js 22、生产依赖和前后端构建物；用户无需安装 Node.js 或运行 `npm install`。Linux ARM64 与 macOS 包列为后续计划，本 Preview 不发布。
 
-Windows 解压后双击 `mmdctl.cmd`；Linux / macOS 解压后执行：
+Windows 解压后双击 `mmdctl.cmd`；Linux 解压后执行：
 
 ```bash
 chmod +x mmdctl
@@ -42,7 +42,7 @@ chmod +x mmdctl
 |------|------|
 | Node.js | **≥ 22**（使用内置 `node:sqlite`，无需原生 SQLite 模块） |
 | Java | 默认使用 PATH 中的 `java`；也可选择面板扫描并验证的本机运行时，面板不接受手填完整路径 |
-| 操作系统 | 源码管理器仅面向 Windows；便携包按五个目标分别构建和验证 |
+| 操作系统 | 源码管理器仅面向 Windows；便携包按 Windows x64 / Linux x64 构建和验证 |
 
 ## 快速开始
 
@@ -159,7 +159,7 @@ minecraft-mystery-dashboard/
 | 文档 | 内容 |
 |------|------|
 | [docs/getting-started.md](docs/getting-started.md) | 安装、初始化、开发模式、生产部署 |
-| [docs/portable-release.md](docs/portable-release.md) | 五平台便携包、校验、升级、数据保留与发布流程 |
+| [docs/portable-release.md](docs/portable-release.md) | Windows/Linux x64 便携包、校验、升级、数据保留与发布流程 |
 | [docs/tutorials.md](docs/tutorials.md) | **新手教程**：分步开服、导入与接管 |
 | [docs/user-guide.md](docs/user-guide.md) | 界面说明、字段含义、FAQ |
 | [docs/configuration.md](docs/configuration.md) | 环境变量与数据目录 |

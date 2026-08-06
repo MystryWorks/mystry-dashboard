@@ -24,6 +24,10 @@ function parseArguments(argv) {
       result.force = true;
       continue;
     }
+    if (name === 'allow-dirty') {
+      result.allowDirty = true;
+      continue;
+    }
     const value = argv[index + 1];
     if (!value || value.startsWith('--')) throw new Error(`参数 --${name} 缺少值`);
     result[name] = value;
@@ -192,11 +196,26 @@ async function collectFiles(rootDir) {
   return result;
 }
 
+function assertCleanWorktreeForRelease(allowDirty) {
+  if (allowDirty || process.env.MMD_PORTABLE_ALLOW_DIRTY === '1') return;
+  try {
+    const status = run('git', ['status', '--porcelain']);
+    if (status) {
+      throw new Error(
+        '工作树不干净，拒绝生成可发布便携包；本地调试可设置 MMD_PORTABLE_ALLOW_DIRTY=1 或传入 --allow-dirty',
+      );
+    }
+  } catch (error) {
+    if (error instanceof Error && error.message.includes('工作树不干净')) throw error;
+    // 非 Git 仓库时跳过（仅本地非发布场景）
+  }
+}
+
 function getGitSha() {
-  if (process.env.GITHUB_SHA?.trim()) return process.env.GITHUB_SHA.trim();
   try {
     return run('git', ['rev-parse', 'HEAD']);
   } catch {
+    if (process.env.GITHUB_SHA?.trim()) return process.env.GITHUB_SHA.trim();
     return 'unknown';
   }
 }
@@ -267,6 +286,7 @@ export async function packagePortable({
   outputDir = path.join(repoRoot, 'release'),
   runtimeDir,
   force = false,
+  allowDirty = false,
 }) {
   const targetPlatform = normalizePlatform(platform);
   const targetArch = arch === 'amd64' ? 'x64' : arch;
@@ -285,6 +305,7 @@ export async function packagePortable({
   if (!['x64', 'arm64'].includes(targetArch)) throw new Error(`不支持的架构：${targetArch}`);
 
   await assertBuildOutputs();
+  assertCleanWorktreeForRelease(allowDirty);
   const rootPackage = JSON.parse(await fsp.readFile(path.join(repoRoot, 'package.json'), 'utf8'));
   const version = rootPackage.version;
   const extension = targetPlatform === 'win32' ? 'zip' : 'tar.gz';
@@ -406,6 +427,7 @@ async function main() {
     outputDir: args['output-dir'] ? path.resolve(args['output-dir']) : undefined,
     runtimeDir: args['runtime-dir'] ? path.resolve(args['runtime-dir']) : undefined,
     force: Boolean(args.force),
+    allowDirty: Boolean(args.allowDirty),
   });
   console.log(`便携包已生成：${result.archivePath}`);
 }

@@ -56,6 +56,7 @@
     "CORS_ORIGINS",
     "DATA_DIR",
     "FILE_DOWNLOAD_IDLE_TIMEOUT_MS",
+    "FILE_DOWNLOAD_TICKET_TTL_SECONDS",
     "HOST",
     "HTTP_CONNECTION_TIMEOUT_MS",
     "HTTP_KEEP_ALIVE_TIMEOUT_MS",
@@ -78,6 +79,12 @@
     "MAX_CORE_METADATA_BYTES",
     "MAX_EXISTING_IMPORT_BYTES",
     "MAX_EXISTING_IMPORT_ENTRIES",
+    "MOD_LOADER_PRECHECK_MAX_DEPTH",
+    "MOD_LOADER_PRECHECK_MAX_ENTRIES",
+    "MOD_LOADER_PRECHECK_TIMEOUT_MS",
+    "MOD_LOADER_SCAN_MAX_DEPTH",
+    "MOD_LOADER_SCAN_MAX_ENTRIES",
+    "MOD_LOADER_SCAN_TIMEOUT_MS",
     "MAX_INSTALLER_OUTPUT_BYTES",
     "MAX_JSON_BODY_BYTES",
     "MAX_QUEUED_TASKS",
@@ -90,6 +97,7 @@
     "MMD_CONFIG_PATH",
     "MMD_DATA_DIR",
     "MMD_HOME",
+    "MMD_PROCESS_FINGERPRINT",
     "PORT",
     "RATE_LIMIT_MAX",
     "RATE_LIMIT_WINDOW_MS",
@@ -196,8 +204,8 @@
     {
       "path": ".github/workflows/quality.yml",
       "includes": [
-        "actions/checkout@v6",
-        "actions/setup-node@v6",
+        "actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+        "actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38",
         "node-version: 22",
         "npm run verify"
       ]
@@ -205,10 +213,15 @@
     {
       "path": ".github/workflows/portable-release.yml",
       "includes": [
-        "ubuntu-24.04-arm",
-        "macos-15-intel",
+        "windows-2025",
+        "ubuntu-24.04",
+        "windows-x64.zip",
+        "linux-x64.tar.gz",
         "npm run audit:production",
+        "npm run windows:test",
         "scripts/portable/smoke-portable.mjs",
+        "RELEASE_GPG_FINGERPRINT",
+        "mmd-release-signing-key.asc",
         "gh release create",
         "--verify-tag",
         "--generate-notes",
@@ -220,9 +233,11 @@
       "path": "docs/portable-release.md",
       "includes": [
         "SHA256SUMS.asc",
+        "mmd-release-signing-key.asc",
         "MMD_CONFIG_PATH",
         "data/instances/<id>",
-        "RELEASE_GPG_PRIVATE_KEY"
+        "RELEASE_GPG_PRIVATE_KEY",
+        "RELEASE_GPG_FINGERPRINT"
       ]
     }
   ]

@@ -1,7 +1,9 @@
 #!/usr/bin/env sh
 set -eu
 
-MMD_HOME=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+if [ -z "${MMD_HOME:-}" ]; then
+  MMD_HOME=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+fi
 export MMD_HOME
 : "${MMD_CONFIG_PATH:=$MMD_HOME/config/panel.env}"
 : "${MMD_DATA_DIR:=$MMD_HOME/data}"

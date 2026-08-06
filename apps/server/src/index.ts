@@ -27,14 +27,31 @@ import {
   recoverInterruptedTasks,
   shutdownTasks,
 } from './services/task-service.js';
+import {
+  acquirePanelDataLock,
+  type PanelDataLock,
+} from './services/data-lock-service.js';
 
 export type BuildAppOptions = LauncherRouteOptions & {
   isShuttingDown?: () => boolean;
+  /** 测试专用：跳过数据目录锁（生产路径不得使用） */
+  skipDataLock?: boolean;
 };
 
+let activePanelDataLock: PanelDataLock | null = null;
+
+export function releasePanelDataLock(): void {
+  activePanelDataLock?.release();
+  activePanelDataLock = null;
+}
+
 export async function buildApp(options: BuildAppOptions = {}) {
-  initDb();
-  const taskRecovery = recoverInterruptedTasks();
+  if (!options.skipDataLock) {
+    activePanelDataLock = acquirePanelDataLock(config.dataDir);
+  }
+  try {
+    initDb();
+    const taskRecovery = recoverInterruptedTasks();
 
   const app = Fastify({
     logger: true,
@@ -122,6 +139,10 @@ export async function buildApp(options: BuildAppOptions = {}) {
   await registerFrontendAssets(app, config.webDist);
 
   return app;
+  } catch (error) {
+    releasePanelDataLock();
+    throw error;
+  }
 }
 
 async function main() {
@@ -158,7 +179,14 @@ async function main() {
           '部分 Minecraft 实例关闭时发生错误',
         );
       }
+      if (instanceResult.stillStopping.length > 0) {
+        app?.log.warn(
+          { instanceIds: instanceResult.stillStopping },
+          '部分 Minecraft 实例在宽限期内未能完全退出，未发送 SIGKILL',
+        );
+      }
       if (app) await app.close();
+      releasePanelDataLock();
       getDb().close();
     })().catch((error) => {
       process.exitCode = 1;
@@ -188,8 +216,14 @@ async function main() {
   };
   process.once('SIGINT', handleSigint);
   process.once('SIGTERM', handleSigterm);
-  await app.listen({ host: config.host, port: config.port });
-  app.log.info(`面板已启动 http://${config.host}:${config.port}`);
+  try {
+    await app.listen({ host: config.host, port: config.port });
+    app.log.info(`面板已启动 http://${config.host}:${config.port}`);
+  } catch (error) {
+    await app.close();
+    releasePanelDataLock();
+    throw error;
+  }
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

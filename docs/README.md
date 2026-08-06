@@ -8,7 +8,7 @@ Minecraft Mystery Dashboard 是一套单机一体的 Minecraft **服务端**管�
 
 | 文档 | 说明 |
 |------|------|
-| [便携预览版](portable-release.md) | 五平台下载、校验、启停、升级、数据保留与已知限制 |
+| [便携预览版](portable-release.md) | Windows/Linux x64 下载、校验、启停、升级、数据保留与已知限制 |
 | [快速开始](getting-started.md) | 环境要求、安装、开发与生产部署 |
 | [分步教程](tutorials.md) | **推荐新手**：从零开服、导入、联机、模组服、备份 |
 | [使用指南](user-guide.md) | 界面导览、字段说明、常见问题 |
@@ -16,6 +16,7 @@ Minecraft Mystery Dashboard 是一套单机一体的 Minecraft **服务端**管�
 | [架构设计](architecture.md) | Monorepo 结构、模块职责与数据流 |
 | [API 参考](api.md) | REST / WebSocket 接口说明 |
 | [开发指南](development.md) | 本地开发、构建与扩展建议 |
+| [Beta 发布修复计划](beta-release-remediation-plan.md) | 当前发布阻断问题的分阶段修复、迁移和验收计划 |
 | [AI 项目知识库](ai/README.md) | AI 开发事实、决策、防错流程与验证门禁 |
 
 ## 社区与开源
@@ -44,9 +45,9 @@ minecraft-mystery-dashboard/
 
 ## 核心能力
 
-- 多实例启停、重启、强制结束
+- 多实例启停、重启、强制停止（确认后 `SIGKILL`）
 - Web 控制台（WebSocket + xterm.js）
-- 实例目录文件浏览、上传、编辑
+- 实例目录文件浏览、上传、文本编辑、删除、同目录重命名与流式下载
 - `server.properties` 可视化编辑
 - 从官方源一键部署 Vanilla / Paper / Fabric / Forge / NeoForge
 - 导入现有服务端 zip 安装包

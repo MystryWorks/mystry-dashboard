@@ -4,9 +4,10 @@
 
 | 版本 | 支持状态 |
 |------|----------|
-| `0.1.x` | 当前维护 |
+| `0.2.0-preview.x` | 当前 Preview，接收安全报告 |
+| `0.1.x` | 仅在未发布更新 Preview 前临时维护 |
 
-发布正式版本后，仅对仍受支持的小版本接收安全修复。
+发布正式稳定版本后，仅对仍受支持的小版本接收安全修复。Preview 不承诺与正式版同等的长期安全支持窗口。
 
 ## 报告漏洞
 
@@ -45,3 +46,15 @@
 ## 致谢
 
 负责任披露并协助修复的贡献者，可在修复发布后按意愿致谢（可匿名）。
+
+## 发布资产完整性
+
+公开 Preview 的 GitHub Release 提供压缩包、`SHA256SUMS`、`SHA256SUMS.asc` 与 `mmd-release-signing-key.asc`。维护者配置与指纹说明见 [`.github/RELEASE_SIGNING.md`](.github/RELEASE_SIGNING.md)；用户验证步骤见 [docs/portable-release.md](docs/portable-release.md#下载与校验)。
+
+验证要点：
+
+1. 导入 Release 附带的公钥，核对指纹与仓库 [`.github/release-signing-key.fingerprint`](.github/release-signing-key.fingerprint) 一致。
+2. 用 `sha256sum -c` 或等效方式确认压缩包哈希与 `SHA256SUMS` 匹配。
+3. 使用 `gpg --verify SHA256SUMS.asc SHA256SUMS` 确认校验和列表由该公钥签名。
+
+CI 在创建 Release 前会在独立 keyring 中完成相同验证；私钥、指纹与 Environment 审批由仓库管理员配置，不由应用运行时读取。

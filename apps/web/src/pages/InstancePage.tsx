@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, NavLink, Route, Routes, useParams } from 'react-router-dom';
 import type { FileEntry, InstanceInfo } from '@mmd/shared';
-import { api, apiForm } from '../api';
+import { isInstanceStopPendingResult } from '@mmd/shared';
+import { ApiError, api, apiForm, downloadAuthenticated } from '../api';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { ConfigTab } from '../components/ConfigTab';
 import { ConsolePanel } from '../components/ConsolePanel';
@@ -15,11 +16,41 @@ const statusLabel: Record<string, string> = {
   crashed: '已崩溃',
 };
 
+/** 进程仍可能存活的状态：允许强制停止。 */
+function canForceStop(status: InstanceInfo['status']): boolean {
+  return status === 'running' || status === 'starting' || status === 'stopping';
+}
+
+function canStartInstance(status: InstanceInfo['status']): boolean {
+  return status === 'stopped' || status === 'crashed';
+}
+
+function canStopInstance(status: InstanceInfo['status']): boolean {
+  return status === 'running';
+}
+
+function isLifecycleBusy(status: InstanceInfo['status']): boolean {
+  return status === 'starting' || status === 'stopping';
+}
+
 /** 与服务端默认 MAX_TEXT_FILE_BYTES 对齐，用于判断是否显示「编辑」。 */
 const MAX_EDITABLE_FILE_BYTES = 1_048_576;
 
 function canEditFile(file: FileEntry): boolean {
   return !file.isDirectory && file.size <= MAX_EDITABLE_FILE_BYTES;
+}
+
+function parentOf(relativePath: string): string {
+  const parts = relativePath.split('/').filter(Boolean);
+  parts.pop();
+  return parts.join('/');
+}
+
+function isValidRenameName(name: string): string | null {
+  const trimmed = name.trim();
+  if (!trimmed) return '名称不能为空';
+  if (trimmed.includes('/') || trimmed.includes('\\')) return '名称不能包含路径分隔符';
+  return null;
 }
 
 function ConsoleTab({ instance }: { instance: InstanceInfo; onChange: () => void }) {
@@ -62,7 +93,13 @@ function FilesTab({ instanceId }: { instanceId: string }) {
   const [newDir, setNewDir] = useState('');
   const [saving, setSaving] = useState(false);
   const [loadingEdit, setLoadingEdit] = useState(false);
+  const [busyPath, setBusyPath] = useState<string | null>(null);
+  const [renameTarget, setRenameTarget] = useState<FileEntry | null>(null);
+  const [renameName, setRenameName] = useState('');
+  const [renameError, setRenameError] = useState('');
+  const [renaming, setRenaming] = useState(false);
   const editDialogRef = useRef<HTMLDialogElement>(null);
+  const renameDialogRef = useRef<HTMLDialogElement>(null);
 
   const load = useCallback(async () => {
     try {
@@ -87,11 +124,25 @@ function FilesTab({ instanceId }: { instanceId: string }) {
     else if (!editPath && dialog.open) dialog.close();
   }, [editPath]);
 
+  useEffect(() => {
+    const dialog = renameDialogRef.current;
+    if (!dialog) return;
+    if (renameTarget && !dialog.open) dialog.showModal();
+    else if (!renameTarget && dialog.open) dialog.close();
+  }, [renameTarget]);
+
   function closeEditor() {
     setEditPath(null);
     setContent('');
     setEditError('');
     setLoadingEdit(false);
+  }
+
+  function closeRename() {
+    setRenameTarget(null);
+    setRenameName('');
+    setRenameError('');
+    setRenaming(false);
   }
 
   async function openDirectory(file: FileEntry) {
@@ -147,6 +198,61 @@ function FilesTab({ instanceId }: { instanceId: string }) {
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  async function download(file: FileEntry) {
+    if (file.isDirectory) return;
+    setBusyPath(file.path);
+    setError('');
+    try {
+      await downloadAuthenticated(instanceId, file.path);
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 429) {
+        setError('下载繁忙，请稍后重试');
+      } else {
+        setError(err instanceof Error ? err.message : String(err));
+      }
+    } finally {
+      setBusyPath(null);
+    }
+  }
+
+  function startRename(file: FileEntry) {
+    setRenameTarget(file);
+    setRenameName(file.name);
+    setRenameError('');
+  }
+
+  async function confirmRename() {
+    if (!renameTarget) return;
+    const validation = isValidRenameName(renameName);
+    if (validation) {
+      setRenameError(validation);
+      return;
+    }
+    const newName = renameName.trim();
+    if (newName === renameTarget.name) {
+      setRenameError('新名称与旧名称相同');
+      return;
+    }
+    const parentPath = parentOf(renameTarget.path);
+    const to = parentPath ? `${parentPath}/${newName}` : newName;
+    setRenaming(true);
+    setRenameError('');
+    try {
+      await api(`/api/instances/${instanceId}/files/rename`, {
+        method: 'POST',
+        json: { from: renameTarget.path, to },
+      });
+      if (editPath === renameTarget.path) closeEditor();
+      closeRename();
+      setError('');
+      await load();
+    } catch (err) {
+      setRenameError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setRenaming(false);
     }
   }
 
@@ -222,6 +328,24 @@ function FilesTab({ instanceId }: { instanceId: string }) {
               </span>
             )}
             <div className="file-actions">
+              {!f.isDirectory && (
+                <button
+                  className="btn btn-ghost"
+                  type="button"
+                  disabled={busyPath === f.path}
+                  onClick={() => void download(f)}
+                >
+                  {busyPath === f.path ? '下载中…' : '下载'}
+                </button>
+              )}
+              <button
+                className="btn btn-ghost"
+                type="button"
+                disabled={busyPath === f.path || renaming}
+                onClick={() => startRename(f)}
+              >
+                重命名
+              </button>
               {canEditFile(f) && (
                 <button className="btn btn-ghost" type="button" onClick={() => void startEdit(f)}>
                   编辑
@@ -290,6 +414,56 @@ function FilesTab({ instanceId }: { instanceId: string }) {
               onClick={() => void saveFile()}
             >
               {saving ? '保存中…' : '保存'}
+            </button>
+          </footer>
+        </div>
+      </dialog>
+
+      <dialog
+        ref={renameDialogRef}
+        className="confirm-dialog"
+        aria-labelledby="file-rename-dialog-title"
+        onClose={closeRename}
+        onCancel={(event) => {
+          event.preventDefault();
+          closeRename();
+        }}
+        onMouseDown={(event) => {
+          if (event.target === event.currentTarget) closeRename();
+        }}
+      >
+        <div className="confirm-dialog-panel">
+          <h2 id="file-rename-dialog-title" className="confirm-dialog-title">
+            重命名
+          </h2>
+          <div className="confirm-dialog-body">
+            <p className="muted" style={{ marginTop: 0 }}>
+              仅同目录改名，不可包含路径分隔符。
+            </p>
+            <div className="field">
+              <label htmlFor="file-rename-input">新名称</label>
+              <input
+                id="file-rename-input"
+                value={renameName}
+                onChange={(e) => setRenameName(e.target.value)}
+                autoComplete="off"
+                autoFocus
+                disabled={renaming}
+              />
+            </div>
+            {renameError && <p className="error">{renameError}</p>}
+          </div>
+          <footer className="confirm-dialog-footer">
+            <button className="btn btn-ghost" type="button" disabled={renaming} onClick={closeRename}>
+              取消
+            </button>
+            <button
+              className="btn"
+              type="button"
+              disabled={renaming || !renameTarget}
+              onClick={() => void confirmRename()}
+            >
+              {renaming ? '重命名中…' : '确认'}
             </button>
           </footer>
         </div>
@@ -374,6 +548,7 @@ export function InstancePage() {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [confirmRestart, setConfirmRestart] = useState(false);
+  const [confirmForceStop, setConfirmForceStop] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -390,10 +565,19 @@ export function InstancePage() {
     return () => clearInterval(timer);
   }, [load]);
 
-  async function act(action: 'start' | 'stop' | 'restart') {
+  async function act(action: 'start' | 'stop' | 'restart', options?: { force?: boolean }) {
     setBusy(true);
     try {
-      await api(`/api/instances/${id}/${action}`, { method: 'POST' });
+      const query = action === 'stop' && options?.force ? '?force=1' : '';
+      const result = await api<InstanceInfo | import('@mmd/shared').InstanceStopPendingResult>(
+        `/api/instances/${id}/${action}${query}`,
+        { method: 'POST' },
+      );
+      if (isInstanceStopPendingResult(result)) {
+        setError(result.error || '服务仍在保存，请等待或选择强制停止');
+      } else {
+        setError('');
+      }
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -421,16 +605,34 @@ export function InstancePage() {
             </p>
           </div>
           <div className="btn-row instance-actions">
-            <button className="btn" type="button" disabled={busy || instance.requiresMigration} onClick={() => void act('start')}>
+            <button
+              className="btn"
+              type="button"
+              disabled={busy || instance.requiresMigration || !canStartInstance(instance.status)}
+              onClick={() => void act('start')}
+            >
               启动
             </button>
-            <button className="btn btn-ghost" type="button" disabled={busy || instance.requiresMigration} onClick={() => void act('stop')}>
+            <button
+              className="btn btn-ghost"
+              type="button"
+              disabled={busy || instance.requiresMigration || !canStopInstance(instance.status)}
+              onClick={() => void act('stop')}
+            >
               停止
             </button>
             <button
               className="btn btn-ghost"
               type="button"
-              disabled={busy || instance.requiresMigration}
+              disabled={busy || instance.requiresMigration || !canForceStop(instance.status)}
+              onClick={() => setConfirmForceStop(true)}
+            >
+              强制停止
+            </button>
+            <button
+              className="btn btn-ghost"
+              type="button"
+              disabled={busy || instance.requiresMigration || isLifecycleBusy(instance.status)}
               onClick={() => setConfirmRestart(true)}
             >
               重启
@@ -491,6 +693,19 @@ export function InstancePage() {
           void act('restart');
         }}
         onCancel={() => setConfirmRestart(false)}
+      />
+      <ConfirmDialog
+        open={confirmForceStop}
+        title={`强制停止实例「${instance.name}」？`}
+        description="强制停止会立即向进程发送 SIGKILL，可能导致世界损坏。建议先尝试普通「停止」。"
+        confirmLabel="确认强制停止"
+        danger
+        busy={busy}
+        onConfirm={() => {
+          setConfirmForceStop(false);
+          void act('stop', { force: true });
+        }}
+        onCancel={() => setConfirmForceStop(false)}
       />
     </div>
   );

@@ -200,7 +200,7 @@ export async function checkProjectKnowledge(root) {
     errors.push(`服务端路由目录不存在：${ROUTES_DIR}`);
   } else {
     const actualRouteFiles = (await fs.readdir(routeDirectory, { withFileTypes: true }))
-      .filter((entry) => entry.isFile() && entry.name.endsWith('.ts'))
+      .filter((entry) => entry.isFile() && entry.name.endsWith('.ts') && !entry.name.endsWith('.test.ts'))
       .map((entry) => entry.name);
     const expectedRouteFiles = (facts.routeModules ?? []).map((route) => route.file);
     compareLists(errors, '服务端路由清单', expectedRouteFiles, actualRouteFiles);

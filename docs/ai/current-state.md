@@ -11,23 +11,32 @@
   - `apps/web`：React 管理界面。
 - 首次 setup、登录和 Bearer JWT 认证；控制台通过短期一次性 ticket 建立 WebSocket。
 - 控制台前端按 ECMA-48 / ISO 6429 对 INFO（绿）、WARN（黄）、ERROR（红）等日志级别着色；服务端仍转发原始纯文本。
-- 多实例创建、编辑、删除、启动、停止、重启和控制台命令。
+- 多实例创建、编辑、删除、启动、停止、强制停止、重启和控制台命令。
 - Vanilla、Paper、Fabric、Forge、NeoForge 部署及 ZIP 导入。
 - 面板外已有服务端交接：只列出 `DATA_DIR/imports` 直接子目录，只读扫描并以后台任务复制到新托管实例；拒绝 symlink/junction、特殊文件、ownership marker、超配额和磁盘空间不足，源目录始终保留。
-- 实例目录内文件列表、上传、文本读写、删除、重命名和流式下载服务端接口。
+- 实例目录内文件列表、上传、文本读写、删除、同目录重命名；目标已存在时重命名返回 `409` 且不覆盖。普通文件通过一次性 download ticket 流式下载（JWT 签发、并发槽预留、`GET` 状态查询、失败回传 SPA；禁止 `blob()` 整包缓存），Web 文件页提供下载与重命名入口。
+- 同 `DATA_DIR` 仅允许一个面板进程进入 `initDb` / 任务恢复：`.mmd-panel-lock/` 目录锁 + `owner.json`（存活 PID 拒绝启动；仅原 PID 不存在时可 quarantine 后接管）。
+- 部署/导入/ZIP 先写入 `DATA_DIR/.mmd-staging/<taskId>/<instanceId>`（marker 含 task/instance/token），校验通过后原子移动到 `instances/<id>`；崩溃恢复只清理 marker 匹配且任务未完成的 staging，**不会**因 `result.instanceId` 删除已注册实例或最终目录（见 D-016）。
+- 实例 start/stop/restart/delete 互斥：start 在首个异步步骤前占位 `starting`；普通 stop 只写 `stop\n`，超时返回仍在停止中且**不**隐式 `SIGKILL`；`force=1` 为唯一强杀路径（UI 二次确认）。
 - `server.properties` 读写、Java 状态检测、本机节点列表。
 - 响应式布局：`apps/web` 覆盖 390px 到 1920px 窗口宽度；`<=1024px` 侧边栏变为抽屉菜单，`<=768px` 实例/节点表格转为卡片列表，表单、弹窗和控制台同步适配窄屏。
 - `PanelManager.cmd` 与本机 `POST /api/launcher/shutdown` 安全关闭通道。
 - 跨平台便携 `mmdctl`：包内 Node 启动、随机配置生成、后台 PID 指纹、健康检查、安全停止、状态和日志。
-- 五目标原生便携组装与最终压缩包冒烟脚本；发布包物理复制 `@mmd/shared`，并生成文件级 manifest。
-- GitHub Preview Release 流水线：标签/main/版本门禁、五目标矩阵、生产依赖审计、校验和签名、SBOM 和自动 Release Notes。
+- 目标平台原生便携组装与最终压缩包冒烟脚本；发布包物理复制 `@mmd/shared`，并生成文件级 manifest。
+- GitHub Preview Release 流水线：标签/main/版本门禁、Windows x64 与 Linux x64 矩阵、生产依赖审计、校验和签名、SBOM 和自动 Release Notes。
 - 上传、下载、任务、元数据、控制台和 ZIP 解压均有大小、并发或超时边界。
 - 任务中心：`GET /api/tasks` 返回最近 50 条任务；前端侧边栏与移动顶栏各有一个铃铛入口（共享单例轮询，429 退避、页面隐藏暂停），离开部署/导入页后仍可查看任务到终态。
-- 危险操作防护：重启需弹窗确认；运行/启动/停止中的实例禁止删除；删除实例需输入实例名二次确认（待迁移实例仅移除记录，免输名）。
+- 危险操作防护：重启与强制停止需弹窗确认；运行/启动/停止中的实例禁止删除；删除实例需输入实例名二次确认（待迁移实例仅移除记录，免输名）。
 - 控制台 WebSocket 断线后指数退避自动重连（1s→30s 封顶，重新申请一次性 ticket）。
 - 前端任一请求收到 401（登录/setup/status 除外）会清空登录态并自动跳回登录页。
-- server.properties 编辑为引导化表单：常用键按「基础/多人与权限/世界/性能」分组，提供中文说明与开关、下拉、数字控件；未收录键折叠进「高级选项」文本编辑，保存仍提交完整键值记录。
-- Java 多运行时：`GET /api/system/java-runtimes` 扫描 JAVA_HOME 与常见安装目录，候选必须文件名为 java/java.exe 且 `-version` 输出可解析才写入 `java_runtimes` 注册表；扫描使用脱敏环境、合并并限频刷新，最近一次扫描未发现的条目会标为不可用。实例可通过 `javaRuntimeId` 绑定运行时（默认仍用 PATH 中的 java），启动和 Forge/NeoForge Installer 会在执行前再次验证绑定条目；部署页与实例设置页提供选择器，并按 MC 版本给出推荐 Java 版本与 mismatch 告警（`recommendedJavaMajor`：1.20.5+ → 21，1.17–1.20.4 → 17，更早 → 8）。
+- server.properties 编辑为引导化表单：常用键按「基础/多人与权限/世界/性能」分组；服务端保留注释、空行、重复键与 `:` 分隔符，引导保存只改每个 key 的最后一次定义，并原子写入。
+- 总览提供「创建空实例」：`POST /api/instances`（custom）成功后跳转实例文件页上传 Jar。
+- 任务中心轮询失败时显示「状态可能已过期」、上次成功刷新时间与重试；已有服务端来源列表仅做有界 ModLoader 预检，完整扫描在导入任务中执行。
+- Java 多运行时：`GET /api/system/java-runtimes` 扫描 JAVA_HOME 与常见安装目录，候选必须文件名为 java/java.exe 且 `-version` 输出可解析才写入 `java_runtimes` 注册表；`detectJava` / 执行前复验 / Minecraft 与 installer 子进程均使用 `getMinecraftChildEnv()` 脱敏环境（不继承面板密钥与 `DATA_DIR`）。实例可通过 `javaRuntimeId` 绑定运行时（默认仍用 PATH 中的 java），启动和 Forge/NeoForge Installer 会在执行前再次验证绑定条目；部署页与实例设置页提供选择器，并按 MC 版本给出推荐 Java 版本与 mismatch 告警（`recommendedJavaMajor`：1.20.5+ → 21，1.17–1.20.4 → 17，更早 → 8）。
+- 新建数据根与子目录在 Unix 上默认 `0700`、敏感文件 `0600`，过宽权限会拒绝启动；Windows 上记录 ACL 无法自动校验时的阻断级警告（见 `data-dir-permissions.ts`）。
+- `PanelManager.ps1` 安全停服：`Get-PanelHealth` 校验 PID、状态文件指纹与健康 JSON 一致后才发送 `X-Launcher-Token`（伪造健康服务测试断言永不发送 token）。
+- Paper/Fabric 等 core 缓存键基于解析后的不可变版本/build，旧 `latest` 键不再误命中。
+- 发布工作流（`.github/workflows/portable-release.yml`）：Actions 使用固定 commit SHA；Windows job 显式 `npm run windows:test`；`RELEASE_GPG_FINGERPRINT` 与仓库内发布公钥/指纹文件用于签名链门禁；`package-portable.mjs` 优先 `git rev-parse HEAD`，脏工作树拒绝正式打包。**本机未验证** GitHub Environment 私钥注入、真实 GPG 签名与双平台 Actions smoke 结果。
 - 亮/暗双主题：CSS 变量按 `[data-theme]` 拆分，index.html 内联脚本在渲染前定主题（默认跟随 `prefers-color-scheme`），选择持久化 `mmd_theme`；切换按钮在侧边栏底部与移动顶栏，控制台终端区域保持暗色。
 
 主要事实源：
@@ -40,14 +49,15 @@
 
 ## 尚未形成完整用户功能
 
-- 文件重命名和下载已有后端接口，但当前前端没有对应调用或可见入口。不得仅因路由存在就宣称 UI 功能完成。
 - 远程节点创建由 `REMOTE_NODE_CREATION_ENABLED = false` 禁用；当前只有内置本机节点 `local`。
-- 任务元数据写入 SQLite，但队列、worker 和运行控制器位于内存；进程重启后不会续跑任务，而是把遗留的 `pending` / `running` 记录标记为失败，并尝试清理已关联的半成品实例。
+- 任务元数据写入 SQLite，但队列、worker 和运行控制器位于内存；进程重启后不会续跑任务，而是把遗留的 `pending` / `running` 记录标记为失败，并**仅**清理可证明位于 `.mmd-staging` 且 marker 匹配的半成品目录。
 - 管理员认证使用浏览器 `localStorage` 中的 JWT；当前没有会话列表、撤销、2FA 或角色权限体系。
 - 数据库只有启动期兼容处理，没有通用、版本化迁移框架。
 - 实例默认使用面板进程 `PATH` 中的 `java`，也可绑定 `java_runtimes` 注册表中当前可用的运行时；绑定条目消失、路径变化或执行前验证失败时必须重新探测和选择。
 - 没有完整的自动备份/恢复、系统安装器、远程 Agent 执行协议或生产监控闭环。
-- 便携发布流水线已经实现，但各 runner 和公开 Release 的实际结果只能由对应 GitHub Actions 运行确认。
+- 便携发布流水线已经实现，但 Windows x64 / Linux x64 runner 和公开 Release 的实际结果只能由对应 GitHub Actions 运行确认。Linux ARM64 与 macOS 打包能力仍在脚本中，不纳入本 Preview 公开发布。
+- 公开发布前须通过 `npm.cmd run audit:production`（拒绝 high/critical）。2026-08-07 本机结果为 0 critical、0 high、2 moderate（React Router 6）；moderate 须写入发布说明，不得用 `--force` 贸然升到 React Router 7。
+- **Beta 门禁缺口（工作树）**：`apps/server/src/services/download-ticket-service.ts` 及多项批次 A–F 新增/测试文件仍为未跟踪文件，`git ls-files` 为空；干净 clone 无法复现当前构建，R0-06 对 Git 跟踪而言未关闭。根 `verify` 尚未串联 `npm run test:regression -w @mmd/server`（需单独执行）。§8.2 人工清单与 Windows/Linux **最终 Release 压缩包** smoke 未在本回合执行。
 
 ## 固定运行边界
 

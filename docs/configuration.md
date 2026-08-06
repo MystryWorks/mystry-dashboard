@@ -38,6 +38,7 @@ node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"
 | `AUTH_RATE_LIMIT_MAX` | `5` | 登录和 setup 限流窗口内的最大次数 |
 | `AUTH_RATE_LIMIT_WINDOW_MS` | `900000` | 登录和 setup 限流窗口，毫秒 |
 | `CONSOLE_TICKET_TTL_SECONDS` | `60` | 控制台 ticket 有效期；每个 ticket 只能建立一次 WebSocket 连接 |
+| `FILE_DOWNLOAD_TICKET_TTL_SECONDS` | `60` | 文件下载 ticket 有效期；每个 ticket 只能下载一次 |
 
 ### HTTP、文件与上传生命周期
 
@@ -101,6 +102,12 @@ node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"
 | `MAX_ZIP_CENTRAL_DIRECTORY_BYTES` | `33554432` | ZIP central directory 上限，32 MiB |
 | `MAX_EXISTING_IMPORT_ENTRIES` | `200000` | `DATA_DIR/imports` 单次目录交接的文件和目录条目上限 |
 | `MAX_EXISTING_IMPORT_BYTES` | `107374182400` | `DATA_DIR/imports` 单次目录交接的文件总大小上限，100 GiB |
+| `MOD_LOADER_PRECHECK_MAX_DEPTH` | `4` | 已有服务端来源列表接口中 ModLoader args 预检最大目录深度 |
+| `MOD_LOADER_PRECHECK_MAX_ENTRIES` | `200` | 同上，最大遍历条目数 |
+| `MOD_LOADER_PRECHECK_TIMEOUT_MS` | `250` | 同上，最大耗时（毫秒） |
+| `MOD_LOADER_SCAN_MAX_DEPTH` | `64` | 导入/部署任务中 ModLoader args 深度扫描最大目录深度 |
+| `MOD_LOADER_SCAN_MAX_ENTRIES` | `50000` | 同上，最大遍历条目数 |
+| `MOD_LOADER_SCAN_TIMEOUT_MS` | `30000` | 同上，最大耗时（毫秒） |
 
 普通文件或 zip 上传超过 `MAX_UPLOAD_BYTES` 时返回 **413**；上传并发槽位已满时返回 **429**。ZIP 还会继续执行条目数、单条目、总解压大小和 central directory 配额校验。
 
@@ -127,6 +134,8 @@ node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"
 | `uploads/` | 上传临时目录 |
 
 无论最终数据目录来自 `MMD_DATA_DIR` 还是 `DATA_DIR`，实例始终只能位于该目录的 `instances/<id>`。部署、导入、创建和启动都使用这一目录；不支持自定义实例安装目录，也不提供从整台机器选择目录的功能。实例文件 API 的路径只是相对于该实例根目录的逻辑路径。
+
+**权限（R1-02）**：在 Linux/macOS 上，面板启动时会创建并校验数据根及 `instances`、`imports`、`uploads`、`.mmd-staging`、`.mmd-panel-lock` 等目录为 `0700`，`panel.db` 及其 WAL/SHM 为 `0600`。若已有目录对 group/other 可访问，默认拒绝启动；设置 `MMD_REPAIR_DATA_PERMISSIONS=1` 可在启动时自动收紧权限。Windows 无法由 Node 可靠验证 ACL，首次启动会输出阻断级警告——请确保 `DATA_DIR` 仅当前运行面板的用户可读写（便携版由 `mmdctl`/PanelManager 创建用户专属目录）。
 
 `MMD_HOME` 和 `MMD_CONFIG_PATH` 用于确定配置文件位置，因此不能依赖该配置文件自己改变其加载位置；应由 `mmdctl`、shell 或进程环境在启动前设置。便携用户通常不需要手动设置这些变量。
 

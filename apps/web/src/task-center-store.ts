@@ -1,4 +1,4 @@
-import { useEffect, useReducer } from 'react';
+import { useCallback, useEffect, useReducer, useRef } from 'react';
 import type { TaskInfo } from '@mmd/shared';
 import { ApiError, listTasks } from './api';
 
@@ -12,6 +12,7 @@ const RATE_LIMIT_BACKOFF_MS = 10_000;
 
 let tasks: TaskInfo[] = [];
 let loadError = '';
+let lastSuccessAt: string | null = null;
 let timer: ReturnType<typeof setTimeout> | null = null;
 let polling = false;
 let pollingGeneration = 0;
@@ -33,6 +34,7 @@ async function tick(): Promise<void> {
     if (!isActive(generation)) return;
     tasks = nextTasks;
     loadError = '';
+    lastSuccessAt = new Date().toISOString();
     schedule(POLL_INTERVAL_MS, generation);
   } catch (error) {
     if (!isActive(generation)) return;
@@ -82,8 +84,21 @@ function stop(): void {
   document.removeEventListener('visibilitychange', onVisibilityChange);
 }
 
-export function useTaskCenter(): { tasks: TaskInfo[]; error: string; activeCount: number } {
+export function retryTaskCenterPoll(): void {
+  if (listeners.size === 0) return;
+  void tick();
+}
+
+export function useTaskCenter(): {
+  tasks: TaskInfo[];
+  error: string;
+  activeCount: number;
+  lastSuccessAt: string | null;
+  retry: () => void;
+} {
   const [, forceRender] = useReducer((count: number) => count + 1, 0);
+  const retryRef = useRef(retryTaskCenterPoll);
+  retryRef.current = retryTaskCenterPoll;
 
   useEffect(() => {
     listeners.add(forceRender);
@@ -98,5 +113,7 @@ export function useTaskCenter(): { tasks: TaskInfo[]; error: string; activeCount
     tasks,
     error: loadError,
     activeCount: tasks.filter((task) => task.status === 'pending' || task.status === 'running').length,
+    lastSuccessAt,
+    retry: useCallback(() => retryRef.current(), []),
   };
 }

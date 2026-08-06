@@ -1,3 +1,4 @@
+# 第三方 Actions 固定 SHA：见 .github/actions-pins.md（审查日期 2026-08-07）
 name: Portable Preview Release
 
 on:
@@ -28,10 +29,7 @@ jobs:
 
     steps:
       - name: Checkout tag
-        uses: actions/checkout@v6
-        with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
-          fetch-depth: 0
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
 
       - name: Validate tag and main ancestry
         id: release-tag
@@ -57,8 +55,18 @@ jobs:
           }
           echo "tag=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
 
+      - name: Assert clean worktree at tag
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -n "$(git status --porcelain)" ]]; then
+            echo "::error::标签 checkout 工作树必须干净"
+            git status --short
+            exit 1
+          fi
+
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: 22.23.1
           cache: npm
@@ -90,38 +98,27 @@ jobs:
             platform: linux
             arch: x64
             asset_suffix: linux-x64.tar.gz
-          - label: Linux ARM64
-            os: ubuntu-24.04-arm
-            platform: linux
-            arch: arm64
-            asset_suffix: linux-arm64.tar.gz
-          - label: macOS Intel
-            os: macos-15-intel
-            platform: darwin
-            arch: x64
-            asset_suffix: macos-x64.tar.gz
-          - label: macOS Apple Silicon
-            os: macos-15
-            platform: darwin
-            arch: arm64
-            asset_suffix: macos-arm64.tar.gz
 
     runs-on: ${{ matrix.os }}
 
     steps:
       - name: Checkout tag
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           ref: ${{ needs.prepare.outputs.tag }}
 
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: 22.23.1
           cache: npm
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Run Windows-specific tests
+        if: matrix.platform == 'win32'
+        run: npm run windows:test
 
       - name: Build application
         run: npm run build
@@ -142,7 +139,7 @@ jobs:
           "release/mmd-${{ needs.prepare.outputs.tag }}-${{ matrix.asset_suffix }}"
 
       - name: Upload portable archive
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: portable-${{ matrix.platform }}-${{ matrix.arch }}
           path: release/mmd-${{ needs.prepare.outputs.tag }}-${{ matrix.asset_suffix }}
@@ -162,17 +159,17 @@ jobs:
 
     steps:
       - name: Checkout tag
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           ref: ${{ needs.prepare.outputs.tag }}
 
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: 22.23.1
 
       - name: Download all archives
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
         with:
           pattern: portable-*
           path: release-assets
@@ -189,24 +186,83 @@ jobs:
         env:
           RELEASE_GPG_PRIVATE_KEY: ${{ secrets.RELEASE_GPG_PRIVATE_KEY }}
           RELEASE_GPG_PASSPHRASE: ${{ secrets.RELEASE_GPG_PASSPHRASE }}
+          RELEASE_GPG_FINGERPRINT: ${{ secrets.RELEASE_GPG_FINGERPRINT }}
         run: |
           set -euo pipefail
-          [[ -n "$RELEASE_GPG_PRIVATE_KEY" ]] || {
+          normalize_fp() {
+            echo "$1" | tr -d '[:space:]' | tr '[:lower:]' '[:upper:]'
+          }
+          [[ -n "${RELEASE_GPG_PRIVATE_KEY:-}" ]] || {
             echo "::error::缺少 RELEASE_GPG_PRIVATE_KEY，拒绝发布未签名校验和"
             exit 1
           }
+          EXPECTED_FP="$(normalize_fp "${RELEASE_GPG_FINGERPRINT:-}")"
+          [[ -n "$EXPECTED_FP" ]] || {
+            echo "::error::缺少 RELEASE_GPG_FINGERPRINT，拒绝在未绑定签名身份时发布"
+            exit 1
+          }
+          REPO_FP_FILE=".github/release-signing-key.fingerprint"
+          [[ -f "$REPO_FP_FILE" ]] || {
+            echo "::error::缺少仓库公钥指纹文件：$REPO_FP_FILE"
+            exit 1
+          }
+          REPO_FP="$(normalize_fp "$(grep -v '^#' "$REPO_FP_FILE" | head -n1)")"
+          [[ "$REPO_FP" != UNCONFIGURED ]] || {
+            echo "::error::仓库发布指纹尚未配置，见 .github/RELEASE_SIGNING.md"
+            exit 1
+          }
+          [[ "$EXPECTED_FP" == "$REPO_FP" ]] || {
+            echo "::error::Environment RELEASE_GPG_FINGERPRINT 与仓库指纹不一致"
+            exit 1
+          }
+          PUB_KEY=".github/release-signing-key.asc"
+          grep -q '^-----BEGIN PGP PUBLIC KEY BLOCK-----' "$PUB_KEY" || {
+            echo "::error::仓库缺少有效的 ASCII armored 发布公钥：$PUB_KEY"
+            exit 1
+          }
           printf '%s' "$RELEASE_GPG_PRIVATE_KEY" | gpg --batch --import
-          if [[ -n "$RELEASE_GPG_PASSPHRASE" ]]; then
+          SECRET_FP="$(gpg --batch --with-colons --list-secret-keys | awk -F: '/^fpr:/ {print $10; exit}')"
+          SECRET_FP="$(normalize_fp "$SECRET_FP")"
+          [[ "$SECRET_FP" == "$EXPECTED_FP" ]] || {
+            echo "::error::导入的签名私钥指纹与 RELEASE_GPG_FINGERPRINT 不匹配"
+            exit 1
+          }
+          if [[ -n "${RELEASE_GPG_PASSPHRASE:-}" ]]; then
             printf '%s' "$RELEASE_GPG_PASSPHRASE" | gpg --batch --yes --pinentry-mode loopback \
               --passphrase-fd 0 \
+              --local-user "$EXPECTED_FP" \
               --armor --detach-sign \
               --output release-assets/SHA256SUMS.asc \
               release-assets/SHA256SUMS
           else
-            gpg --batch --yes --armor --detach-sign \
+            gpg --batch --yes \
+              --local-user "$EXPECTED_FP" \
+              --armor --detach-sign \
               --output release-assets/SHA256SUMS.asc \
               release-assets/SHA256SUMS
           fi
+          cp "$PUB_KEY" release-assets/mmd-release-signing-key.asc
+
+      - name: Verify checksum signature in isolated keyring
+        shell: bash
+        env:
+          RELEASE_GPG_FINGERPRINT: ${{ secrets.RELEASE_GPG_FINGERPRINT }}
+        run: |
+          set -euo pipefail
+          normalize_fp() {
+            echo "$1" | tr -d '[:space:]' | tr '[:lower:]' '[:upper:]'
+          }
+          EXPECTED_FP="$(normalize_fp "${RELEASE_GPG_FINGERPRINT:-}")"
+          VERIFY_HOME="$(mktemp -d)"
+          chmod 700 "$VERIFY_HOME"
+          gpg --homedir "$VERIFY_HOME" --batch --import .github/release-signing-key.asc
+          PUB_FP="$(gpg --homedir "$VERIFY_HOME" --batch --with-colons --list-keys | awk -F: '/^fpr:/ {print $10; exit}')"
+          PUB_FP="$(normalize_fp "$PUB_FP")"
+          [[ "$PUB_FP" == "$EXPECTED_FP" ]] || {
+            echo "::error::独立 keyring 中的公钥指纹与 RELEASE_GPG_FINGERPRINT 不一致"
+            exit 1
+          }
+          gpg --homedir "$VERIFY_HOME" --batch --verify release-assets/SHA256SUMS.asc release-assets/SHA256SUMS
 
       - name: Verify release asset set
         shell: bash
@@ -215,12 +271,10 @@ jobs:
           VERSION="${{ needs.prepare.outputs.tag }}"
           test -f "release-assets/mmd-${VERSION}-windows-x64.zip"
           test -f "release-assets/mmd-${VERSION}-linux-x64.tar.gz"
-          test -f "release-assets/mmd-${VERSION}-linux-arm64.tar.gz"
-          test -f "release-assets/mmd-${VERSION}-macos-x64.tar.gz"
-          test -f "release-assets/mmd-${VERSION}-macos-arm64.tar.gz"
           test -f release-assets/SHA256SUMS
           test -f release-assets/SHA256SUMS.asc
           test -f release-assets/sbom.cdx.json
+          test -f release-assets/mmd-release-signing-key.asc
 
       - name: Create GitHub prerelease
         shell: bash
