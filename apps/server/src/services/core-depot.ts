@@ -155,7 +155,7 @@ export async function downloadToFile(
   let renamed = false;
 
   try {
-    fs.mkdirSync(path.dirname(dest), { recursive: true });
+    fs.mkdirSync(path.dirname(dest), { recursive: true, mode: 0o700 });
     const res = await fetch(url, { headers: { 'User-Agent': USER_AGENT }, signal: controller.signal });
     if (!res.ok || !res.body) {
       throw new Error(`下载失败 ${res.status}: ${url}`);

@@ -64,10 +64,10 @@ export function isProcessAlive(pid: number): boolean {
 }
 
 function writeOwner(lockDir: string, owner: PanelLockOwner): void {
-  fs.mkdirSync(lockDir, { recursive: true });
+  fs.mkdirSync(lockDir, { recursive: true, mode: 0o700 });
   const ownerPath = path.join(lockDir, OWNER_FILE);
   const tempPath = `${ownerPath}.${process.pid}.${Date.now()}.tmp`;
-  fs.writeFileSync(tempPath, `${JSON.stringify(owner)}\n`, 'utf8');
+  fs.writeFileSync(tempPath, `${JSON.stringify(owner)}\n`, { encoding: 'utf8', mode: 0o600 });
   fs.renameSync(tempPath, ownerPath);
 }
 
@@ -93,10 +93,10 @@ function lockConflictError(dataDir: string, owner: PanelLockOwner | null): Error
 }
 
 function tryAcquireOnce(dataDir: string): PanelDataLock | 'exists' {
-  fs.mkdirSync(dataDir, { recursive: true });
+  fs.mkdirSync(dataDir, { recursive: true, mode: 0o700 });
   const lockDir = lockDirPath(dataDir);
   try {
-    fs.mkdirSync(lockDir);
+    fs.mkdirSync(lockDir, { mode: 0o700 });
   } catch (error) {
     if (error && typeof error === 'object' && 'code' in error && error.code === 'EEXIST') {
       return 'exists';

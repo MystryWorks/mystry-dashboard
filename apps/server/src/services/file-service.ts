@@ -152,7 +152,7 @@ export function writeTextFile(instanceId: string, relativePath: string, content:
       throw new Error('目标不是普通文件');
     }
   }
-  fs.mkdirSync(path.dirname(target), { recursive: true });
+  fs.mkdirSync(path.dirname(target), { recursive: true, mode: 0o700 });
   fs.writeFileSync(target, Buffer.from(content, 'utf8'));
 }
 
@@ -210,7 +210,7 @@ export function mkdirPath(instanceId: string, relativePath: string): void {
   const root = getInstanceDir(instanceId);
   const target = resolveSafePath(root, relativePath);
   assertMutableTarget(root, target);
-  fs.mkdirSync(target, { recursive: true });
+  fs.mkdirSync(target, { recursive: true, mode: 0o700 });
 }
 
 export function getAbsoluteFilePath(instanceId: string, relativePath: string): string {
@@ -240,7 +240,7 @@ export async function saveUploadedFile(
   const safeName = path.posix.basename(filename.replace(/\\/g, '/'));
   const target = resolveSafePath(root, path.posix.join(relativeDir || '', safeName));
   assertMutableTarget(root, target);
-  fs.mkdirSync(path.dirname(target), { recursive: true });
+  fs.mkdirSync(path.dirname(target), { recursive: true, mode: 0o700 });
   const temp = await streamToUploadTemp(input, 'file');
   try {
     if (fs.existsSync(target)) {

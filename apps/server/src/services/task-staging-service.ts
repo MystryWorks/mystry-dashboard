@@ -50,7 +50,7 @@ export function prepareTaskStaging(
   dataDir = config.dataDir,
 ): string {
   const dir = taskStagingDir(taskId, instanceId, dataDir);
-  fs.mkdirSync(dir, { recursive: true });
+  fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
   writeTaskStagingMarker(dir, { version: 1, taskId, instanceId, token });
   return dir;
 }

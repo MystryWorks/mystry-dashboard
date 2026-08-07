@@ -115,7 +115,7 @@ export function createInstance(input: CreateInstanceInput): InstanceInfo {
   try {
     const existedBefore = fs.existsSync(dir);
     assertSafeDirectoryPath(dir);
-    fs.mkdirSync(dir, { recursive: true });
+    fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
     directoryCreatedByCall = !existedBefore;
     assertSafeInstanceRoot(dir);
     if (fs.readdirSync(dir).length > 0) {

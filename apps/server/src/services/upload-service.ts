@@ -74,7 +74,7 @@ export async function streamToUploadTemp(input: Readable, prefix: string): Promi
   };
 
   try {
-    fs.mkdirSync(config.uploadDir, { recursive: true });
+    fs.mkdirSync(config.uploadDir, { recursive: true, mode: 0o700 });
     target = tempPath(prefix);
     let bytes = 0;
     const counter = new Transform({

@@ -236,7 +236,7 @@ function assertMutablePropertiesFile(instanceId: string, file: string): void {
 
 function writeFileAtomic(target: string, content: string): void {
   const dir = path.dirname(target);
-  fs.mkdirSync(dir, { recursive: true });
+  fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
   const temp = path.join(
     dir,
     `.${path.basename(target)}.${process.pid}.${randomBytes(8).toString('hex')}.tmp`,

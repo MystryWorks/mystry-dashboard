@@ -32,6 +32,16 @@ test('R0-01: 第二个面板进程不得在进入 initDb 前写入数据库', as
   second.release();
 });
 
+test('R0-01: 锁目录应为 0700、owner.json 应为 0600', { skip: process.platform === 'win32' }, async (t) => {
+  const dataRoot = prepareTempDataRoot(t);
+  const { acquirePanelDataLock } = await import('./data-lock-service.js');
+  const lock = acquirePanelDataLock(dataRoot);
+  t.after(() => lock.release());
+  const lockDir = path.join(dataRoot, '.mmd-panel-lock');
+  assert.equal(fs.statSync(lockDir).mode & 0o777, 0o700);
+  assert.equal(fs.statSync(path.join(lockDir, 'owner.json')).mode & 0o777, 0o600);
+});
+
 test('R0-01: 陈旧锁仅在原 PID 不存在时可 quarantine 并接管', async (t) => {
   const dataRoot = prepareTempDataRoot(t);
   const lockDir = path.join(dataRoot, '.mmd-panel-lock');

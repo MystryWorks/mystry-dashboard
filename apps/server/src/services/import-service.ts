@@ -185,10 +185,10 @@ async function extractZipEntry(
   const target = resolveSafePath(destDir, entry.normalizedName);
   if (entry.directory) {
     throwIfAborted(signal);
-    fs.mkdirSync(target, { recursive: true });
+    fs.mkdirSync(target, { recursive: true, mode: 0o700 });
     return;
   }
-  fs.mkdirSync(path.dirname(target), { recursive: true });
+  fs.mkdirSync(path.dirname(target), { recursive: true, mode: 0o700 });
   if (fs.existsSync(target)) throw new Error(`ZIP entry 覆盖了已有路径：${entry.name}`);
 
   let written = 0;
@@ -238,7 +238,7 @@ export async function safeExtract(
   destDir: string,
   signal: AbortSignal = new AbortController().signal,
 ): Promise<void> {
-  fs.mkdirSync(destDir, { recursive: true });
+  fs.mkdirSync(destDir, { recursive: true, mode: 0o700 });
   assertSafeInstanceRoot(destDir);
   try {
     throwIfAborted(signal);
