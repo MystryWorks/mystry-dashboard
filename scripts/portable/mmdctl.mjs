@@ -101,22 +101,35 @@ async function writeAtomic(filePath, content) {
 async function databaseNeedsSetup() {
   const databasePath = path.join(dataDir, 'panel.db');
   if (!fs.existsSync(databasePath)) return true;
-  try {
-    const { DatabaseSync } = await import('node:sqlite');
-    const database = new DatabaseSync(databasePath, { readOnly: true });
+  const startedAt = Date.now();
+  let lastError = null;
+  while (Date.now() - startedAt < 15_000) {
     try {
-      const table = database
-        .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'users'")
-        .get();
-      if (!table) return true;
-      const count = database.prepare('SELECT COUNT(*) AS count FROM users').get();
-      return !count || Number(count.count) === 0;
-    } finally {
-      database.close();
+      const { DatabaseSync } = await import('node:sqlite');
+      const database = new DatabaseSync(databasePath, { readOnly: true, timeout: 5_000 });
+      try {
+        const table = database
+          .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'users'")
+          .get();
+        if (!table) return true;
+        const count = database.prepare('SELECT COUNT(*) AS count FROM users').get();
+        return !count || Number(count.count) === 0;
+      } finally {
+        database.close();
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      // 面板重启收尾期间数据库可能短暂被写锁占用，等待后重试。
+      if (!/database is locked|SQLITE_BUSY/.test(message)) {
+        throw new Error(`无法检查管理员初始化状态：${message}`);
+      }
+      lastError = error;
+      await new Promise((resolve) => setTimeout(resolve, 500));
     }
-  } catch (error) {
-    throw new Error(`无法检查管理员初始化状态：${error instanceof Error ? error.message : String(error)}`);
   }
+  throw new Error(
+    `无法检查管理员初始化状态：${lastError instanceof Error ? lastError.message : String(lastError)}`,
+  );
 }
 
 async function backupConfiguration() {
