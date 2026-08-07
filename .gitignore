@@ -13,4 +13,6 @@ coverage/
 release/
 /sbom.cdx.json
 .slim/deepwork/
+.playwright-mcp/
+.release-signing-backup/
 *.tsbuildinfo

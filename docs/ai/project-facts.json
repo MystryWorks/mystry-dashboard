@@ -114,7 +114,7 @@
     "windows:test": "node --test scripts/windows/panel-manager.test.mjs",
     "test:static": "npm run test:static -w @mmd/server",
     "audit:production": "node scripts/check-production-audit.mjs",
-    "verify": "npm run knowledge:check && npm run knowledge:test && npm run portable:test && npm run windows:test && npm run build -w @mmd/shared && npm run typecheck && npm run test:security -w @mmd/server && npm run build && npm run test:static"
+    "verify": "npm run knowledge:check && npm run knowledge:test && npm run portable:test && npm run windows:test && npm run build -w @mmd/shared && npm run typecheck && npm run test:security -w @mmd/server && npm run test:regression -w @mmd/server && npm run build && npm run test:static"
   },
   "knowledgeDocuments": [
     "docs/ai/README.md",

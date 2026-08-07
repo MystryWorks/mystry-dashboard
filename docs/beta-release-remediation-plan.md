@@ -1,9 +1,9 @@
 # Beta 发布修复计划
 
-> 状态：`In Progress`（批次 A–F 已在 **dev 脏工作树**落地；批次 G 于 **2026-08-07** 在本机 Windows 跑通 `knowledge:*`、`typecheck`、`test:security`、`test:regression`、`windows:test`、`build`、`verify`、`audit:production`）  
+> 状态：`In Progress`（批次 A–F 已随提交 `7d94c83` 合入 **dev** 并全部纳入 Git 跟踪；根 `verify` 已串联 `test:regression`；批次 G 于 **2026-08-07** 在本机 Windows 跑通 `knowledge:*`、`typecheck`、`test:security`、`test:regression`、`windows:test`、`build`、`verify`、`audit:production`）  
 > 基线：2026-08-06 审查 + 2026-08-07 门禁复验  
 > 目标：将当前项目从“可供内部试用”提升为可向真实 Minecraft 管理员发布的公开 Beta。  
-> **未满足 §8.3 公开 Beta 准入**：R0-06（干净 checkout / 无未跟踪实现文件）、§8.2 人工清单、双平台 CI 最终包 smoke、GitHub Environment 真实 GPG 与 Release 签名验证。
+> **未满足 §8.3 公开 Beta 准入**：§8.2 人工清单、双平台 CI 最终包 smoke、真实 Release 运行与签名验证、`dev` 合入 `main` 后打标签。签名密钥与 `release` Environment 三个密钥已配置（2026-08-07）；GitHub Free 不支持 Environment 保护规则（required_reviewers / wait_timer 均返回 422），以工作流内置门禁与标签权限规则作为替代，见 §7.2.5。
 
 ### 工作树实施进度（相对 §2 清单）
 
@@ -14,7 +14,7 @@
 | R0-03 | 已实现 | `process-manager.test.ts` | 真实 MC 停服宽限期 |
 | R0-04 | 已实现 | `task-service.test.ts`、`security-self-test` | 各阶段注入崩溃人工 |
 | R0-05 | 已实现 | `file-service.test.ts` | UI 冲突保留（骨架已有） |
-| R0-06 | **未关闭** | 脏树 `verify` 通过 | `download-ticket-service.ts` 等仍 **未 git track** |
+| R0-06 | 已关闭 | `7d94c83` 已纳入 Git 跟踪；根 `verify` 已串联 `test:regression` | 干净 checkout 构建与双平台 CI 终验 |
 | R1-01 | 已实现 | `java-detect.test.ts` | — |
 | R1-02 | 部分 | Unix 用例在 Windows CI skip | 本机 ACL 仅警告 |
 | R1-03 | 已实现 | `windows:test` R1-03 | — |
@@ -330,6 +330,7 @@ Web 测试可引入仅开发期使用的 Vitest、React Testing Library 和浏�
 3. 在仓库和 Release 资产中发布 ASCII armored 公钥与固定指纹。文档给出获取、导入、fingerprint 比对和 `gpg --verify` 的完整步骤。
 4. 签名后在独立 keyring 中用发布公钥验证 `SHA256SUMS.asc`，再执行 `gh release create`。
 5. GitHub `release` Environment 必须要求人工审批并限制可访问该 Environment 的分支；此项通过仓库设置截图或管理员记录验证。
+6. **Free 套餐限制（2026-08-07 实测）**：required_reviewers 与 wait_timer 保护规则在 GitHub Free 均被 API 拒绝（HTTP 422）。当前以工作流内置门禁替代（tag 必须为 `origin/main` 祖先、与 `package.json` 版本一致、工作树干净、`verify` 与 `audit:production` 通过），并建议对 `v*` 标签启用仓库 Ruleset 权限控制；升级 Pro/Team 后可再启用人工审批。
 
 ### 7.3 平台测试
 

@@ -23,13 +23,13 @@ npm.cmd run audit:production
 npm.cmd run verify
 ```
 
-Beta 修复批次额外回归（**尚未**并入根 `verify`，发布前建议与 `verify` 同跑）：
+Beta 修复批次回归（已并入根 `verify`；需要单独聚焦执行时）：
 
 ```powershell
 npm.cmd run test:regression -w @mmd/server
 ```
 
-2026-08-07 本机 Windows：`verify` exit 0；`test:regression` 18 pass / 2 skip（R1-02 Unix 权限）；`audit:production` critical=0 high=0 moderate=2。
+2026-08-07 本机 Windows：`verify` exit 0（已含 `test:regression` 18 pass / 2 skip，R1-02 Unix 权限）；`audit:production` critical=0 high=0 moderate=2。
 
 Linux/macOS 和 CI 使用相同脚本名，但命令入口为 `npm run ...`。
 
