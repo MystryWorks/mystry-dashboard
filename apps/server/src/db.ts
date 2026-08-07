@@ -4,6 +4,7 @@ import { config } from './config.js';
 import { STAGING_ROOT_DIR } from './services/task-staging-service.js';
 import {
   finalizeSensitiveDataFiles,
+  forceSecureSensitiveFile,
   prepareSecureDataLayout,
 } from './utils/data-dir-permissions.js';
 
@@ -102,6 +103,10 @@ export function initDb(): void {
   db = new DatabaseSync(config.dbPath);
   db.exec('PRAGMA journal_mode = WAL');
   db.exec('PRAGMA foreign_keys = ON');
+  // SQLite 按进程 umask 创建主库与 WAL/SHM 文件，立即收紧为 0600
+  forceSecureSensitiveFile(config.dbPath);
+  forceSecureSensitiveFile(`${config.dbPath}-wal`);
+  forceSecureSensitiveFile(`${config.dbPath}-shm`);
   finalizeSensitiveDataFiles(config.dbPath);
 
   db.exec(`

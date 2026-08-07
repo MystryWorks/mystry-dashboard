@@ -121,9 +121,15 @@ export function prepareSecureDataLayout(dataDir: string, subdirectories: string[
   }
 }
 
-/** SQLite 主库与 WAL/SHM  companion 文件的权限校验。 */
+/** SQLite 主库与 WAL/SHM companion 文件的权限校验。 */
 export function finalizeSensitiveDataFiles(dbPath: string): void {
   ensureSecureSensitiveFile(dbPath);
   ensureSecureSensitiveFile(`${dbPath}-wal`);
   ensureSecureSensitiveFile(`${dbPath}-shm`);
+}
+
+/** 立即把刚创建的文件收紧为 0600（SQLite 以默认 mode 建库后调用）。 */
+export function forceSecureSensitiveFile(filePath: string): void {
+  if (!isUnix() || !fs.existsSync(filePath)) return;
+  fs.chmodSync(filePath, FILE_MODE);
 }

@@ -19,6 +19,18 @@ test('R1-02: 新建目录在 Unix 上应为 0700', { skip: process.platform === 
   assert.equal(mode, 0o700);
 });
 
+test('R1-02: forceSecureSensitiveFile 应立即把新文件收紧为 0600', { skip: process.platform === 'win32' }, async (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'mmd-data-perm-force-'));
+  t.after(() => {
+    fs.rmSync(root, { recursive: true, force: true });
+  });
+  const file = path.join(root, 'panel.db');
+  fs.writeFileSync(file, 'db');
+  const { forceSecureSensitiveFile } = await import('./data-dir-permissions.js');
+  forceSecureSensitiveFile(file);
+  assert.equal(fs.statSync(file).mode & 0o777, 0o600);
+});
+
 test('R1-02: 过宽权限应拒绝启动', { skip: process.platform === 'win32' }, async (t) => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'mmd-data-perm-bad-'));
   t.after(() => {
