@@ -292,7 +292,8 @@ async function copySourceDirectory(
 
       if (stat.isDirectory()) {
         assertSafeInstanceRoot(source);
-        await fs.promises.mkdir(target, { mode: stat.mode & 0o777 });
+        // 使用固定权限而不是沿用源目录 mode，避免把源端特殊权限带入面板托管目录。
+        await fs.promises.mkdir(target, { mode: 0o700 });
         await walk(relative);
         reportCopyProgress();
         continue;
@@ -312,12 +313,22 @@ async function copySourceDirectory(
           callback(null, chunk);
         },
       });
-      await pipeline(
-        fs.createReadStream(source),
-        meter,
-        fs.createWriteStream(target, { flags: 'wx', mode: stat.mode & 0o777 }),
-        { signal },
-      );
+      // 先打开源文件 fd 再 fstat 校验，消除 lstat 与读流之间文件被替换的 TOCTOU 窗口。
+      const sourceFd = await fs.promises.open(source, 'r');
+      try {
+        const fdStat = await sourceFd.stat();
+        if (!fdStat.isFile()) {
+          throw new Error(`交接目录包含不支持的特殊文件：${relative}`);
+        }
+        await pipeline(
+          sourceFd.createReadStream(),
+          meter,
+          fs.createWriteStream(target, { flags: 'wx', mode: 0o600 }),
+          { signal },
+        );
+      } finally {
+        await sourceFd.close();
+      }
       copiedBytes += fileBytes;
       reportCopyProgress();
     }
@@ -368,6 +379,7 @@ export async function importExistingServerDirectory(input: ImportExistingServerI
       }
 
       report(95, '写入实例目录…');
+      throwIfAborted(signal);
       promoteTaskStagingToInstance(taskId, instanceId);
       registerPromotedInstance(instanceId, {
         name: input.name.trim(),

@@ -54,7 +54,21 @@ export async function buildApp(options: BuildAppOptions = {}) {
     const taskRecovery = recoverInterruptedTasks();
 
   const app = Fastify({
-    logger: true,
+    logger: {
+      serializers: {
+        req(request) {
+          // ticket/token 类查询参数不应进入日志（下载票据、控制台票据、设置令牌等）。
+          const url = request.url.replace(/([?&](?:ticket|token)=)[^&]*/gi, '$1[redacted]');
+          return {
+            method: request.method,
+            url,
+            hostname: request.hostname,
+            remoteAddress: request.ip,
+            remotePort: request.socket?.remotePort,
+          };
+        },
+      },
+    },
     bodyLimit: config.maxJsonBodyBytes,
     requestTimeout: config.httpRequestTimeoutMs,
     connectionTimeout: config.httpConnectionTimeoutMs,
@@ -111,6 +125,22 @@ export async function buildApp(options: BuildAppOptions = {}) {
     reply.header('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
     reply.header('X-Permitted-Cross-Domain-Policies', 'none');
     return payload;
+  });
+
+  // 统一错误响应为全站 {error} 格式；500 不泄露内部消息（可能含绝对路径）。
+  app.setErrorHandler((error, req, reply) => {
+    req.log.error(error);
+    if (reply.sent) return;
+    const err = error as { statusCode?: unknown; message?: unknown };
+    const statusCode =
+      typeof err.statusCode === 'number' && Number.isInteger(err.statusCode) ? err.statusCode : 500;
+    const normalized = statusCode >= 400 && statusCode < 600 ? statusCode : 500;
+    if (normalized === 500) {
+      return reply.code(500).send({ error: '服务器内部错误' });
+    }
+    return reply
+      .code(normalized)
+      .send({ error: typeof err.message === 'string' ? err.message : '请求失败' });
   });
 
   registerAuthHooks(app);

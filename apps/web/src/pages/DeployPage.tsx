@@ -48,12 +48,18 @@ export function DeployPage() {
   const [copyStatus, setCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const errorDialogRef = useRef<HTMLDialogElement>(null);
   const metadataGenerationRef = useRef(0);
+  /** 组件卸载时中止进行中的任务轮询，避免登出/离开页面后仍持续请求或跳转。 */
+  const pollAbortRef = useRef<AbortController | null>(null);
   const nameFieldId = useId();
   const coreTypeFieldId = useId();
   const jvmArgsFieldId = useId();
   const eulaFieldId = useId();
   const errorPreview = useMemo(() => createErrorPreview(error), [error]);
   const hasErrorDetails = error.includes('\n') || error.length > ERROR_PREVIEW_MAX_LENGTH;
+
+  useEffect(() => {
+    return () => pollAbortRef.current?.abort();
+  }, []);
 
   useEffect(() => {
     const dialog = errorDialogRef.current;
@@ -218,9 +224,13 @@ export function DeployPage() {
         },
       });
       setProgress(task);
-      const result = await pollTask(task.id, (t) => setProgress(t as TaskInfo));
+      const controller = new AbortController();
+      pollAbortRef.current = controller;
+      const result = await pollTask(task.id, (t) => setProgress(t as TaskInfo), controller.signal);
       if (result.instanceId) navigate(`/instances/${result.instanceId}`);
     } catch (err) {
+      // 组件卸载导致的中止不是错误，不需要提示。
+      if (err instanceof Error && err.name === 'AbortError') return;
       setError(err instanceof Error ? err.message : String(err));
     } finally {
       setBusy(false);

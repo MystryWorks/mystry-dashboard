@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import type { CoreType, DeployCoreInput, ImportExistingServerInput } from '@mmd/shared';
 import {
   CORE_TYPE_ENUM,
+  DEPLOYABLE_CORE_TYPE_ENUM,
   deployCoreBodySchema,
   importExistingServerBodySchema,
 } from '@mmd/shared';
@@ -41,7 +42,21 @@ export async function coreRoutes(app: FastifyInstance): Promise<void> {
 
   app.get<{ Params: { type: 'vanilla' | 'paper' | 'fabric' | 'forge' | 'neoforge' } }>(
     '/api/cores/:type/versions',
+    {
+      attachValidation: true,
+      schema: {
+        params: {
+          type: 'object',
+          additionalProperties: false,
+          required: ['type'],
+          properties: { type: { type: 'string', enum: [...DEPLOYABLE_CORE_TYPE_ENUM] } },
+        },
+      },
+    },
     async (req, reply) => {
+      if (req.validationError) {
+        return reply.code(400).send({ error: '不支持的核心类型' });
+      }
       try {
         const versions = await listCoreVersions(req.params.type);
         return { versions };
@@ -213,7 +228,15 @@ export async function coreRoutes(app: FastifyInstance): Promise<void> {
         return reply.code(400).send({ error: `不支持已移除的字段：${removedField}` });
       }
       if (invalidCoreType) return reply.code(400).send({ error: '核心类型不受支持' });
+      if (name.length > 128) return reply.code(400).send({ error: '实例名称过长' });
       if (!name.trim()) return reply.code(400).send({ error: '名称不能为空' });
+      if (jvmArgs.length > 8192) return reply.code(400).send({ error: 'JVM 参数过长' });
+      if (mcVersion && mcVersion.length > 64) {
+        return reply.code(400).send({ error: 'MC 版本过长' });
+      }
+      if (javaRuntimeId && javaRuntimeId.length > 255) {
+        return reply.code(400).send({ error: 'Java 运行时 ID 过长' });
+      }
       if (!zipPath) return reply.code(400).send({ error: '请上传 zip 安装包' });
 
       const task = await importZipPackage({

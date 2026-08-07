@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { CoreType, ExistingServerSourceInfo, TaskInfo } from '@mmd/shared';
 import { api, apiForm, listExistingServerSources, pollTask } from '../api';
@@ -33,6 +33,12 @@ export function ImportPage() {
   const [error, setError] = useState('');
   const [progress, setProgress] = useState<TaskInfo | null>(null);
   const [busy, setBusy] = useState(false);
+  /** 组件卸载时中止进行中的任务轮询，避免登出/离开页面后仍持续请求或跳转。 */
+  const pollAbortRef = useRef<AbortController | null>(null);
+
+  useEffect(() => {
+    return () => pollAbortRef.current?.abort();
+  }, []);
 
   const loadSources = useCallback(async () => {
     setSourcesLoading(true);
@@ -106,9 +112,13 @@ export function ImportPage() {
       }
 
       setProgress(task);
-      const result = await pollTask(task.id, (next) => setProgress(next as TaskInfo));
+      const controller = new AbortController();
+      pollAbortRef.current = controller;
+      const result = await pollTask(task.id, (next) => setProgress(next as TaskInfo), controller.signal);
       if (result.instanceId) navigate(`/instances/${result.instanceId}`);
     } catch (err) {
+      // 组件卸载导致的中止不是错误，不需要提示。
+      if (err instanceof Error && err.name === 'AbortError') return;
       setError(err instanceof Error ? err.message : String(err));
     } finally {
       setBusy(false);

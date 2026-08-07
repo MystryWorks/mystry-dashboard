@@ -30,6 +30,14 @@ export function ConfirmDialog({
   const [typed, setTyped] = useState('');
   const titleId = useId();
   const inputId = useId();
+  /** 同一打开周期内只触发一次取消，避免 close 事件与按钮 onClick 双路径重复调用。 */
+  const cancelHandledRef = useRef(false);
+
+  function handleCancel(): void {
+    if (cancelHandledRef.current) return;
+    cancelHandledRef.current = true;
+    onCancel();
+  }
 
   useEffect(() => {
     const dialog = dialogRef.current;
@@ -40,6 +48,7 @@ export function ConfirmDialog({
 
   useEffect(() => {
     if (open) setTyped('');
+    cancelHandledRef.current = false;
   }, [open]);
 
   const needText = Boolean(requireText);
@@ -50,13 +59,13 @@ export function ConfirmDialog({
       ref={dialogRef}
       className="confirm-dialog"
       aria-labelledby={titleId}
-      onClose={onCancel}
+      onClose={handleCancel}
       onCancel={(event) => {
         event.preventDefault();
-        onCancel();
+        handleCancel();
       }}
       onMouseDown={(event) => {
-        if (event.target === event.currentTarget) onCancel();
+        if (event.target === event.currentTarget) handleCancel();
       }}
     >
       <div className="confirm-dialog-panel">
@@ -79,7 +88,7 @@ export function ConfirmDialog({
           </div>
         )}
         <footer className="confirm-dialog-footer">
-          <button className="btn btn-ghost" type="button" disabled={busy} onClick={onCancel}>
+          <button className="btn btn-ghost" type="button" disabled={busy} onClick={handleCancel}>
             取消
           </button>
           <button

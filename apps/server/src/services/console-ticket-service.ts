@@ -9,6 +9,9 @@ type ConsoleTicket = {
 
 const tickets = new Map<string, ConsoleTicket>();
 
+/** 未过期票据数量上限，防止异常客户端反复签发耗尽内存。 */
+const MAX_CONSOLE_TICKETS = 1000;
+
 function pruneExpired(now = Date.now()): void {
   for (const [ticket, value] of tickets) {
     if (value.expiresAt <= now) tickets.delete(ticket);
@@ -21,6 +24,9 @@ export function issueConsoleTicket(userId: string, instanceId: string): {
 } {
   const now = Date.now();
   pruneExpired(now);
+  if (tickets.size >= MAX_CONSOLE_TICKETS) {
+    throw new Error('控制台票据数量已达上限，请稍后重试');
+  }
   const ticket = randomBytes(32).toString('base64url');
   tickets.set(ticket, {
     userId,

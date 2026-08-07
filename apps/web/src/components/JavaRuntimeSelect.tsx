@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { recommendedJavaMajor, type JavaRuntimeInfo } from '@mmd/shared';
 import { listJavaRuntimes } from '../api';
 
@@ -23,17 +23,26 @@ export function JavaRuntimeSelect({
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
+  /** 加载代次：挂载加载与「重新探测」并发时，丢弃先发起但后到达的旧响应。 */
+  const loadGenerationRef = useRef(0);
 
   const load = useCallback(async (refresh: boolean) => {
+    const generation = loadGenerationRef.current + 1;
+    loadGenerationRef.current = generation;
     if (refresh) setRefreshing(true);
     try {
-      setRuntimes(await listJavaRuntimes(refresh));
+      const result = await listJavaRuntimes(refresh);
+      if (generation !== loadGenerationRef.current) return;
+      setRuntimes(result);
       setError('');
     } catch (err) {
+      if (generation !== loadGenerationRef.current) return;
       setError(err instanceof Error ? err.message : String(err));
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      if (generation === loadGenerationRef.current) {
+        setLoading(false);
+        setRefreshing(false);
+      }
     }
   }, []);
 

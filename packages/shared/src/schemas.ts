@@ -27,14 +27,14 @@ export const createInstanceBodySchema = {
   additionalProperties: false,
   required: ['name'],
   properties: {
-    name: { type: 'string' },
-    jarFile: { type: 'string' },
-    jvmArgs: { type: 'string' },
+    name: { type: 'string', minLength: 1, maxLength: 128 },
+    jarFile: { type: 'string', maxLength: 1024 },
+    jvmArgs: { type: 'string', maxLength: 8192 },
     coreType: { type: 'string', enum: [...CORE_TYPE_ENUM] },
-    mcVersion: { type: 'string' },
+    mcVersion: { type: 'string', maxLength: 64 },
     acceptEula: { type: 'boolean' },
-    nodeId: { type: 'string' },
-    javaRuntimeId: { type: ['string', 'null'] },
+    nodeId: { type: 'string', maxLength: 255 },
+    javaRuntimeId: { type: ['string', 'null'], maxLength: 255 },
   },
 } as const;
 
@@ -42,11 +42,11 @@ export const updateInstanceBodySchema = {
   type: 'object',
   additionalProperties: false,
   properties: {
-    name: { type: 'string' },
-    jarFile: { type: 'string' },
-    jvmArgs: { type: 'string' },
+    name: { type: 'string', minLength: 1, maxLength: 128 },
+    jarFile: { type: 'string', maxLength: 1024 },
+    jvmArgs: { type: 'string', maxLength: 8192 },
     acceptEula: { type: 'boolean' },
-    javaRuntimeId: { type: ['string', 'null'] },
+    javaRuntimeId: { type: ['string', 'null'], maxLength: 255 },
   },
 } as const;
 
@@ -55,15 +55,15 @@ export const deployCoreBodySchema = {
   additionalProperties: false,
   required: ['name', 'coreType', 'mcVersion'],
   properties: {
-    name: { type: 'string' },
+    name: { type: 'string', minLength: 1, maxLength: 128 },
     coreType: { type: 'string', enum: [...DEPLOYABLE_CORE_TYPE_ENUM] },
-    mcVersion: { type: 'string' },
+    mcVersion: { type: 'string', maxLength: 64 },
     build: { type: 'integer' },
-    loaderVersion: { type: 'string' },
-    installerVersion: { type: 'string' },
-    jvmArgs: { type: 'string' },
+    loaderVersion: { type: 'string', maxLength: 128 },
+    installerVersion: { type: 'string', maxLength: 128 },
+    jvmArgs: { type: 'string', maxLength: 8192 },
     acceptEula: { type: 'boolean' },
-    javaRuntimeId: { type: ['string', 'null'] },
+    javaRuntimeId: { type: ['string', 'null'], maxLength: 255 },
   },
 } as const;
 

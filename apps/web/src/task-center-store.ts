@@ -82,6 +82,10 @@ function stop(): void {
     timer = null;
   }
   document.removeEventListener('visibilitychange', onVisibilityChange);
+  // 订阅清零（登出/退出登录页）时清空模块级缓存，避免换用户后短暂显示上一会话的任务。
+  tasks = [];
+  loadError = '';
+  lastSuccessAt = null;
 }
 
 export function retryTaskCenterPoll(): void {

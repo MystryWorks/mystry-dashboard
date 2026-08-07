@@ -113,12 +113,14 @@ export async function downloadAuthenticated(
   }
 
   let ticket: string;
+  let expiresInSeconds = 60;
   try {
     const issued = await api<FileDownloadTicketResult>(
       `/api/instances/${encodeURIComponent(instanceId)}/files/download-ticket`,
       { method: 'POST', json: { path: relativePath } },
     );
     ticket = issued.ticket;
+    expiresInSeconds = issued.expiresIn;
   } catch (error) {
     popup.close();
     throw error;
@@ -130,7 +132,7 @@ export async function downloadAuthenticated(
     + `&ticket=${encodeURIComponent(ticket)}`;
   popup.location.href = url;
 
-  const deadline = Date.now() + 120_000;
+  const deadline = Date.now() + expiresInSeconds * 1000;
   while (Date.now() < deadline) {
     await new Promise((resolve) => setTimeout(resolve, 400));
     let status: FileDownloadTicketStatusResult;
@@ -139,8 +141,10 @@ export async function downloadAuthenticated(
         `/api/instances/${encodeURIComponent(instanceId)}/files/download-ticket/${encodeURIComponent(ticket)}/status`,
       );
     } catch (error) {
+      // 票据被服务端清理（过期等）时返回 404：关闭空白下载窗并明确报错。
       if (error instanceof ApiError && error.status === 404) {
-        return;
+        popup.close();
+        throw new Error('下载票据已过期，请重试');
       }
       popup.close();
       throw error;
@@ -155,6 +159,8 @@ export async function downloadAuthenticated(
       throw new Error(status.error || '下载票据已过期');
     }
   }
+  popup.close();
+  throw new Error('下载票据已过期，请重试');
 }
 
 /** 任务中心：拉取最近的任务列表（含排队/进行中和已结束任务）。 */
@@ -186,11 +192,29 @@ export async function pollTask(
     error?: string;
     result?: { instanceId?: string };
   }) => void,
+  signal?: AbortSignal,
 ): Promise<{ instanceId?: string }> {
   const pollIntervalMs = 2_000;
   const rateLimitBackoffMs = 5_000;
+  if (signal?.aborted) {
+    throw new DOMException('任务轮询已中止', 'AbortError');
+  }
+
+  // 等待与中止信号竞争，组件卸载/登出后可立即终止轮询。
+  const wait = (ms: number) =>
+    new Promise<void>((resolve) => {
+      const timer = setTimeout(resolve, ms);
+      signal?.addEventListener('abort', () => {
+        clearTimeout(timer);
+        resolve();
+      }, { once: true });
+    });
+  const throwIfAborted = () => {
+    if (signal?.aborted) throw new DOMException('任务轮询已中止', 'AbortError');
+  };
 
   for (;;) {
+    throwIfAborted();
     let task: {
       status: string;
       progress: number;
@@ -211,15 +235,16 @@ export async function pollTask(
       // 任务可能仍在排队，服务端限流不代表任务失败。继续使用单一
       // 的等待链轮询，避免每次重试都创建一个新的并发定时器。
       if (error instanceof ApiError && error.status === 429) {
-        await new Promise((resolve) => setTimeout(resolve, rateLimitBackoffMs));
+        await wait(rateLimitBackoffMs);
         continue;
       }
       throw error;
     }
 
+    throwIfAborted();
     onUpdate?.(task);
     if (task.status === 'completed') return task.result ?? {};
     if (task.status === 'failed') throw new Error(task.error || '任务失败');
-    await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
+    await wait(pollIntervalMs);
   }
 }

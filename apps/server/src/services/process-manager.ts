@@ -352,6 +352,9 @@ export class ProcessManager extends EventEmitter {
 
       child.stdout.on('data', onChunk);
       child.stderr.on('data', onChunk);
+      // 管道流 error 无监听器会成为未捕获异常；子进程退出时管道 EPIPE 属正常现象。
+      child.stdout.on('error', () => {});
+      child.stderr.on('error', () => {});
       child.stdin.on('drain', () => {
         if (this.processes.get(instance.id) === managed && managed.stdinAvailable) {
           managed.stdinBackpressured = false;
@@ -390,12 +393,11 @@ export class ProcessManager extends EventEmitter {
       throw new InstanceOperationConflictError('实例正在启动中，请稍后再试');
     }
 
-    managed.status = 'stopping';
-    this.emitStatus(instanceId, 'stopping');
-
     const child = managed.child;
 
     if (force) {
+      managed.status = 'stopping';
+      this.emitStatus(instanceId, 'stopping');
       child.kill('SIGKILL');
       const outcome = await waitForChildExit(child, getStopGraceMs());
       if (outcome === 'timeout' && this.processes.get(instanceId) === managed) {
@@ -404,15 +406,22 @@ export class ProcessManager extends EventEmitter {
       return;
     }
 
+    // 先确认输入流可用，再进入 stopping，避免校验失败时实例永久卡在 stopping。
     const stdin = child.stdin;
     if (!managed.stdinAvailable || stdin.writableEnded || stdin.destroyed || !stdin.writable) {
       throw new Error('实例输入流不可用，无法发送停止指令');
     }
+
+    managed.status = 'stopping';
+    this.emitStatus(instanceId, 'stopping');
+
     try {
       if (!stdin.write('stop\n')) managed.stdinBackpressured = true;
     } catch {
       managed.stdinAvailable = false;
       managed.stdinBackpressured = true;
+      managed.status = 'running';
+      this.emitStatus(instanceId, 'running');
       throw new Error('停止指令写入失败');
     }
 

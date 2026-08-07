@@ -64,6 +64,9 @@ export async function nodeRoutes(app: FastifyInstance): Promise<void> {
   );
 
   app.delete<{ Params: { id: string } }>('/api/nodes/:id', async (req, reply) => {
+    if (!getNode(req.params.id)) {
+      return reply.code(404).send({ error: '节点不存在' });
+    }
     try {
       deleteNode(req.params.id);
       return { ok: true };

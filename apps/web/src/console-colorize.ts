@@ -15,6 +15,17 @@ const ANSI = {
 
 const HAS_ANSI = /\x1b\[/;
 
+/**
+ * 剥离 OSC（ESC ]…：剪贴板读写/标题/清屏）与除 SGR（ESC [ … m）之外的
+ * CSI 控制序列，只保留着色，避免 xterm 执行服务端日志里的危险终端序列。
+ */
+function sanitizeAnsi(line: string): string {
+  const withoutOsc = line.replace(/\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)/g, '');
+  return withoutOsc.replace(/\x1b\[[0-9;?]*([A-Za-z@-~])/g, (sequence, final: string) =>
+    final === 'm' ? sequence : '',
+  );
+}
+
 /** 匹配 Minecraft / Log4j 常见级别写法，例如 [Server thread/INFO]、/WARN] */
 const LEVEL_RE =
   /(?:^|[^A-Za-z0-9_])(?:\/)?(FATAL|ERROR|SEVERE|WARN(?:ING)?|INFO|DEBUG|TRACE)(?=[\]:\s])/i;
@@ -47,9 +58,9 @@ function colorForLevel(level: string): string | null {
   }
 }
 
-/** 为单行日志附加 ANSI 颜色；已含转义序列的行原样返回。 */
+/** 为单行日志附加 ANSI 颜色；已含转义序列的行做净化后原样返回。 */
 export function colorizeConsoleLine(line: string): string {
-  if (!line || HAS_ANSI.test(line)) return line;
+  if (!line || HAS_ANSI.test(line)) return sanitizeAnsi(line);
 
   // 面板自身提示
   if (line.startsWith('[错误]')) return `${ANSI.error}${line}${RESET}`;

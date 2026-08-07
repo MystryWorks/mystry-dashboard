@@ -193,6 +193,13 @@ export function initDb(): void {
   taskCols = db.prepare('PRAGMA table_info(tasks)').all() as Array<{ name: string }>;
   migrateLegacyTaskPhases(taskCols);
 
+  // 索引必须放在列迁移之后，旧库缺列时 CREATE INDEX 会失败。
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
+    CREATE INDEX IF NOT EXISTS idx_tasks_created_at ON tasks(created_at);
+    CREATE INDEX IF NOT EXISTS idx_instances_node_id ON instances(node_id);
+  `);
+
   ensureLocalNode();
 
   const userCount = db.prepare('SELECT COUNT(*) as c FROM users').get() as { c: number };

@@ -71,7 +71,28 @@ function writeOwner(lockDir: string, owner: PanelLockOwner): void {
   fs.renameSync(tempPath, ownerPath);
 }
 
+/** 清理超过 7 天的 quarantine 锁目录，防止面板反复异常退出后累积垃圾目录。 */
+function cleanupOldQuarantines(dataDir: string): void {
+  const cutoffMs = Date.now() - 7 * 24 * 60 * 60 * 1000;
+  try {
+    for (const entry of fs.readdirSync(dataDir, { withFileTypes: true })) {
+      if (!entry.isDirectory() || !entry.name.startsWith(`${LOCK_DIR_NAME}.quarantine.`)) continue;
+      const dir = path.join(dataDir, entry.name);
+      try {
+        if (fs.statSync(dir).mtimeMs < cutoffMs) {
+          fs.rmSync(dir, { recursive: true, force: true });
+        }
+      } catch {
+        /* 单个目录清理失败不影响其他目录 */
+      }
+    }
+  } catch {
+    /* 数据目录不可读时跳过清理 */
+  }
+}
+
 function quarantineStaleLock(dataDir: string, lockDir: string): boolean {
+  cleanupOldQuarantines(dataDir);
   const quarantineName = `${LOCK_DIR_NAME}.quarantine.${Date.now()}.${process.pid}.${nanoid(8)}`;
   const quarantinePath = path.join(dataDir, quarantineName);
   try {

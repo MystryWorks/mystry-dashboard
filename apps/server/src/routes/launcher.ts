@@ -55,7 +55,10 @@ export async function launcherRoutes(
       }
 
       const summary = options.prepareShutdown();
+      // 客户端在响应刷新前断开时 reply 'finish' 不会触发，'close' 兜底启动关闭流程，
+      // 否则面板会停留在 503 拒服务空窗。startShutdown 内部对重复调用有去重。
       reply.raw.once('finish', options.startShutdown);
+      reply.raw.once('close', options.startShutdown);
       return reply.code(202).send({ accepted: true, ...summary });
     },
   );

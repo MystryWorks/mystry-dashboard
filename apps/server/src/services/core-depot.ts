@@ -689,6 +689,9 @@ function runInstallerAttempt(
     child.stderr.on('data', (c: Buffer) => {
       appendOutput(c);
     });
+    // 管道流 error 无监听器会成为未捕获异常；子进程退出时管道 EPIPE 属正常现象。
+    child.stdout.on('error', () => {});
+    child.stderr.on('error', () => {});
     child.once('error', (error) => finish(aborted || signal.aborted ? abortError(signal) : error));
     child.once('close', (code) => {
       if (aborted || signal.aborted) {
@@ -845,6 +848,7 @@ export async function deployCore(input: DeployCoreInput) {
         }
 
         writeEulaIfNeeded();
+        throwIfAborted(signal);
         report(95, '写入实例目录…');
         promoteTaskStagingToInstance(taskId, instanceId);
         registerPromotedInstance(instanceId, {

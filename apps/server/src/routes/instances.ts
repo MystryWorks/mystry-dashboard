@@ -68,7 +68,7 @@ export async function instanceRoutes(app: FastifyInstance): Promise<void> {
       return reply.code(400).send({ error: '名称不能为空' });
     }
     try {
-      return createInstance(req.body);
+      return createInstance({ ...req.body, name: req.body.name.trim() });
     } catch (err) {
       return reply.code(400).send({ error: err instanceof Error ? err.message : String(err) });
     }
@@ -81,10 +81,13 @@ export async function instanceRoutes(app: FastifyInstance): Promise<void> {
     if (req.validationError) {
       return reply.code(400).send({ error: '实例参数包含不支持的字段或格式不正确' });
     }
+    if (!getInstanceRow(req.params.id)) {
+      return reply.code(404).send({ error: '实例不存在' });
+    }
     try {
       return updateInstance(req.params.id, req.body);
     } catch (err) {
-      return reply.code(404).send({ error: err instanceof Error ? err.message : String(err) });
+      return reply.code(400).send({ error: err instanceof Error ? err.message : String(err) });
     }
   });
 
@@ -122,6 +125,9 @@ export async function instanceRoutes(app: FastifyInstance): Promise<void> {
   app.post<{ Params: { id: string }; Querystring: { force?: string } }>(
     '/api/instances/:id/stop',
     async (req, reply) => {
+      if (!getInstanceRow(req.params.id)) {
+        return reply.code(404).send({ error: '实例不存在' });
+      }
       try {
         await processManager.stop(req.params.id, req.query.force === '1');
         return getInstance(req.params.id);

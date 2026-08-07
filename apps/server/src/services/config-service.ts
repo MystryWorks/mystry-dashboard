@@ -169,12 +169,39 @@ export function parseProperties(content: string): PropertiesMap {
 }
 
 function replaceEntryValue(line: PropertyEntryLine, value: string): PropertyEntryLine {
-  const prefix = line.raw.slice(0, line.raw.indexOf(line.separator) + 1);
+  // 与 parseEntryLine 相同的扫描方式定位分隔符，跳过 key 中反斜杠转义的 \=。
+  let separatorIndex = -1;
+  for (let index = 0; index < line.raw.length; index += 1) {
+    const char = line.raw[index]!;
+    if (char === '\\') {
+      index += 1;
+      continue;
+    }
+    if (char === line.separator) {
+      separatorIndex = index;
+      break;
+    }
+  }
+  const prefix = separatorIndex === -1 ? line.raw : line.raw.slice(0, separatorIndex + 1);
   return {
     ...line,
     raw: `${prefix}${value}`,
-    value,
+    value: unescapePropertyValue(value),
   };
+}
+
+/** Java properties 转义：反斜杠与 \t \r \n \f 必须转义，否则写出后会被当作语法而非值。 */
+function escapePropertyValue(value: string): string {
+  return value.replace(/[\\\t\r\n\f]/g, (char) => {
+    const mapped: Record<string, string> = {
+      '\\': '\\\\',
+      '\t': '\\t',
+      '\r': '\\r',
+      '\n': '\\n',
+      '\f': '\\f',
+    };
+    return mapped[char] ?? char;
+  });
 }
 
 /**
@@ -190,11 +217,12 @@ export function applyPropertiesPatch(document: PropertiesDocument, patch: Proper
   const appended: PropertyLine[] = [];
 
   for (const [key, value] of Object.entries(patch)) {
+    const escapedValue = escapePropertyValue(value);
     const lastIndex = lastIndexByKey.get(key);
     if (lastIndex === undefined) {
       appended.push({
         kind: 'entry',
-        raw: `${key}=${value}`,
+        raw: `${key}=${escapedValue}`,
         key,
         separator: '=',
         value,
@@ -203,7 +231,7 @@ export function applyPropertiesPatch(document: PropertiesDocument, patch: Proper
     }
     const current = nextLines[lastIndex];
     if (current?.kind === 'entry') {
-      nextLines[lastIndex] = replaceEntryValue(current, value);
+      nextLines[lastIndex] = replaceEntryValue(current, escapedValue);
     }
   }
 
@@ -249,9 +277,8 @@ function writeFileAtomic(target: string, content: string): void {
     fs.closeSync(fd);
   }
   try {
-    if (fs.existsSync(target)) {
-      fs.rmSync(target, { force: true });
-    }
+    // 直接 rename 覆盖：POSIX 原子替换，Windows 上 libuv 使用
+    // MOVEFILE_REPLACE_EXISTING。不再先删除原文件，rename 失败时原文件仍保留。
     fs.renameSync(temp, target);
   } catch (error) {
     try {

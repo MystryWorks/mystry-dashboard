@@ -39,6 +39,14 @@ function parsePositiveInt(name: string, fallback: number): number {
   return value;
 }
 
+/** JWT 有效期：接受纯数字（毫秒）或 ms/s/m/h/d/w/y 时长字符串，启动时即校验。 */
+function parseJwtExpiresIn(): string | number {
+  const raw = process.env.JWT_EXPIRES_IN?.trim() || '2h';
+  if (/^\d+$/.test(raw)) return Number(raw);
+  if (/^\d+(ms|s|m|h|d|w|y)$/i.test(raw)) return raw;
+  throw new Error('JWT_EXPIRES_IN 必须是正整数（毫秒）或形如 2h/30m/7d 的时长字符串');
+}
+
 function parseOrigins(): string[] {
   const raw = process.env.CORS_ORIGINS === undefined
     ? 'http://127.0.0.1:5173,http://localhost:5173'
@@ -92,7 +100,7 @@ export const config = {
   jwtSecret,
   setupToken,
   launcherToken,
-  jwtExpiresIn: process.env.JWT_EXPIRES_IN?.trim() || '2h',
+  jwtExpiresIn: parseJwtExpiresIn(),
   corsOrigins: parseOrigins(),
   repoRoot,
   homeDir,

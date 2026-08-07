@@ -100,6 +100,8 @@ function FilesTab({ instanceId }: { instanceId: string }) {
   const [renaming, setRenaming] = useState(false);
   const editDialogRef = useRef<HTMLDialogElement>(null);
   const renameDialogRef = useRef<HTMLDialogElement>(null);
+  /** 编辑代次：关闭编辑器或打开新文件时递增，用于丢弃慢响应到达的旧文件内容。 */
+  const editGenerationRef = useRef(0);
 
   const load = useCallback(async () => {
     try {
@@ -132,6 +134,7 @@ function FilesTab({ instanceId }: { instanceId: string }) {
   }, [renameTarget]);
 
   function closeEditor() {
+    editGenerationRef.current += 1;
     setEditPath(null);
     setContent('');
     setEditError('');
@@ -152,6 +155,8 @@ function FilesTab({ instanceId }: { instanceId: string }) {
 
   async function startEdit(file: FileEntry) {
     if (!canEditFile(file)) return;
+    const generation = editGenerationRef.current + 1;
+    editGenerationRef.current = generation;
     setLoadingEdit(true);
     setEditError('');
     setEditPath(file.path);
@@ -160,11 +165,14 @@ function FilesTab({ instanceId }: { instanceId: string }) {
       const res = await api<{ content: string }>(
         `/api/instances/${instanceId}/files/content?path=${encodeURIComponent(file.path)}`,
       );
+      // 期间可能已关闭编辑器或打开其他文件，过期响应必须丢弃，否则会把 A 内容存进 B 文件。
+      if (generation !== editGenerationRef.current) return;
       setContent(res.content);
     } catch (err) {
+      if (generation !== editGenerationRef.current) return;
       setEditError(err instanceof Error ? err.message : String(err));
     } finally {
-      setLoadingEdit(false);
+      if (generation === editGenerationRef.current) setLoadingEdit(false);
     }
   }
 
@@ -181,6 +189,7 @@ function FilesTab({ instanceId }: { instanceId: string }) {
       closeEditor();
       setSaved(true);
       setTimeout(() => setSaved(false), 1500);
+      await load();
     } catch (err) {
       setEditError(err instanceof Error ? err.message : String(err));
     } finally {

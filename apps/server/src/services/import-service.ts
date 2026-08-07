@@ -302,7 +302,8 @@ export async function importZipPackage(options: {
   javaRuntimeId?: string | null;
 }) {
   const zipPath = assertUploadPath(options.zipPath);
-  return runBackgroundTask('import', '正在导入安装包…', async (taskId, signal, report) => {
+  try {
+    return await runBackgroundTask('import', '正在导入安装包…', async (taskId, signal, report) => {
     let instanceId: string | null = null;
     let stagingToken: string | null = null;
     let completed = false;
@@ -379,5 +380,16 @@ export async function importZipPackage(options: {
         }
       }
     }
-  });
+    });
+  } catch (err) {
+    // 任务未进入队列（队列满/面板关闭中）时任务回调不会执行，兜底清理上传临时文件。
+    if (fs.existsSync(zipPath)) {
+      try {
+        removeUploadTemp(zipPath);
+      } catch {
+        /* 清理失败不覆盖原始错误 */
+      }
+    }
+    throw err;
+  }
 }

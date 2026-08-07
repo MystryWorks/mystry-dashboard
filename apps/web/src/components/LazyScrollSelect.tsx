@@ -107,14 +107,13 @@ export function LazyScrollSelect<T extends string | number>({
 
   function moveActive(delta: number) {
     if (options.length === 0) return;
-    setActiveIndex((current) => {
-      const base = current < 0 ? 0 : current;
-      const next = Math.max(0, Math.min(options.length - 1, base + delta));
-      if (next >= visibleCount - 1 && visibleCount < options.length) {
-        setVisibleCount((count) => Math.min(count + PAGE_SIZE, options.length));
-      }
-      return next;
-    });
+    // 在 updater 外计算下一个索引，避免在 setState updater 内调用其他 setState（非纯函数）。
+    const base = activeIndex < 0 ? 0 : activeIndex;
+    const next = Math.max(0, Math.min(options.length - 1, base + delta));
+    setActiveIndex(next);
+    if (next >= visibleCount - 1 && visibleCount < options.length) {
+      setVisibleCount((count) => Math.min(count + PAGE_SIZE, options.length));
+    }
   }
 
   function onTriggerKeyDown(event: React.KeyboardEvent<HTMLButtonElement>) {

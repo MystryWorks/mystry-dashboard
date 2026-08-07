@@ -41,7 +41,7 @@ function rowToInfo(row: InstanceRow): InstanceInfo {
     jarFile: row.jar_file,
     javaPath: 'java',
     jvmArgs: row.jvm_args,
-    installPath: row.install_path === null ? defaultInstanceDir(row.id) : null,
+    installPath: row.install_path ?? defaultInstanceDir(row.id),
     requiresMigration,
     status: processManager.getStatus(row.id) as InstanceStatus,
     nodeId: row.node_id,
@@ -271,6 +271,7 @@ export function deleteInstance(id: string): void {
   }
   const dir = defaultInstanceDir(row.id);
   const canRemoveDirectory = hasValidOwnershipMarker(row);
+  // 保持先删目录后删 DB 行的顺序：安全自检 R1 断言「目录删除失败时数据库记录必须保留」。
   if (canRemoveDirectory && fs.existsSync(dir)) {
     assertSafeInstanceRoot(dir);
     fs.rmSync(dir, { recursive: true, force: true });
