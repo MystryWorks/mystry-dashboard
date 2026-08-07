@@ -4,6 +4,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
+process.env.JWT_SECRET = 'a'.repeat(64);
+process.env.SETUP_TOKEN = 'b'.repeat(64);
+process.env.LAUNCHER_TOKEN = 'c'.repeat(64);
+
 test('R1-06: ticket 一次性消费与重放拒绝（内存服务）', async () => {
   const {
     resetDownloadTicketsForTests,

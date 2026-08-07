@@ -1,14 +1,18 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import {
-  applyPropertiesPatch,
-  parseProperties,
-  parsePropertiesDocument,
-  propertiesMapFromDocument,
-  stringifyPropertiesDocument,
-} from './config-service.js';
 
-test('保留注释、空行、重复键与分隔符，引导补丁只改最后定义', () => {
+process.env.JWT_SECRET = 'a'.repeat(64);
+process.env.SETUP_TOKEN = 'b'.repeat(64);
+process.env.LAUNCHER_TOKEN = 'c'.repeat(64);
+
+test('保留注释、空行、重复键与分隔符，引导补丁只改最后定义', async () => {
+  const {
+    applyPropertiesPatch,
+    parseProperties,
+    parsePropertiesDocument,
+    propertiesMapFromDocument,
+    stringifyPropertiesDocument,
+  } = await import('./config-service.js');
   const fixture = [
     '# 顶部注释',
     '',
@@ -35,7 +39,8 @@ test('保留注释、空行、重复键与分隔符，引导补丁只改最后�
   assert.match(output, /gamemode:survival/);
 });
 
-test('parseProperties 对重复键取最后有效值', () => {
+test('parseProperties 对重复键取最后有效值', async () => {
+  const { parseProperties } = await import('./config-service.js');
   const map = parseProperties('a=1\na=2\n# comment\nb=3\n');
   assert.deepEqual(map, { a: '2', b: '3' });
 });

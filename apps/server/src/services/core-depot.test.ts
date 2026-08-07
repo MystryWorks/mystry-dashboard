@@ -1,8 +1,12 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildResolvedCoreCacheBasename } from './core-depot.js';
 
-test('Paper 缓存键使用解析后的 build，旧 latest 键不会命中', () => {
+process.env.JWT_SECRET = 'a'.repeat(64);
+process.env.SETUP_TOKEN = 'b'.repeat(64);
+process.env.LAUNCHER_TOKEN = 'c'.repeat(64);
+
+test('Paper 缓存键使用解析后的 build，旧 latest 键不会命中', async () => {
+  const { buildResolvedCoreCacheBasename } = await import('./core-depot.js');
   const resolved = buildResolvedCoreCacheBasename('paper', '1.21.1', { build: 42 });
   const legacy = 'paper-1.21.1-latest-.jar'.replace(/[^\w.-]+/g, '_');
   const current = resolved.replace(/[^\w.-]+/g, '_');
@@ -10,7 +14,8 @@ test('Paper 缓存键使用解析后的 build，旧 latest 键不会命中', () 
   assert.match(current, /paper-1\.21\.1-build-42\.jar/);
 });
 
-test('Fabric 缓存键包含解析后的 loader 与 installer', () => {
+test('Fabric 缓存键包含解析后的 loader 与 installer', async () => {
+  const { buildResolvedCoreCacheBasename } = await import('./core-depot.js');
   const resolved = buildResolvedCoreCacheBasename('fabric', '1.21.1', {
     loader: '0.16.9',
     installer: '1.0.1',

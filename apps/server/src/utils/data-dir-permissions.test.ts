@@ -37,7 +37,7 @@ test('R1-02: 过宽权限应拒绝启动', { skip: process.platform === 'win32' 
     delete process.env.MMD_REPAIR_DATA_PERMISSIONS;
     fs.rmSync(root, { recursive: true, force: true });
   });
-  fs.mkdirSync(root, { mode: 0o755 });
+  fs.chmodSync(root, 0o755);
   const { ensureSecureDirectory, DataDirPermissionError } = await import('./data-dir-permissions.js');
   assert.throws(() => ensureSecureDirectory(root), DataDirPermissionError);
   process.env.MMD_REPAIR_DATA_PERMISSIONS = '1';
