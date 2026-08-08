@@ -31,6 +31,10 @@ const tickets = new Map<string, DownloadTicketRecord>();
 const expiredTickets = new Map<string, { userId: string; expiresAt: number }>();
 const EXPIRED_TOMBSTONE_MS = 60_000;
 
+/** 已消费票据的短时 tombstone：下载完成后仍能返回 consumed，避免前端误判 404 为过期 */
+const consumedTickets = new Map<string, { userId: string; expiresAt: number }>();
+const CONSUMED_TOMBSTONE_MS = 60_000;
+
 function noopRelease(): void {}
 
 function releaseTicketSlot(record: DownloadTicketRecord): void {
@@ -50,6 +54,9 @@ function pruneExpired(now = Date.now()): void {
   }
   for (const [ticket, value] of expiredTickets) {
     if (value.expiresAt <= now) expiredTickets.delete(ticket);
+  }
+  for (const [ticket, value] of consumedTickets) {
+    if (value.expiresAt <= now) consumedTickets.delete(ticket);
   }
 }
 
@@ -104,6 +111,10 @@ export function getDownloadTicketStatus(
   if (tombstone && tombstone.userId === userId) {
     return { status: 'expired', error: '下载票据已过期' };
   }
+  const consumed = consumedTickets.get(ticket);
+  if (consumed && consumed.userId === userId) {
+    return { status: 'consumed' };
+  }
   return null;
 }
 
@@ -137,6 +148,10 @@ export function completeDownloadStream(ticket: string): void {
   releaseTicketSlot(value);
   value.status = 'consumed';
   tickets.delete(ticket);
+  consumedTickets.set(ticket, {
+    userId: value.userId,
+    expiresAt: Date.now() + CONSUMED_TOMBSTONE_MS,
+  });
 }
 
 export function failDownloadStream(ticket: string, error: string): void {
@@ -204,4 +219,5 @@ export function resetDownloadTicketsForTests(): void {
   }
   tickets.clear();
   expiredTickets.clear();
+  consumedTickets.clear();
 }

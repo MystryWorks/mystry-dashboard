@@ -57,3 +57,41 @@ test('R1-06: GET 开流失败应通过 ticket 状态查询反馈 SPA', async () 
   assert.equal(status?.status, 'failed');
   assert.match(status?.error ?? '', /文件不存在/);
 });
+
+test('R1-06: 下载完成后状态查询返回 consumed 而非 404（短时 tombstone）', async () => {
+  const {
+    resetDownloadTicketsForTests,
+    reserveDownloadTicket,
+    beginDownloadStream,
+    completeDownloadStream,
+    getDownloadTicketStatus,
+  } = await import('../services/download-ticket-service.js');
+  resetDownloadTicketsForTests();
+  const issued = reserveDownloadTicket('user-1', 'inst-1', 'logs/latest.log', () => {});
+  assert.equal(beginDownloadStream(issued.ticket, 'inst-1', 'logs/latest.log')?.userId, 'user-1');
+  completeDownloadStream(issued.ticket);
+  const status = getDownloadTicketStatus(issued.ticket, 'user-1');
+  assert.equal(status?.status, 'consumed');
+  assert.equal(getDownloadTicketStatus(issued.ticket, 'user-2'), null);
+});
+
+test('R1-06: consumed tombstone 过期后状态查询回落 null', async () => {
+  const { mock } = test;
+  mock.timers.enable({ now: 1_000_000, apis: ['Date'] });
+  try {
+    const {
+      resetDownloadTicketsForTests,
+      reserveDownloadTicket,
+      completeDownloadStream,
+      getDownloadTicketStatus,
+    } = await import('../services/download-ticket-service.js');
+    resetDownloadTicketsForTests();
+    const issued = reserveDownloadTicket('user-1', 'inst-1', 'logs/latest.log', () => {});
+    completeDownloadStream(issued.ticket);
+    assert.equal(getDownloadTicketStatus(issued.ticket, 'user-1')?.status, 'consumed');
+    mock.timers.tick(61_000);
+    assert.equal(getDownloadTicketStatus(issued.ticket, 'user-1'), null);
+  } finally {
+    mock.timers.reset();
+  }
+});
