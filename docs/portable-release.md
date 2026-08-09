@@ -143,6 +143,22 @@ node scripts/portable/package-portable.mjs --platform win32 --arch x64 --output-
 node scripts/portable/smoke-portable.mjs release/mmd-v0.2.0-preview.1-windows-x64.zip
 ```
 
+以上流程可一键完成（在目标平台原生运行，自动使用当前平台与架构，并生成压缩包、SHA256SUMS 与 SBOM）：
+
+```bash
+npm run package:release
+```
+
+Windows 用户也可直接双击 `scripts/portable/package-release.cmd`。参数：
+
+- `--skip-install`：跳过 `npm ci`（需已有依赖）
+- `--skip-verify`：跳过 `verify` 与生产依赖审计，仅构建后打包（开发自测）
+- `--skip-smoke`：跳过最终压缩包冒烟验证
+- `--no-force`：已有同名压缩包时拒绝覆盖
+- `--allow-dirty`：允许脏工作树打包（非发布用途）
+- `--output-dir <目录>`：指定输出目录，默认 `release`
+- `--runtime-dir <目录>`：复用本机已下载的 Node 运行时，不重新下载
+
 `package-portable.mjs` 写入 `manifest.json` 的 Git SHA 优先取自当前 checkout 的 `git rev-parse HEAD`（而非 workflow 的 `GITHUB_SHA`）。正式资产要求工作树干净；本地非发布调试可设置 `MMD_PORTABLE_ALLOW_DIRTY=1` 或传入 `--allow-dirty`。
 
 目标平台必须与构建机平台、架构一致。发布流程位于 `.github/workflows/portable-release.yml`：只有位于 `main` 历史、版本与根 `package.json` 一致、且 checkout 工作树干净的现有 `v*` 标签才能触发发布；prepare 阶段执行 `npm run verify` 与生产依赖审计；Windows x64 矩阵 job 显式执行 `npm run windows:test`；Win/Linux x64 两个最终压缩包都必须重新解压并通过健康检查，Release job 才会生成校验和、经指纹绑定的 GPG 签名、SBOM 和自动 Release Notes。第三方 Actions 使用固定 commit SHA，见 [`.github/actions-pins.md`](../.github/actions-pins.md)。

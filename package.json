@@ -30,6 +30,7 @@
     "test:static": "npm run test:static -w @mmd/server",
     "verify": "npm run knowledge:check && npm run knowledge:test && npm run portable:test && npm run windows:test && npm run build -w @mmd/shared && npm run typecheck && npm run test:security -w @mmd/server && npm run test:regression -w @mmd/server && npm run build && npm run test:static",
     "audit:production": "node scripts/check-production-audit.mjs",
+    "package:release": "node scripts/portable/package-release.mjs",
     "portable:package": "node scripts/portable/package-portable.mjs",
     "portable:smoke": "node scripts/portable/smoke-portable.mjs",
     "portable:checksums": "node scripts/portable/create-checksums.mjs",
