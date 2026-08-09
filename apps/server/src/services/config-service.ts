@@ -303,9 +303,11 @@ export function readServerProperties(instanceId: string): PropertiesMap {
 export function previewServerPropertiesWrite(instanceId: string, patch: PropertiesMap): string {
   const root = getInstanceDir(instanceId);
   const file = resolveSafePath(root, 'server.properties');
+  // 默认文档不混入 patch：先解析纯默认值，再统一经 applyPropertiesPatch 转义应用，
+  // 避免未转义值（换行、尾随反斜杠）在解析阶段被拆成额外属性或吞并下一行。
   const baseDocument = fs.existsSync(file)
     ? parsePropertiesDocument(fs.readFileSync(file, 'utf8'))
-    : parsePropertiesDocument(stringifyProperties({ ...DEFAULT_PROPERTIES, ...patch }));
+    : parsePropertiesDocument(stringifyProperties({ ...DEFAULT_PROPERTIES }));
   return stringifyPropertiesDocument(applyPropertiesPatch(baseDocument, patch));
 }
 
@@ -314,9 +316,11 @@ export function writeServerProperties(instanceId: string, patch: PropertiesMap):
   const file = resolveSafePath(root, 'server.properties');
   assertMutablePropertiesFile(instanceId, file);
 
+  // 默认文档不混入 patch：先解析纯默认值，再统一经 applyPropertiesPatch 转义应用，
+  // 避免未转义值（换行、尾随反斜杠）在解析阶段被拆成额外属性或吞并下一行。
   const baseDocument = fs.existsSync(file)
     ? parsePropertiesDocument(fs.readFileSync(file, 'utf8'))
-    : parsePropertiesDocument(stringifyProperties({ ...DEFAULT_PROPERTIES, ...patch }));
+    : parsePropertiesDocument(stringifyProperties({ ...DEFAULT_PROPERTIES }));
   const nextContent = stringifyPropertiesDocument(applyPropertiesPatch(baseDocument, patch));
   writeFileAtomic(file, nextContent);
 }

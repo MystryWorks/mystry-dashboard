@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import type { InstanceInfo } from '@mmd/shared';
 import { isInstanceStopPendingResult } from '@mmd/shared';
@@ -13,6 +13,8 @@ const statusLabel: Record<string, string> = {
   stopping: '停止中',
   crashed: '已崩溃',
 };
+
+type LoadState = 'loading' | 'loaded' | 'error';
 
 function canStartInstance(status: InstanceInfo['status']): boolean {
   return status === 'stopped' || status === 'crashed';
@@ -34,7 +36,10 @@ function isAlive(status: InstanceInfo['status']): boolean {
 export function DashboardPage() {
   const navigate = useNavigate();
   const [instances, setInstances] = useState<InstanceInfo[]>([]);
-  const [error, setError] = useState('');
+  const [loadState, setLoadState] = useState<LoadState>('loading');
+  const [loadError, setLoadError] = useState('');
+  const [actionError, setActionError] = useState('');
+  const latestLoadRequestRef = useRef(0);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [restartTarget, setRestartTarget] = useState<InstanceInfo | null>(null);
   const [forceStopTarget, setForceStopTarget] = useState<InstanceInfo | null>(null);
@@ -47,11 +52,17 @@ export function DashboardPage() {
   const [emptyBusy, setEmptyBusy] = useState(false);
 
   const load = useCallback(async () => {
+    const requestId = ++latestLoadRequestRef.current;
     try {
-      setInstances(await api<InstanceInfo[]>('/api/instances'));
-      setError('');
+      const result = await api<InstanceInfo[]>('/api/instances');
+      if (requestId !== latestLoadRequestRef.current) return;
+      setInstances(result);
+      setLoadState('loaded');
+      setLoadError('');
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      if (requestId !== latestLoadRequestRef.current) return;
+      setLoadError(err instanceof Error ? err.message : String(err));
+      setLoadState((current) => (current === 'loaded' ? 'loaded' : 'error'));
     }
   }, []);
 
@@ -61,8 +72,15 @@ export function DashboardPage() {
     return () => clearInterval(timer);
   }, [load]);
 
+  function retryLoad(): void {
+    setLoadError('');
+    setLoadState('loading');
+    void load();
+  }
+
   async function act(id: string, action: 'start' | 'stop' | 'restart', options?: { force?: boolean }) {
     setBusyId(id);
+    setActionError('');
     try {
       const query = action === 'stop' && options?.force ? '?force=1' : '';
       const result = await api<InstanceInfo | import('@mmd/shared').InstanceStopPendingResult>(
@@ -70,13 +88,13 @@ export function DashboardPage() {
         { method: 'POST' },
       );
       if (isInstanceStopPendingResult(result)) {
-        setError(result.error || '服务仍在保存，请等待或选择强制停止');
+        setActionError(result.error || '服务仍在保存，请等待或选择强制停止');
       } else {
-        setError('');
+        setActionError('');
       }
       await load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setActionError(err instanceof Error ? err.message : String(err));
     } finally {
       setBusyId(null);
     }
@@ -100,12 +118,13 @@ export function DashboardPage() {
     if (!deleteTarget) return;
     const target = deleteTarget;
     setBusyId(target.id);
+    setActionError('');
     try {
       await api(`/api/instances/${target.id}`, { method: 'DELETE' });
       setDeleteTarget(null);
       await load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setActionError(err instanceof Error ? err.message : String(err));
     } finally {
       setBusyId(null);
     }
@@ -113,7 +132,7 @@ export function DashboardPage() {
 
   async function confirmCreateEmpty() {
     setEmptyBusy(true);
-    setError('');
+    setActionError('');
     try {
       const inst = await api<InstanceInfo>('/api/instances', {
         method: 'POST',
@@ -128,7 +147,7 @@ export function DashboardPage() {
       setEmptyOpen(false);
       navigate(`/instances/${inst.id}/files`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setActionError(err instanceof Error ? err.message : String(err));
     } finally {
       setEmptyBusy(false);
     }
@@ -137,46 +156,54 @@ export function DashboardPage() {
   return (
     <div>
       <header className="dashboard-header">
-        <div>
+        <div className="dashboard-create-actions">
           <h1 className="page-title">实例总览</h1>
           <p className="page-desc">管理本机 Minecraft 服务端进程。</p>
         </div>
-        <nav className="dashboard-actions" aria-label="创建实例">
-          <Link className="quick-action quick-action-primary" to="/deploy">
-            <span className="quick-action-icon" aria-hidden="true">＋</span>
-            <span className="quick-action-copy">
-              <strong>一键部署</strong>
-              <small>在线选择服务端核心</small>
-            </span>
-            <span className="quick-action-arrow" aria-hidden="true">›</span>
-          </Link>
-          <Link className="quick-action" to="/import">
-            <span className="quick-action-icon" aria-hidden="true">⇩</span>
-            <span className="quick-action-copy">
-              <strong>导入已有服务端</strong>
-              <small>接管同机目录或上传 ZIP</small>
-            </span>
-            <span className="quick-action-arrow" aria-hidden="true">›</span>
-          </Link>
-          <button
-            type="button"
-            className="quick-action"
-            onClick={() => setEmptyOpen(true)}
-          >
-            <span className="quick-action-icon" aria-hidden="true">⬆</span>
-            <span className="quick-action-copy">
-              <strong>创建空实例</strong>
-              <small>上传自定义 server.jar</small>
-            </span>
-            <span className="quick-action-arrow" aria-hidden="true">›</span>
+        <div>
+          <nav className="dashboard-actions" aria-label="创建实例">
+            <Link className="quick-action quick-action-primary" to="/deploy">
+              <span className="quick-action-icon" aria-hidden="true">＋</span>
+              <span className="quick-action-copy">
+                <strong>一键部署</strong>
+                <small>在线选择服务端核心</small>
+              </span>
+              <span className="quick-action-arrow" aria-hidden="true">›</span>
+            </Link>
+            <Link className="quick-action" to="/import">
+              <span className="quick-action-icon" aria-hidden="true">⇩</span>
+              <span className="quick-action-copy">
+                <strong>导入已有服务端</strong>
+                <small>接管同机目录或上传 ZIP</small>
+              </span>
+              <span className="quick-action-arrow" aria-hidden="true">›</span>
+            </Link>
+          </nav>
+          <button type="button" className="dashboard-empty-action" onClick={() => setEmptyOpen(true)}>
+            创建空实例（上传自定义 server.jar）
           </button>
-        </nav>
+        </div>
       </header>
 
-      {error && <p className="error">{error}</p>}
+      {actionError && <p className="error" role="alert">{actionError}</p>}
+      {loadError && (
+        <p className="error" role="alert">
+          {loadError}
+          {loadState === 'loaded' ? ' 当前正在显示上次成功加载的实例数据。' : ''}
+        </p>
+      )}
 
       <div className="panel">
-        {instances.length === 0 ? (
+        {loadState === 'loading' ? (
+          <p className="muted" role="status">正在加载实例列表…</p>
+        ) : loadState === 'error' ? (
+          <div role="alert">
+            <p className="muted">实例列表暂时不可用，请检查面板连接后重试。</p>
+            <button className="btn btn-ghost" type="button" onClick={retryLoad}>
+              重新加载
+            </button>
+          </div>
+        ) : instances.length === 0 ? (
           <p className="muted">暂无实例。可从「一键部署」下载核心，或导入面板外已有的服务端。</p>
         ) : (
           <table className="table">
@@ -205,51 +232,69 @@ export function DashboardPage() {
                       <Link className="btn btn-ghost" to={`/instances/${inst.id}`}>
                         查看实例
                       </Link>
-                      <button
-                        className="btn"
-                        type="button"
-                        disabled={busyId === inst.id || inst.requiresMigration || !canStartInstance(inst.status)}
-                        onClick={() => void act(inst.id, 'start')}
-                      >
-                        启动
-                      </button>
-                      <button
-                        className="btn btn-ghost"
-                        type="button"
-                        disabled={busyId === inst.id || inst.requiresMigration || !canStopInstance(inst.status)}
-                        onClick={() => void act(inst.id, 'stop')}
-                      >
-                        停止
-                      </button>
-                      <button
-                        className="btn btn-ghost"
-                        type="button"
-                        disabled={busyId === inst.id || inst.requiresMigration || !isAlive(inst.status)}
-                        onClick={() => setForceStopTarget(inst)}
-                      >
-                        强制停止
-                      </button>
-                      <button
-                        className="btn btn-ghost"
-                        type="button"
-                        disabled={busyId === inst.id || inst.requiresMigration || isLifecycleBusy(inst.status)}
-                        onClick={() => setRestartTarget(inst)}
-                      >
-                        重启
-                      </button>
-                      <button
-                        className="btn btn-danger"
-                        type="button"
-                        disabled={busyId === inst.id || (!inst.requiresMigration && isAlive(inst.status))}
-                        title={
-                          !inst.requiresMigration && isAlive(inst.status)
-                            ? '实例仍在运行，请先停止后再删除'
-                            : undefined
-                        }
-                        onClick={() => setDeleteTarget(inst)}
-                      >
-                        删除
-                      </button>
+                      {canStartInstance(inst.status) && (
+                        <button
+                          className="btn"
+                          type="button"
+                          disabled={busyId === inst.id || inst.requiresMigration}
+                          onClick={() => void act(inst.id, 'start')}
+                        >
+                          启动
+                        </button>
+                      )}
+                      {canStopInstance(inst.status) && (
+                        <button
+                          className="btn btn-ghost"
+                          type="button"
+                          disabled={busyId === inst.id || inst.requiresMigration}
+                          onClick={() => void act(inst.id, 'stop')}
+                        >
+                          停止
+                        </button>
+                      )}
+                      <details className="action-menu">
+                        <summary className="btn btn-ghost">更多操作</summary>
+                        <div className="btn-row">
+                          <button
+                            className="btn btn-ghost"
+                            type="button"
+                            disabled={busyId === inst.id || inst.requiresMigration || !isAlive(inst.status)}
+                            onClick={(event) => {
+                              event.currentTarget.closest('details')?.removeAttribute('open');
+                              setForceStopTarget(inst);
+                            }}
+                          >
+                            强制停止
+                          </button>
+                          <button
+                            className="btn btn-ghost"
+                            type="button"
+                            disabled={busyId === inst.id || inst.requiresMigration || isLifecycleBusy(inst.status)}
+                            onClick={(event) => {
+                              event.currentTarget.closest('details')?.removeAttribute('open');
+                              setRestartTarget(inst);
+                            }}
+                          >
+                            重启
+                          </button>
+                          <button
+                            className="btn btn-danger"
+                            type="button"
+                            disabled={busyId === inst.id || (!inst.requiresMigration && isAlive(inst.status))}
+                            title={
+                              !inst.requiresMigration && isAlive(inst.status)
+                                ? '实例仍在运行，请先停止后再删除'
+                                : undefined
+                            }
+                            onClick={(event) => {
+                              event.currentTarget.closest('details')?.removeAttribute('open');
+                              setDeleteTarget(inst);
+                            }}
+                          >
+                            删除
+                          </button>
+                        </div>
+                      </details>
                     </div>
                   </td>
                 </tr>

@@ -13,9 +13,11 @@ const RATE_LIMIT_BACKOFF_MS = 10_000;
 let tasks: TaskInfo[] = [];
 let loadError = '';
 let lastSuccessAt: string | null = null;
+let hasLoaded = false;
 let timer: ReturnType<typeof setTimeout> | null = null;
 let polling = false;
 let pollingGeneration = 0;
+let inFlight: { generation: number; promise: Promise<void> } | null = null;
 const listeners = new Set<() => void>();
 
 function emit(): void {
@@ -26,26 +28,42 @@ function isActive(generation: number): boolean {
   return polling && listeners.size > 0 && generation === pollingGeneration;
 }
 
-async function tick(): Promise<void> {
-  const generation = pollingGeneration;
-  if (!isActive(generation)) return;
+async function runTick(generation: number): Promise<void> {
   try {
     const nextTasks = await listTasks();
     if (!isActive(generation)) return;
     tasks = nextTasks;
     loadError = '';
     lastSuccessAt = new Date().toISOString();
+    hasLoaded = true;
     schedule(POLL_INTERVAL_MS, generation);
   } catch (error) {
     if (!isActive(generation)) return;
     // 429 说明服务端限流，退避后继续；401 等错误交给全局处理，这里仅记录。
     loadError = error instanceof Error ? error.message : String(error);
+    hasLoaded = true;
     schedule(
       error instanceof ApiError && error.status === 429 ? RATE_LIMIT_BACKOFF_MS : POLL_INTERVAL_MS,
       generation,
     );
   }
   if (isActive(generation)) emit();
+}
+
+function tick(): Promise<void> {
+  const generation = pollingGeneration;
+  if (!isActive(generation)) return Promise.resolve();
+  if (inFlight?.generation === generation) return inFlight.promise;
+  if (timer) {
+    clearTimeout(timer);
+    timer = null;
+  }
+
+  const promise = runTick(generation).finally(() => {
+    if (inFlight?.promise === promise) inFlight = null;
+  });
+  inFlight = { generation, promise };
+  return promise;
 }
 
 function schedule(delay: number, generation: number): void {
@@ -77,6 +95,7 @@ function start(): void {
 function stop(): void {
   polling = false;
   pollingGeneration += 1;
+  inFlight = null;
   if (timer) {
     clearTimeout(timer);
     timer = null;
@@ -86,6 +105,7 @@ function stop(): void {
   tasks = [];
   loadError = '';
   lastSuccessAt = null;
+  hasLoaded = false;
 }
 
 export function retryTaskCenterPoll(): void {
@@ -96,6 +116,7 @@ export function retryTaskCenterPoll(): void {
 export function useTaskCenter(): {
   tasks: TaskInfo[];
   error: string;
+  loading: boolean;
   activeCount: number;
   lastSuccessAt: string | null;
   retry: () => void;
@@ -116,6 +137,7 @@ export function useTaskCenter(): {
   return {
     tasks,
     error: loadError,
+    loading: !hasLoaded,
     activeCount: tasks.filter((task) => task.status === 'pending' || task.status === 'running').length,
     lastSuccessAt,
     retry: useCallback(() => retryRef.current(), []),

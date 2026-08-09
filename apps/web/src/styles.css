@@ -8,6 +8,7 @@
   --accent: #f062a6;
   --accent-hover: #ff7ab8;
   --danger: #ff5d7d;
+  --danger-hover: #ff7691;
   --warn: #e0a84a;
   --ok: #65d6a0;
   --glow-1: rgba(112, 27, 73, 0.52);
@@ -19,6 +20,7 @@
   --card-row: rgba(26, 17, 24, 0.72);
   --badge-bg: #35232f;
   --on-accent: #2b091b;
+  --on-danger: #2b091b;
   --editor-bg: #0b080c;
   --editor-border: #3a2634;
   --quick-gradient: linear-gradient(135deg, rgba(240, 98, 166, 0.24), rgba(67, 28, 53, 0.88));
@@ -42,6 +44,7 @@
   --accent: #d6337f;
   --accent-hover: #b02669;
   --danger: #cf2f55;
+  --danger-hover: #ad2348;
   --warn: #9a6b12;
   --ok: #237a52;
   --glow-1: rgba(240, 98, 166, 0.16);
@@ -53,6 +56,7 @@
   --card-row: rgba(255, 255, 255, 0.75);
   --badge-bg: #f2e0ea;
   --on-accent: #ffffff;
+  --on-danger: #ffffff;
   --editor-bg: #fdf7fa;
   --editor-border: #e2c8d8;
   --quick-gradient: linear-gradient(135deg, rgba(214, 51, 127, 0.14), rgba(255, 255, 255, 0.9));
@@ -347,7 +351,12 @@ button {
 
 .btn-danger {
   background: var(--danger);
-  color: #fff;
+  color: var(--on-danger);
+}
+
+.btn-danger:hover {
+  background: var(--danger-hover);
+  color: var(--on-danger);
 }
 
 .btn-row {
@@ -589,6 +598,67 @@ button {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.65rem;
+}
+
+.dashboard-create-actions {
+  min-width: min(100%, 32rem);
+}
+
+.dashboard-empty-action {
+  display: block;
+  margin: 0.55rem 0 0 auto;
+  padding: 0.25rem 0;
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  text-align: right;
+  transition: color 0.18s ease;
+}
+
+.dashboard-empty-action:hover {
+  color: var(--accent-hover);
+  text-decoration: underline;
+  text-underline-offset: 0.2rem;
+}
+
+.action-menu {
+  position: relative;
+}
+
+.action-menu > summary {
+  list-style: none;
+  user-select: none;
+}
+
+.action-menu > summary::-webkit-details-marker {
+  display: none;
+}
+
+.action-menu[open] > summary {
+  border-color: var(--accent);
+  background: var(--bg-elevated);
+}
+
+.action-menu > .btn-row {
+  position: absolute;
+  top: calc(100% + 0.4rem);
+  right: 0;
+  z-index: 30;
+  min-width: 10rem;
+  flex-direction: column;
+  flex-wrap: nowrap;
+  padding: 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg-panel);
+  box-shadow: 0 14px 36px rgba(0, 0, 0, 0.38);
+}
+
+.action-menu > .btn-row .btn {
+  width: 100%;
+  justify-content: flex-start;
+  white-space: nowrap;
 }
 
 .quick-action {
@@ -836,8 +906,13 @@ button {
   border-radius: 0;
 }
 
-.lazy-select-option:hover {
+.lazy-select-option:hover,
+.lazy-select-option.is-active {
   background: rgba(240, 98, 166, 0.12);
+}
+
+.lazy-select-option.is-active {
+  box-shadow: inset 3px 0 var(--accent);
 }
 
 .lazy-select-option.is-selected,
@@ -1247,7 +1322,7 @@ button {
   padding: 0 0.25rem;
   border-radius: 999px;
   background: var(--accent);
-  color: #fff;
+  color: var(--on-accent);
   font-size: 0.68rem;
   font-weight: 700;
   line-height: 1.05rem;
@@ -1420,6 +1495,7 @@ button {
     flex-direction: column;
   }
 
+  .dashboard-create-actions,
   .dashboard-actions {
     width: 100%;
   }
@@ -1578,6 +1654,21 @@ button {
 
   .table .btn-row {
     justify-content: flex-start;
+  }
+
+  .action-menu {
+    width: 100%;
+  }
+
+  .action-menu > summary {
+    width: 100%;
+  }
+
+  .action-menu > .btn-row {
+    position: static;
+    width: 100%;
+    margin-top: 0.5rem;
+    box-shadow: none;
   }
 
   .file-edit-dialog-textarea {

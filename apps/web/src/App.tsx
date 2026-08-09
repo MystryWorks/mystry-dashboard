@@ -1,18 +1,37 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { Menu, X } from 'lucide-react';
 import { useAuth } from './auth';
 import { TaskCenter } from './components/TaskCenter';
 import { ThemeToggle } from './components/ThemeToggle';
 import { LoginPage } from './pages/LoginPage';
-import { DashboardPage } from './pages/DashboardPage';
-import { InstancePage } from './pages/InstancePage';
-import { DeployPage } from './pages/DeployPage';
-import { ImportPage } from './pages/ImportPage';
-import { NodesPage } from './pages/NodesPage';
+
+const DashboardPage = lazy(() =>
+  import('./pages/DashboardPage').then(({ DashboardPage }) => ({ default: DashboardPage })),
+);
+const InstancePage = lazy(() =>
+  import('./pages/InstancePage').then(({ InstancePage }) => ({ default: InstancePage })),
+);
+const DeployPage = lazy(() =>
+  import('./pages/DeployPage').then(({ DeployPage }) => ({ default: DeployPage })),
+);
+const ImportPage = lazy(() =>
+  import('./pages/ImportPage').then(({ ImportPage }) => ({ default: ImportPage })),
+);
+const NodesPage = lazy(() =>
+  import('./pages/NodesPage').then(({ NodesPage }) => ({ default: NodesPage })),
+);
 
 const FOCUSABLE =
   'a[href], button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])';
+
+function PageLoading() {
+  return (
+    <div className="login-page" role="status" aria-live="polite">
+      页面加载中…
+    </div>
+  );
+}
 
 function Shell({ children }: { children: React.ReactNode }) {
   const { user, logout } = useAuth();
@@ -137,7 +156,11 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
   const { user, loading, needsSetup } = useAuth();
   if (loading) return <div className="login-page">加载中…</div>;
   if (needsSetup || !user) return <Navigate to="/login" replace />;
-  return <Shell>{children}</Shell>;
+  return (
+    <Shell>
+      <Suspense fallback={<PageLoading />}>{children}</Suspense>
+    </Shell>
+  );
 }
 
 export function App() {

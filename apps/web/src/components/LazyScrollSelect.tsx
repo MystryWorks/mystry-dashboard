@@ -23,6 +23,11 @@ function countForSelectedIndex(index: number, total: number): number {
   return Math.min(Math.ceil((index + 1) / PAGE_SIZE) * PAGE_SIZE, total);
 }
 
+/** 将活动索引限制在当前选项范围内，避免读屏器指向不存在的选项。 */
+function normalizeActiveIndex(index: number, total: number): number {
+  return index >= 0 && index < total ? index : -1;
+}
+
 export function LazyScrollSelect<T extends string | number>({
   value,
   options,
@@ -55,7 +60,7 @@ export function LazyScrollSelect<T extends string | number>({
       return;
     }
     const selectedIndex = value === '' ? -1 : options.indexOf(value as T);
-    setActiveIndex(selectedIndex >= 0 ? selectedIndex : 0);
+    setActiveIndex(selectedIndex >= 0 ? selectedIndex : options.length > 0 ? 0 : -1);
   }, [open, options, value]);
 
   useEffect(() => {
@@ -108,7 +113,8 @@ export function LazyScrollSelect<T extends string | number>({
   function moveActive(delta: number) {
     if (options.length === 0) return;
     // 在 updater 外计算下一个索引，避免在 setState updater 内调用其他 setState（非纯函数）。
-    const base = activeIndex < 0 ? 0 : activeIndex;
+    const currentIndex = normalizeActiveIndex(activeIndex, options.length);
+    const base = currentIndex < 0 ? 0 : currentIndex;
     const next = Math.max(0, Math.min(options.length - 1, base + delta));
     setActiveIndex(next);
     if (next >= visibleCount - 1 && visibleCount < options.length) {
@@ -180,6 +186,9 @@ export function LazyScrollSelect<T extends string | number>({
       : formatLabel(value as T);
   const hasValue = value !== '';
   const visibleOptions = options.slice(0, visibleCount);
+  const visibleActiveIndex = normalizeActiveIndex(activeIndex, visibleOptions.length);
+  const activeOptionId =
+    visibleActiveIndex >= 0 ? `${listboxId}-option-${visibleActiveIndex}` : undefined;
 
   return (
     <div className={`lazy-select${open ? ' is-open' : ''}`} ref={rootRef}>
@@ -204,6 +213,7 @@ export function LazyScrollSelect<T extends string | number>({
           className="lazy-select-panel"
           role="listbox"
           aria-label={ariaLabel}
+          aria-activedescendant={activeOptionId}
           ref={listRef}
           onScroll={handleScroll}
           onKeyDown={onPanelKeyDown}
@@ -217,9 +227,10 @@ export function LazyScrollSelect<T extends string | number>({
           )}
           {visibleOptions.map((opt, index) => {
             const selected = opt === value;
-            const active = index === activeIndex;
+            const active = index === visibleActiveIndex;
             return (
               <button
+                id={`${listboxId}-option-${index}`}
                 key={String(opt)}
                 type="button"
                 role="option"

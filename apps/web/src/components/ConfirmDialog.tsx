@@ -34,7 +34,8 @@ export function ConfirmDialog({
   const cancelHandledRef = useRef(false);
 
   function handleCancel(): void {
-    if (cancelHandledRef.current) return;
+    // 请求执行期间禁止 Escape、遮罩和关闭事件绕过 busy 锁。
+    if (busy || cancelHandledRef.current) return;
     cancelHandledRef.current = true;
     onCancel();
   }

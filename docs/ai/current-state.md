@@ -19,19 +19,19 @@
 - 部署/导入/ZIP 先写入 `DATA_DIR/.mmd-staging/<taskId>/<instanceId>`（marker 含 task/instance/token），校验通过后原子移动到 `instances/<id>`；崩溃恢复只清理 marker 匹配且任务未完成的 staging，**不会**因 `result.instanceId` 删除已注册实例或最终目录（见 D-016）。
 - 实例 start/stop/restart/delete 互斥：start 在首个异步步骤前占位 `starting`；普通 stop 只写 `stop\n`，超时返回仍在停止中且**不**隐式 `SIGKILL`；`force=1` 为唯一强杀路径（UI 二次确认）。
 - `server.properties` 读写、Java 状态检测、本机节点列表。
-- 响应式布局：`apps/web` 覆盖 390px 到 1920px 窗口宽度；`<=1024px` 侧边栏变为抽屉菜单，`<=768px` 实例/节点表格转为卡片列表，表单、弹窗和控制台同步适配窄屏。
+- 响应式布局：`apps/web` 覆盖 390px 到 1920px 窗口宽度；`<=1024px` 侧边栏变为抽屉菜单，`<=768px` 实例/节点表格转为卡片列表，表单、弹窗和控制台同步适配窄屏。总览固定保留「一键部署 / 导入已有服务端」两列主入口，空实例为次级入口；实例行只直接展示当前可执行的启动/停止，重启、强制停止和删除收进「更多操作」。
 - `PanelManager.cmd` 与本机 `POST /api/launcher/shutdown` 安全关闭通道。
 - 跨平台便携 `mmdctl`：包内 Node 启动、随机配置生成、后台 PID 指纹、健康检查、安全停止、状态和日志。
 - 目标平台原生便携组装与最终压缩包冒烟脚本；发布包物理复制 `@mmd/shared`，并生成文件级 manifest。
 - GitHub Preview Release 流水线：标签/main/版本门禁、Windows x64 与 Linux x64 矩阵、生产依赖审计、校验和签名、SBOM 和自动 Release Notes。
 - 上传、下载、任务、元数据、控制台和 ZIP 解压均有大小、并发或超时边界。
 - 任务中心：`GET /api/tasks` 返回最近 50 条任务；前端侧边栏与移动顶栏各有一个铃铛入口（共享单例轮询，429 退避、页面隐藏暂停），离开部署/导入页后仍可查看任务到终态。
-- 危险操作防护：重启与强制停止需弹窗确认；运行/启动/停止中的实例禁止删除；删除实例需输入实例名二次确认（待迁移实例仅移除记录，免输名）。
+- 危险操作防护：重启与强制停止需弹窗确认；运行/启动/停止中的实例禁止删除；删除实例需输入实例名二次确认（待迁移实例仅移除记录，免输名）；文件/目录与远程节点删除也使用统一确认弹窗，执行期间禁止 Escape 或遮罩绕过 busy 锁。
 - 控制台 WebSocket 断线后指数退避自动重连（1s→30s 封顶，重新申请一次性 ticket）。
 - 前端任一请求收到 401（登录/setup/status 除外）会清空登录态并自动跳回登录页。
-- server.properties 编辑为引导化表单：常用键按「基础/多人与权限/世界/性能」分组；服务端保留注释、空行、重复键与 `:` 分隔符，引导保存只改每个 key 的最后一次定义，并原子写入。
+- server.properties 编辑为引导化表单：常用键按「基础/多人与权限/世界/性能」分组；服务端保留注释、空行、重复键与 `:` 分隔符，引导保存只改每个 key 的最后一次定义，并原子写入。应用使用 Data Router 支持 SPA 导航阻塞；配置与实例设置页跟踪未保存状态，无变化时禁用保存，保存期间锁定表单，切换页面前使用统一确认弹窗，浏览器离开则使用 beforeunload；配置保存后明确提示重启生效。
 - 总览提供「创建空实例」：`POST /api/instances`（custom）成功后跳转实例文件页上传 Jar。
-- 任务中心轮询失败时显示「状态可能已过期」、上次成功刷新时间与重试；已有服务端来源列表仅做有界 ModLoader 预检，完整扫描在导入任务中执行。
+- 任务中心区分首次读取、空列表和轮询失败；失败时显示「状态可能已过期」、上次成功刷新时间与重试，弹层打开后接收焦点并支持 Escape 返回入口。部署/导入表单提交后锁定，进度值限制在 0–100 并带 progressbar 语义；已有服务端来源列表仅做有界 ModLoader 预检，完整扫描在导入任务中执行。
 - Java 多运行时：`GET /api/system/java-runtimes` 扫描 JAVA_HOME 与常见安装目录，候选必须文件名为 java/java.exe 且 `-version` 输出可解析才写入 `java_runtimes` 注册表；`detectJava` / 执行前复验 / Minecraft 与 installer 子进程均使用 `getMinecraftChildEnv()` 脱敏环境（不继承面板密钥与 `DATA_DIR`）。实例可通过 `javaRuntimeId` 绑定运行时（默认仍用 PATH 中的 java），启动和 Forge/NeoForge Installer 会在执行前再次验证绑定条目；部署页与实例设置页提供选择器，并按 MC 版本给出推荐 Java 版本与 mismatch 告警（`recommendedJavaMajor`：1.20.5+ → 21，1.17–1.20.4 → 17，更早 → 8）。
 - 新建数据根与子目录在 Unix 上默认 `0700`、敏感文件 `0600`，过宽权限会拒绝启动；Windows 上记录 ACL 无法自动校验时的阻断级警告（见 `data-dir-permissions.ts`）。
 - `PanelManager.ps1` 安全停服：`Get-PanelHealth` 校验 PID、状态文件指纹与健康 JSON 一致后才发送 `X-Launcher-Token`（伪造健康服务测试断言永不发送 token）。

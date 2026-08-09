@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useBlocker } from 'react-router-dom';
 import { api } from '../api';
+import { ConfirmDialog } from './ConfirmDialog';
 
 /**
  * server.properties 引导化编辑器：
@@ -21,6 +23,12 @@ interface FieldMeta {
 interface GroupMeta {
   title: string;
   fields: FieldMeta[];
+}
+
+function arePropertiesEqual(left: Record<string, string>, right: Record<string, string>): boolean {
+  const leftKeys = Object.keys(left);
+  const rightKeys = Object.keys(right);
+  return leftKeys.length === rightKeys.length && leftKeys.every((key) => left[key] === right[key]);
 }
 
 const GROUPS: GroupMeta[] = [
@@ -84,6 +92,7 @@ const GROUPS: GroupMeta[] = [
 
 export function ConfigTab({ instanceId }: { instanceId: string }) {
   const [props, setProps] = useState<Record<string, string>>({});
+  const [originalProps, setOriginalProps] = useState<Record<string, string>>({});
   const [error, setError] = useState('');
   const [saved, setSaved] = useState(false);
   const [loaded, setLoaded] = useState(false);
@@ -101,6 +110,7 @@ export function ConfigTab({ instanceId }: { instanceId: string }) {
       .then((nextProps) => {
         if (controller.signal.aborted) return;
         setProps(nextProps);
+        setOriginalProps(nextProps);
         setLoaded(true);
       })
       .catch((err: unknown) => {
@@ -110,8 +120,26 @@ export function ConfigTab({ instanceId }: { instanceId: string }) {
     return () => controller.abort();
   }, [instanceId]);
 
+  const dirty = loaded && !arePropertiesEqual(props, originalProps);
+  const blocker = useBlocker(dirty || saving);
+
+  useEffect(() => {
+    // 用户在保存过程中触发导航时，保存成功后直接继续原导航。
+    if (blocker.state === 'blocked' && !dirty && !saving) blocker.proceed();
+  }, [blocker, dirty, saving]);
+
+  useEffect(() => {
+    if (!dirty) return;
+    function preventUnload(event: BeforeUnloadEvent) {
+      event.preventDefault();
+      event.returnValue = true;
+    }
+    window.addEventListener('beforeunload', preventUnload);
+    return () => window.removeEventListener('beforeunload', preventUnload);
+  }, [dirty]);
+
   async function save() {
-    if (!loaded || saving) return;
+    if (!loaded || !dirty || saving) return;
     setSaving(true);
     setSaved(false);
     try {
@@ -119,9 +147,9 @@ export function ConfigTab({ instanceId }: { instanceId: string }) {
         method: 'PUT',
         json: props,
       });
+      setOriginalProps(props);
       setSaved(true);
       setError('');
-      setTimeout(() => setSaved(false), 1500);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -136,6 +164,7 @@ export function ConfigTab({ instanceId }: { instanceId: string }) {
   const advancedKeys = Object.keys(props).filter((key) => !knownKeys.has(key)).sort();
 
   function setValue(key: string, value: string) {
+    setSaved(false);
     setProps((prev) => ({ ...prev, [key]: value }));
   }
 
@@ -195,7 +224,8 @@ export function ConfigTab({ instanceId }: { instanceId: string }) {
       <div className="config-workspace-header">
         <p className="page-desc">编辑 server.properties（修改后需重启实例生效）。</p>
         {error && <p className="error">{error}</p>}
-        {saved && <p className="muted">已保存</p>}
+        {dirty && <p className="muted" role="status">有未保存的修改，离开页面会丢失。</p>}
+        {saved && !dirty && <p className="muted" role="status" aria-live="polite">已保存，重启实例后生效。</p>}
         {!loaded && !error && <p className="muted">正在读取配置…</p>}
       </div>
 
@@ -231,10 +261,29 @@ export function ConfigTab({ instanceId }: { instanceId: string }) {
       </div>
 
       <div className="config-workspace-footer">
-        <button className="btn" type="button" disabled={!loaded || saving} onClick={() => void save()}>
+        <button className="btn" type="button" disabled={!loaded || !dirty || saving} onClick={() => void save()}>
           {saving ? '保存中…' : '保存配置'}
         </button>
       </div>
+
+      <ConfirmDialog
+        open={blocker.state === 'blocked'}
+        title={saving ? '正在保存配置…' : '放弃未保存的配置修改？'}
+        description={
+          saving
+            ? '保存完成后会自动继续离开；保存期间无法放弃或取消。'
+            : '离开配置页会丢失尚未保存的 server.properties 修改。'
+        }
+        confirmLabel="放弃修改并离开"
+        danger={!saving}
+        busy={saving}
+        onConfirm={() => {
+          if (!saving && blocker.state === 'blocked') blocker.proceed();
+        }}
+        onCancel={() => {
+          if (!saving && blocker.state === 'blocked') blocker.reset();
+        }}
+      />
     </div>
   );
 }

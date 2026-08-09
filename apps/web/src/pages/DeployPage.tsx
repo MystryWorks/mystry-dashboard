@@ -208,9 +208,14 @@ export function DeployPage() {
     if (!coreType || !mcVersion) return;
     setBusy(true);
     setError('');
+    setProgress(null);
+    // 先建控制器并保存：POST 期间卸载也能立即中止，避免之后无人接管轮询。
+    const controller = new AbortController();
+    pollAbortRef.current = controller;
     try {
       const task = await api<TaskInfo>('/api/cores/deploy', {
         method: 'POST',
+        signal: controller.signal,
         json: {
           name,
           coreType,
@@ -223,9 +228,8 @@ export function DeployPage() {
           javaRuntimeId,
         },
       });
+      if (controller.signal.aborted) return;
       setProgress(task);
-      const controller = new AbortController();
-      pollAbortRef.current = controller;
       const result = await pollTask(task.id, (t) => setProgress(t as TaskInfo), controller.signal);
       if (result.instanceId) navigate(`/instances/${result.instanceId}`);
     } catch (err) {
@@ -245,6 +249,9 @@ export function DeployPage() {
     (coreType !== 'paper' || build !== '') &&
     (coreType !== 'fabric' || (Boolean(loaderVersion) && Boolean(installerVersion))) &&
     ((coreType !== 'forge' && coreType !== 'neoforge') || Boolean(loaderVersion));
+  const progressValue = progress
+    ? Math.min(100, Math.max(0, Number.isFinite(progress.progress) ? progress.progress : 0))
+    : 0;
 
   return (
     <div>
@@ -256,7 +263,12 @@ export function DeployPage() {
       <div className="panel" style={{ maxWidth: 640 }}>
         <div className="field">
           <label htmlFor={nameFieldId}>实例名称</label>
-          <input id={nameFieldId} value={name} onChange={(e) => setName(e.target.value)} />
+          <input
+            id={nameFieldId}
+            value={name}
+            disabled={busy}
+            onChange={(e) => setName(e.target.value)}
+          />
         </div>
         <div className="managed-note"><strong>实例目录由面板托管</strong><span>面板会使用 data/instances/&lt;实例 ID&gt;，不接受外部安装路径。</span></div>
         <div className="field">
@@ -264,6 +276,7 @@ export function DeployPage() {
           <select
             id={coreTypeFieldId}
             value={coreType}
+            disabled={busy}
             onChange={(e) => handleCoreTypeChange(e.target.value as CoreType | '')}
           >
             <option value="">请选择</option>
@@ -351,7 +364,12 @@ export function DeployPage() {
         />
         <div className="field">
           <label htmlFor={jvmArgsFieldId}>JVM 参数</label>
-          <input id={jvmArgsFieldId} value={jvmArgs} onChange={(e) => setJvmArgs(e.target.value)} />
+          <input
+            id={jvmArgsFieldId}
+            value={jvmArgs}
+            disabled={busy}
+            onChange={(e) => setJvmArgs(e.target.value)}
+          />
         </div>
         <label
           htmlFor={eulaFieldId}
@@ -361,20 +379,33 @@ export function DeployPage() {
             id={eulaFieldId}
             type="checkbox"
             checked={acceptEula}
+            disabled={busy}
             onChange={(e) => setAcceptEula(e.target.checked)}
           />
           自动接受 Mojang EULA（eula=true）
         </label>
 
         {progress && (
-          <div style={{ marginBottom: '1rem' }}>
+          <div style={{ marginBottom: '1rem' }} aria-live="polite">
             <div className="muted">
-              {progress.message}（{Math.round(progress.progress)}%）
+              {progress.message}（{Math.round(progressValue)}%）
             </div>
-            <div className="progress">
-              <span style={{ width: `${progress.progress}%` }} />
+            <div
+              className="progress"
+              role="progressbar"
+              aria-label="部署进度"
+              aria-valuenow={progressValue}
+              aria-valuemin={0}
+              aria-valuemax={100}
+            >
+              <span style={{ width: `${progressValue}%` }} />
             </div>
           </div>
+        )}
+        {busy && (
+          <p className="muted" role="status" aria-live="polite">
+            可离开此页，任务会继续在任务中心更新。
+          </p>
         )}
         {error && (
           <section className="error-summary" role="alert" aria-labelledby="deploy-error-title">

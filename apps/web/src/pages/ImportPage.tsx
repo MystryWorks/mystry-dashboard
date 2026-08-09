@@ -65,6 +65,9 @@ export function ImportPage() {
     () => sources.find((source) => source.id === sourceId) ?? null,
     [sourceId, sources],
   );
+  const progressValue = progress
+    ? Math.min(100, Math.max(0, Number.isFinite(progress.progress) ? progress.progress : 0))
+    : 0;
 
   useEffect(() => {
     if (selectedSource?.ready) setCoreType(selectedSource.coreType);
@@ -84,11 +87,15 @@ export function ImportPage() {
     setBusy(true);
     setError('');
     setProgress(null);
+    // 先建控制器并保存：POST 期间卸载也能立即中止，避免之后无人接管轮询。
+    const controller = new AbortController();
+    pollAbortRef.current = controller;
     try {
       let task: TaskInfo;
       if (mode === 'directory') {
         task = await api<TaskInfo>('/api/import/existing', {
           method: 'POST',
+          signal: controller.signal,
           json: {
             name,
             sourceId,
@@ -108,12 +115,11 @@ export function ImportPage() {
         form.append('acceptEula', acceptEula ? 'true' : 'false');
         if (javaRuntimeId) form.append('javaRuntimeId', javaRuntimeId);
         form.append('file', file!);
-        task = await apiForm<TaskInfo>('/api/import', form);
+        task = await apiForm<TaskInfo>('/api/import', form, { signal: controller.signal });
       }
 
+      if (controller.signal.aborted) return;
       setProgress(task);
-      const controller = new AbortController();
-      pollAbortRef.current = controller;
       const result = await pollTask(task.id, (next) => setProgress(next as TaskInfo), controller.signal);
       if (result.instanceId) navigate(`/instances/${result.instanceId}`);
     } catch (err) {
@@ -287,14 +293,26 @@ export function ImportPage() {
 
         {error && <p className="error">{error}</p>}
         {progress && (
-          <div className="import-progress">
+          <div className="import-progress" aria-live="polite">
             <div className="muted">
-              {progress.message}（{Math.round(progress.progress)}%）
+              {progress.message}（{Math.round(progressValue)}%）
             </div>
-            <div className="progress">
-              <span style={{ width: `${progress.progress}%` }} />
+            <div
+              className="progress"
+              role="progressbar"
+              aria-label="导入进度"
+              aria-valuenow={progressValue}
+              aria-valuemin={0}
+              aria-valuemax={100}
+            >
+              <span style={{ width: `${progressValue}%` }} />
             </div>
           </div>
+        )}
+        {busy && (
+          <p className="muted" role="status" aria-live="polite">
+            可离开此页，任务会继续在任务中心更新。
+          </p>
         )}
 
         <button

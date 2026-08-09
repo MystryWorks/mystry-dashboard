@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { Link, NavLink, Route, Routes, useParams } from 'react-router-dom';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Link, NavLink, Route, Routes, useBlocker, useParams } from 'react-router-dom';
 import type { FileEntry, InstanceInfo } from '@mmd/shared';
 import { isInstanceStopPendingResult } from '@mmd/shared';
 import { ApiError, api, apiForm, downloadAuthenticated } from '../api';
@@ -85,6 +85,8 @@ function MigrationPanel({ instance, onAdopt }: { instance: InstanceInfo; onAdopt
 function FilesTab({ instanceId }: { instanceId: string }) {
   const [path, setPath] = useState('');
   const [files, setFiles] = useState<FileEntry[]>([]);
+  const [loaded, setLoaded] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [editPath, setEditPath] = useState<string | null>(null);
   const [content, setContent] = useState('');
   const [error, setError] = useState('');
@@ -98,22 +100,45 @@ function FilesTab({ instanceId }: { instanceId: string }) {
   const [renameName, setRenameName] = useState('');
   const [renameError, setRenameError] = useState('');
   const [renaming, setRenaming] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<FileEntry | null>(null);
+  const [deleteError, setDeleteError] = useState('');
+  const [deleting, setDeleting] = useState(false);
   const editDialogRef = useRef<HTMLDialogElement>(null);
   const renameDialogRef = useRef<HTMLDialogElement>(null);
   /** 编辑代次：关闭编辑器或打开新文件时递增，用于丢弃慢响应到达的旧文件内容。 */
   const editGenerationRef = useRef(0);
+  /** 文件列表请求代次：切换目录后丢弃迟到的旧列表，避免覆盖当前视图。 */
+  const loadGenerationRef = useRef(0);
 
   const load = useCallback(async () => {
+    const generation = loadGenerationRef.current + 1;
+    loadGenerationRef.current = generation;
+    setLoading(true);
     try {
       const list = await api<FileEntry[]>(
         `/api/instances/${instanceId}/files?path=${encodeURIComponent(path)}`,
       );
+      if (generation !== loadGenerationRef.current) return;
       setFiles(list);
+      setLoaded(true);
       setError('');
     } catch (err) {
+      if (generation !== loadGenerationRef.current) return;
+      // 刷新失败时保留上一份成功列表，避免把暂时的网络问题误显示为目录为空。
       setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      if (generation === loadGenerationRef.current) setLoading(false);
     }
   }, [instanceId, path]);
+
+  useEffect(() => {
+    loadGenerationRef.current += 1;
+    setPath('');
+    setFiles([]);
+    setLoaded(false);
+    setLoading(true);
+    setError('');
+  }, [instanceId]);
 
   useEffect(() => {
     void load();
@@ -148,9 +173,23 @@ function FilesTab({ instanceId }: { instanceId: string }) {
     setRenaming(false);
   }
 
-  async function openDirectory(file: FileEntry) {
+  function closeDelete() {
+    setDeleteTarget(null);
+    setDeleteError('');
+  }
+
+  function changePath(nextPath: string) {
+    loadGenerationRef.current += 1;
+    setFiles([]);
+    setLoaded(false);
+    setLoading(true);
+    setError('');
+    setPath(nextPath);
+  }
+
+  function openDirectory(file: FileEntry) {
     if (!file.isDirectory) return;
-    setPath(file.path);
+    changePath(file.path);
   }
 
   async function startEdit(file: FileEntry) {
@@ -197,16 +236,26 @@ function FilesTab({ instanceId }: { instanceId: string }) {
     }
   }
 
-  async function remove(file: FileEntry) {
-    if (!confirm(`删除 ${file.name}？`)) return;
+  function requestRemove(file: FileEntry) {
+    setDeleteTarget(file);
+    setDeleteError('');
+  }
+
+  async function confirmRemove() {
+    if (!deleteTarget || deleting) return;
+    setDeleting(true);
+    setDeleteError('');
     try {
-      await api(`/api/instances/${instanceId}/files?path=${encodeURIComponent(file.path)}`, {
+      await api(`/api/instances/${instanceId}/files?path=${encodeURIComponent(deleteTarget.path)}`, {
         method: 'DELETE',
       });
-      if (editPath === file.path) closeEditor();
+      if (editPath === deleteTarget.path) closeEditor();
       await load();
+      closeDelete();
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setDeleteError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setDeleting(false);
     }
   }
 
@@ -302,7 +351,7 @@ function FilesTab({ instanceId }: { instanceId: string }) {
     if (!path) return;
     const parts = path.split('/').filter(Boolean);
     parts.pop();
-    setPath(parts.join('/'));
+    changePath(parts.join('/'));
   }
 
   return (
@@ -318,55 +367,88 @@ function FilesTab({ instanceId }: { instanceId: string }) {
           </label>
         </div>
         <p className="muted files-path">当前路径：/{path || ''}</p>
-        {error && <p className="error">{error}</p>}
+        {error && (
+          <div role="alert">
+            <p className="error">
+              {error}{loaded ? ' 当前继续显示上次成功读取的文件列表。' : ''}
+            </p>
+            <button className="btn btn-ghost" type="button" disabled={loading} onClick={() => void load()}>
+              {loading ? '正在重试…' : '重新读取'}
+            </button>
+          </div>
+        )}
         {saved && <p className="muted">已保存</p>}
+        {!loaded && loading && (
+          <p className="muted" role="status" aria-live="polite">
+            正在读取文件列表…
+          </p>
+        )}
+        {loaded && loading && (
+          <p className="muted" role="status" aria-live="polite">
+            正在刷新文件列表，继续显示上次结果。
+          </p>
+        )}
       </div>
 
-      <ul className="file-list">
-        {files.map((f) => (
-          <li key={f.path}>
-            {f.isDirectory ? (
-              <button className="linkish" type="button" onClick={() => void openDirectory(f)}>
-                <span className="file-kind dir" aria-hidden="true" />
-                {f.name}
-              </button>
-            ) : (
-              <span className="file-name">
-                <span className="file-kind file" aria-hidden="true" />
-                {f.name}
-              </span>
-            )}
-            <div className="file-actions">
-              {!f.isDirectory && (
+      {!loaded ? null : files.length === 0 ? (
+        <p className="muted" role="status">当前目录为空。</p>
+      ) : (
+        <ul className="file-list">
+          {files.map((f) => (
+            <li key={f.path}>
+              {f.isDirectory ? (
+                <button className="linkish" type="button" onClick={() => void openDirectory(f)}>
+                  <span className="file-kind dir" aria-hidden="true" />
+                  {f.name}
+                </button>
+              ) : (
+                <span className="file-name">
+                  <span className="file-kind file" aria-hidden="true" />
+                  {f.name}
+                </span>
+              )}
+              <div className="file-actions">
+                {!f.isDirectory && (
+                  <button
+                    className="btn btn-ghost"
+                    type="button"
+                    disabled={busyPath === f.path || deleting}
+                    onClick={() => void download(f)}
+                  >
+                    {busyPath === f.path ? '下载中…' : '下载'}
+                  </button>
+                )}
                 <button
                   className="btn btn-ghost"
                   type="button"
-                  disabled={busyPath === f.path}
-                  onClick={() => void download(f)}
+                  disabled={busyPath === f.path || renaming || deleting}
+                  onClick={() => startRename(f)}
                 >
-                  {busyPath === f.path ? '下载中…' : '下载'}
+                  重命名
                 </button>
-              )}
-              <button
-                className="btn btn-ghost"
-                type="button"
-                disabled={busyPath === f.path || renaming}
-                onClick={() => startRename(f)}
-              >
-                重命名
-              </button>
-              {canEditFile(f) && (
-                <button className="btn btn-ghost" type="button" onClick={() => void startEdit(f)}>
-                  编辑
+                {canEditFile(f) && (
+                  <button
+                    className="btn btn-ghost"
+                    type="button"
+                    disabled={deleting}
+                    onClick={() => void startEdit(f)}
+                  >
+                    编辑
+                  </button>
+                )}
+                <button
+                  className="btn btn-ghost"
+                  type="button"
+                  disabled={deleting}
+                  onClick={() => requestRemove(f)}
+                >
+                  删除
                 </button>
-              )}
-              <button className="btn btn-ghost" type="button" onClick={() => void remove(f)}>
-                删除
-              </button>
-            </div>
-          </li>
-        ))}
-      </ul>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
 
       <div className="files-footer field">
         <label>新建文件夹</label>
@@ -477,8 +559,53 @@ function FilesTab({ instanceId }: { instanceId: string }) {
           </footer>
         </div>
       </dialog>
+
+      <ConfirmDialog
+        open={Boolean(deleteTarget)}
+        title={deleteTarget?.isDirectory ? `删除文件夹「${deleteTarget.name}」？` : `删除文件「${deleteTarget?.name ?? ''}」？`}
+        description={
+          deleteTarget?.isDirectory ? (
+            <>
+              <p>将递归删除目录「/{deleteTarget.path}」及其中所有文件，且无法恢复。</p>
+              {deleting && <p role="status" aria-live="polite">正在删除文件夹…</p>}
+              {deleteError && <p className="error">{deleteError}</p>}
+            </>
+          ) : (
+            <>
+              <p>将删除文件「/{deleteTarget?.path ?? ''}」，且无法恢复。</p>
+              {deleting && <p role="status" aria-live="polite">正在删除文件…</p>}
+              {deleteError && <p className="error">{deleteError}</p>}
+            </>
+          )
+        }
+        confirmLabel="确认删除"
+        danger
+        busy={deleting}
+        onConfirm={() => void confirmRemove()}
+        onCancel={closeDelete}
+      />
     </div>
   );
+}
+
+type SettingsDraft = Pick<InstanceInfo, 'name' | 'jarFile' | 'jvmArgs' | 'acceptEula' | 'javaRuntimeId'>;
+
+function settingsFromInstance(instance: InstanceInfo): SettingsDraft {
+  return {
+    name: instance.name,
+    jarFile: instance.jarFile,
+    jvmArgs: instance.jvmArgs,
+    acceptEula: instance.acceptEula,
+    javaRuntimeId: instance.javaRuntimeId,
+  };
+}
+
+function isSameSettings(left: SettingsDraft, right: SettingsDraft): boolean {
+  return left.name === right.name
+    && left.jarFile === right.jarFile
+    && left.jvmArgs === right.jvmArgs
+    && left.acceptEula === right.acceptEula
+    && left.javaRuntimeId === right.javaRuntimeId;
 }
 
 function SettingsTab({
@@ -493,60 +620,160 @@ function SettingsTab({
   const [jvmArgs, setJvmArgs] = useState(instance.jvmArgs);
   const [acceptEula, setAcceptEula] = useState(instance.acceptEula);
   const [javaRuntimeId, setJavaRuntimeId] = useState<string | null>(instance.javaRuntimeId);
+  const [originalSettings, setOriginalSettings] = useState<SettingsDraft>(() => settingsFromInstance(instance));
   const [error, setError] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const draft = useMemo<SettingsDraft>(
+    () => ({ name, jarFile, jvmArgs, acceptEula, javaRuntimeId }),
+    [acceptEula, jarFile, javaRuntimeId, jvmArgs, name],
+  );
+  const dirty = !isSameSettings(draft, originalSettings);
+  const blocker = useBlocker(dirty || saving);
+
+  useEffect(() => {
+    // 用户在保存过程中触发导航时，保存成功后直接继续原导航。
+    if (blocker.state === 'blocked' && !dirty && !saving) blocker.proceed();
+  }, [blocker, dirty, saving]);
+
+  useEffect(() => {
+    if (!dirty) return;
+    function preventUnload(event: BeforeUnloadEvent) {
+      event.preventDefault();
+      event.returnValue = true;
+    }
+    window.addEventListener('beforeunload', preventUnload);
+    return () => window.removeEventListener('beforeunload', preventUnload);
+  }, [dirty]);
+
+  useEffect(() => {
+    const next = settingsFromInstance(instance);
+    setName(next.name);
+    setJarFile(next.jarFile);
+    setJvmArgs(next.jvmArgs);
+    setAcceptEula(next.acceptEula);
+    setJavaRuntimeId(next.javaRuntimeId);
+    setOriginalSettings(next);
+    setError('');
+    setSaved(false);
+  }, [instance.id]);
 
   async function save() {
+    if (!dirty || saving) return;
+    setSaving(true);
+    setSaved(false);
     try {
       await api(`/api/instances/${instance.id}`, {
         method: 'PATCH',
-        json: { name, jarFile, jvmArgs, acceptEula, javaRuntimeId },
+        json: draft,
       });
       setError('');
+      setOriginalSettings(draft);
+      setSaved(true);
       onSaved();
-      alert('设置已保存');
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setSaving(false);
     }
   }
 
   return (
     <div className="panel" style={{ maxWidth: 640 }}>
       {error && <p className="error">{error}</p>}
+      {dirty && <p className="muted" role="status">有未保存的设置。</p>}
+      {saved && !dirty && <p className="muted" role="status" aria-live="polite">设置已保存。</p>}
       <div className="field">
-        <label>名称</label>
-        <input value={name} onChange={(e) => setName(e.target.value)} />
+        <label htmlFor="instance-settings-name">名称</label>
+        <input
+          id="instance-settings-name"
+          value={name}
+          disabled={saving}
+          onChange={(e) => {
+            setName(e.target.value);
+            setSaved(false);
+          }}
+        />
       </div>
       <div className="field">
-        <label>Jar 文件名</label>
-        <input value={jarFile} onChange={(e) => setJarFile(e.target.value)} />
+        <label htmlFor="instance-settings-jar-file">Jar 文件名</label>
+        <input
+          id="instance-settings-jar-file"
+          value={jarFile}
+          disabled={saving}
+          onChange={(e) => {
+            setJarFile(e.target.value);
+            setSaved(false);
+          }}
+        />
       </div>
       <div className="field">
-        <label>安装路径</label>
-        <input value={instance.installPath ?? `配置的 DATA_DIR/instances/${instance.id}`} readOnly />
+        <label htmlFor="instance-settings-install-path">安装路径</label>
+        <input
+          id="instance-settings-install-path"
+          value={instance.installPath ?? `配置的 DATA_DIR/instances/${instance.id}`}
+          readOnly
+        />
         <p className="muted" style={{ margin: '0.25rem 0 0', fontSize: '0.8rem' }}>
           实例目录由面板托管，创建后不可修改。
         </p>
       </div>
       <div className="field">
-        <label>JVM 参数</label>
-        <input value={jvmArgs} onChange={(e) => setJvmArgs(e.target.value)} />
+        <label htmlFor="instance-settings-jvm-args">JVM 参数</label>
+        <input
+          id="instance-settings-jvm-args"
+          value={jvmArgs}
+          disabled={saving}
+          onChange={(e) => {
+            setJvmArgs(e.target.value);
+            setSaved(false);
+          }}
+        />
       </div>
       <JavaRuntimeSelect
         value={javaRuntimeId}
-        onChange={setJavaRuntimeId}
+        onChange={(nextRuntimeId) => {
+          setJavaRuntimeId(nextRuntimeId);
+          setSaved(false);
+        }}
         mcVersion={instance.mcVersion}
+        disabled={saving}
       />
-      <label style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginBottom: '1rem' }}>
+      <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginBottom: '1rem' }}>
         <input
+          id="instance-settings-accept-eula"
           type="checkbox"
           checked={acceptEula}
-          onChange={(e) => setAcceptEula(e.target.checked)}
+          disabled={saving}
+          onChange={(e) => {
+            setAcceptEula(e.target.checked);
+            setSaved(false);
+          }}
         />
-        启动时自动写入 eula=true
-      </label>
-      <button className="btn" type="button" onClick={() => void save()}>
-        保存设置
+        <label htmlFor="instance-settings-accept-eula">启动时自动写入 eula=true</label>
+      </div>
+      <button className="btn" type="button" disabled={!dirty || saving} onClick={() => void save()}>
+        {saving ? '保存中…' : '保存设置'}
       </button>
+
+      <ConfirmDialog
+        open={blocker.state === 'blocked'}
+        title={saving ? '正在保存设置…' : '放弃未保存的设置修改？'}
+        description={
+          saving
+            ? '保存完成后会自动继续离开；保存期间无法放弃或取消。'
+            : '离开设置页会丢失尚未保存的实例设置。'
+        }
+        confirmLabel="放弃修改并离开"
+        danger={!saving}
+        busy={saving}
+        onConfirm={() => {
+          if (!saving && blocker.state === 'blocked') blocker.proceed();
+        }}
+        onCancel={() => {
+          if (!saving && blocker.state === 'blocked') blocker.reset();
+        }}
+      />
     </div>
   );
 }
@@ -706,7 +933,7 @@ export function InstancePage() {
       <ConfirmDialog
         open={confirmForceStop}
         title={`强制停止实例「${instance.name}」？`}
-        description="强制停止会立即向进程发送 SIGKILL，可能导致世界损坏。建议先尝试普通「停止」。"
+        description="强制停止会立即强制结束进程，可能导致世界损坏。建议先尝试普通「停止」。"
         confirmLabel="确认强制停止"
         danger
         busy={busy}

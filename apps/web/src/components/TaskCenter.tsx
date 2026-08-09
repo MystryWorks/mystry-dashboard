@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Bell } from 'lucide-react';
 import type { TaskInfo } from '@mmd/shared';
@@ -37,9 +37,12 @@ function formatTime(iso: string | null): string {
  * placement 控制面板展开方向（侧边栏向上、顶栏向下）。
  */
 export function TaskCenter({ placement }: { placement: 'sidebar' | 'topbar' }) {
-  const { tasks, error, activeCount, lastSuccessAt, retry } = useTaskCenter();
+  const { tasks, error, loading, activeCount, lastSuccessAt, retry } = useTaskCenter();
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
+  const toggleRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const panelId = useId();
   // 面板用 fixed 定位并跟随按钮坐标：侧边栏有 overflow:auto，
   // absolute 定位会被滚动容器裁切，导致面板显示不全。
   const [panelStyle, setPanelStyle] = useState<React.CSSProperties>({});
@@ -73,8 +76,12 @@ export function TaskCenter({ placement }: { placement: 'sidebar' | 'topbar' }) {
 
   useEffect(() => {
     if (!open) return;
+    panelRef.current?.focus();
     function onKeyDown(event: KeyboardEvent) {
-      if (event.key === 'Escape') setOpen(false);
+      if (event.key === 'Escape') {
+        setOpen(false);
+        toggleRef.current?.focus();
+      }
     }
     function onMouseDown(event: MouseEvent) {
       if (rootRef.current && !rootRef.current.contains(event.target as Node)) setOpen(false);
@@ -92,10 +99,12 @@ export function TaskCenter({ placement }: { placement: 'sidebar' | 'topbar' }) {
   return (
     <div className={`task-center task-center-${placement}`} ref={rootRef}>
       <button
+        ref={toggleRef}
         type="button"
         className="task-center-toggle"
         aria-label={open ? '关闭任务中心' : `打开任务中心，${activeCount} 个任务进行中`}
         aria-expanded={open}
+        aria-controls={panelId}
         onClick={() => setOpen((value) => !value)}
       >
         <Bell size={18} aria-hidden="true" />
@@ -103,7 +112,15 @@ export function TaskCenter({ placement }: { placement: 'sidebar' | 'topbar' }) {
       </button>
 
       {open && (
-        <div className="task-panel" style={panelStyle} role="dialog" aria-label="任务中心">
+        <div
+          id={panelId}
+          ref={panelRef}
+          className="task-panel"
+          style={panelStyle}
+          role="dialog"
+          aria-label="任务中心"
+          tabIndex={-1}
+        >
           <header className="task-panel-header">
             <h2>任务中心</h2>
             {activeCount > 0 && <span className="muted">{activeCount} 个进行中</span>}
@@ -119,10 +136,8 @@ export function TaskCenter({ placement }: { placement: 'sidebar' | 'topbar' }) {
               </button>
             </div>
           )}
-          {!stale && error && tasks.length === 0 && (
-            <p className="error">任务列表加载失败：{error}</p>
-          )}
-          {!error && tasks.length === 0 && (
+          {loading && <p className="muted">正在读取任务…</p>}
+          {!loading && !error && tasks.length === 0 && (
             <p className="muted">暂无任务。部署或导入实例后会显示在这里。</p>
           )}
           <ul className="task-list">

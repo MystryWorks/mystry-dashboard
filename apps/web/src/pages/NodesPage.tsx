@@ -1,24 +1,37 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { NodeInfo } from '@mmd/shared';
 import { REMOTE_NODE_CREATION_ENABLED } from '@mmd/shared';
 import { api } from '../api';
+import { ConfirmDialog } from '../components/ConfirmDialog';
 
 const statusLabel: Record<string, string> = {
   online: '在线',
   offline: '离线',
 };
 
+type LoadState = 'loading' | 'loaded' | 'error';
+
 export function NodesPage() {
   const [nodes, setNodes] = useState<NodeInfo[]>([]);
-  const [error, setError] = useState('');
+  const [loadState, setLoadState] = useState<LoadState>('loading');
+  const [loadError, setLoadError] = useState('');
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<NodeInfo | null>(null);
+  const [deleteError, setDeleteError] = useState('');
+  const latestLoadRequestRef = useRef(0);
 
   const load = useCallback(async () => {
+    const requestId = ++latestLoadRequestRef.current;
     try {
-      setNodes(await api<NodeInfo[]>('/api/nodes'));
-      setError('');
+      const result = await api<NodeInfo[]>('/api/nodes');
+      if (requestId !== latestLoadRequestRef.current) return;
+      setNodes(result);
+      setLoadState('loaded');
+      setLoadError('');
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      if (requestId !== latestLoadRequestRef.current) return;
+      setLoadError(err instanceof Error ? err.message : String(err));
+      setLoadState((current) => (current === 'loaded' ? 'loaded' : 'error'));
     }
   }, []);
 
@@ -28,14 +41,28 @@ export function NodesPage() {
     return () => clearInterval(timer);
   }, [load]);
 
-  async function onDelete(id: string) {
-    if (!confirm('确定删除该节点？（该节点下必须没有实例）')) return;
-    setBusyId(id);
+  function retryLoad(): void {
+    setLoadError('');
+    setLoadState('loading');
+    void load();
+  }
+
+  function openDeleteDialog(node: NodeInfo): void {
+    setDeleteError('');
+    setDeleteTarget(node);
+  }
+
+  async function confirmDelete() {
+    if (!deleteTarget) return;
+    const target = deleteTarget;
+    setBusyId(target.id);
+    setDeleteError('');
     try {
-      await api(`/api/nodes/${id}`, { method: 'DELETE' });
+      await api(`/api/nodes/${target.id}`, { method: 'DELETE' });
+      setDeleteTarget(null);
       await load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setDeleteError(err instanceof Error ? err.message : String(err));
     } finally {
       setBusyId(null);
     }
@@ -51,10 +78,24 @@ export function NodesPage() {
         多机 Agent 纳管尚未开放；创建远程节点与远程部署将在后续版本提供。
       </p>
 
-      {error && <p className="error">{error}</p>}
+      {loadError && (
+        <p className="error" role="alert">
+          {loadError}
+          {loadState === 'loaded' ? ' 当前正在显示上次成功加载的节点数据。' : ''}
+        </p>
+      )}
 
       <div className="panel" style={{ marginBottom: '1.25rem' }}>
-        {nodes.length === 0 ? (
+        {loadState === 'loading' ? (
+          <p className="muted" role="status">正在加载节点列表…</p>
+        ) : loadState === 'error' ? (
+          <div role="alert">
+            <p className="muted">节点列表暂时不可用，请检查面板连接后重试。</p>
+            <button className="btn btn-ghost" type="button" onClick={retryLoad}>
+              重新加载
+            </button>
+          </div>
+        ) : nodes.length === 0 ? (
           <p className="muted">暂无节点数据。</p>
         ) : (
           <table className="table">
@@ -88,7 +129,7 @@ export function NodesPage() {
                         className="btn btn-danger"
                         type="button"
                         disabled={busyId === node.id || node.instanceCount > 0}
-                        onClick={() => void onDelete(node.id)}
+                        onClick={() => openDeleteDialog(node)}
                       >
                         删除
                       </button>
@@ -112,6 +153,25 @@ export function NodesPage() {
           </p>
         </div>
       )}
+
+      <ConfirmDialog
+        open={deleteTarget !== null}
+        title={`删除节点「${deleteTarget?.name ?? ''}」？`}
+        description={
+          <>
+            <p>仅可删除没有关联实例的远程节点。删除后无法恢复。</p>
+            {deleteError && <p className="error" role="alert">{deleteError}</p>}
+          </>
+        }
+        confirmLabel="确认删除"
+        danger
+        busy={busyId === deleteTarget?.id}
+        onConfirm={() => void confirmDelete()}
+        onCancel={() => {
+          setDeleteTarget(null);
+          setDeleteError('');
+        }}
+      />
     </div>
   );
 }

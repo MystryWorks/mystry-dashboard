@@ -1,9 +1,27 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 
 process.env.JWT_SECRET = 'a'.repeat(64);
 process.env.SETUP_TOKEN = 'b'.repeat(64);
 process.env.LAUNCHER_TOKEN = 'c'.repeat(64);
+
+function prepareTempDataRoot(t: test.TestContext): string {
+  const dataRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'mmd-config-service-test-'));
+  t.after(async () => {
+    try {
+      const { closeDb } = await import('../db.js');
+      closeDb();
+    } catch {
+      /* 模块可能尚未加载 */
+    }
+    fs.rmSync(dataRoot, { recursive: true, force: true });
+  });
+  process.env.DATA_DIR = dataRoot;
+  return dataRoot;
+}
 
 test('保留注释、空行、重复键与分隔符，引导补丁只改最后定义', async () => {
   const {
@@ -43,4 +61,43 @@ test('parseProperties 对重复键取最后有效值', async () => {
   const { parseProperties } = await import('./config-service.js');
   const map = parseProperties('a=1\na=2\n# comment\nb=3\n');
   assert.deepEqual(map, { a: '2', b: '3' });
+});
+
+test('首次写入不存在的 server.properties：值含换行不产生额外属性', async (t) => {
+  prepareTempDataRoot(t);
+  const { initDb } = await import('../db.js');
+  const { createInstance } = await import('./instance-service.js');
+  const { writeServerProperties, readServerProperties } = await import('./config-service.js');
+
+  initDb();
+  const inst = createInstance({ name: 'props-newline' });
+  const instanceDir = path.join(process.env.DATA_DIR!, 'instances', inst.id);
+  assert.ok(!fs.existsSync(path.join(instanceDir, 'server.properties')), '前置：文件尚不存在');
+
+  writeServerProperties(inst.id, { motd: 'line1\nmalicious=value' });
+  const content = fs.readFileSync(path.join(instanceDir, 'server.properties'), 'utf8');
+  const { parseProperties } = await import('./config-service.js');
+  const parsed = parseProperties(content);
+
+  assert.ok(content.includes('motd=line1\\nmalicious=value'), '换行应被转义为字面 \\n');
+  assert.ok(!('malicious' in parsed), '不得产生多余的 malicious 属性');
+  assert.equal(parsed.motd, 'line1\nmalicious=value');
+});
+
+test('首次写入不存在的 server.properties：值以反斜杠结尾不吞并下一行', async (t) => {
+  prepareTempDataRoot(t);
+  const { initDb } = await import('../db.js');
+  const { createInstance } = await import('./instance-service.js');
+  const { writeServerProperties, readServerProperties } = await import('./config-service.js');
+
+  initDb();
+  const inst = createInstance({ name: 'props-trailing-slash' });
+  const instanceDir = path.join(process.env.DATA_DIR!, 'instances', inst.id);
+
+  writeServerProperties(inst.id, { motd: 'foo\\' });
+  const content = fs.readFileSync(path.join(instanceDir, 'server.properties'), 'utf8');
+
+  assert.ok(content.includes('motd=foo\\\\\n'), '尾随反斜杠应转义且独占一行');
+  assert.ok(content.includes('online-mode=true'), '默认属性不得被吞并');
+  assert.equal(readServerProperties(inst.id).motd, 'foo\\');
 });

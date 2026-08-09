@@ -76,11 +76,15 @@ export async function api<T>(
   return data as T;
 }
 
-export async function apiForm<T>(path: string, form: FormData): Promise<T> {
+export async function apiForm<T>(
+  path: string,
+  form: FormData,
+  options?: { signal?: AbortSignal },
+): Promise<T> {
   const headers = new Headers();
   const token = getToken();
   if (token) headers.set('Authorization', `Bearer ${token}`);
-  const res = await fetch(path, { method: 'POST', headers, body: form });
+  const res = await fetch(path, { method: 'POST', headers, body: form, signal: options?.signal });
   const data = await res.json();
   if (!res.ok) {
     if (res.status === 401) handleUnauthorized(path);
@@ -203,11 +207,16 @@ export async function pollTask(
   // 等待与中止信号竞争，组件卸载/登出后可立即终止轮询。
   const wait = (ms: number) =>
     new Promise<void>((resolve) => {
-      const timer = setTimeout(resolve, ms);
-      signal?.addEventListener('abort', () => {
+      const onAbort = () => {
         clearTimeout(timer);
+        signal?.removeEventListener('abort', onAbort);
         resolve();
-      }, { once: true });
+      };
+      const timer = setTimeout(() => {
+        signal?.removeEventListener('abort', onAbort);
+        resolve();
+      }, ms);
+      signal?.addEventListener('abort', onAbort, { once: true });
     });
   const throwIfAborted = () => {
     if (signal?.aborted) throw new DOMException('任务轮询已中止', 'AbortError');
@@ -230,7 +239,7 @@ export async function pollTask(
         message: string;
         error?: string;
         result?: { instanceId?: string };
-      }>(`/api/tasks/${taskId}`);
+      }>(`/api/tasks/${taskId}`, { signal });
     } catch (error) {
       // 任务可能仍在排队，服务端限流不代表任务失败。继续使用单一
       // 的等待链轮询，避免每次重试都创建一个新的并发定时器。

@@ -1,6 +1,6 @@
 import { Component, StrictMode, type ErrorInfo, type ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
-import { BrowserRouter } from 'react-router-dom';
+import { createBrowserRouter, RouterProvider } from 'react-router-dom';
 import { AuthProvider } from './auth';
 import { App } from './App';
 import './styles.css';
@@ -33,14 +33,21 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | 
   }
 }
 
-createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <BrowserRouter>
+const router = createBrowserRouter([
+  {
+    path: '*',
+    element: (
       <AuthProvider>
         <ErrorBoundary>
           <App />
         </ErrorBoundary>
       </AuthProvider>
-    </BrowserRouter>
+    ),
+  },
+]);
+
+createRoot(document.getElementById('root')!).render(
+  <StrictMode>
+    <RouterProvider router={router} />
   </StrictMode>,
 );
