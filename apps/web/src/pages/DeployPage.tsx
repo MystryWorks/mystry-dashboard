@@ -4,7 +4,7 @@ import type { TaskInfo } from '@mmd/shared';
 import { api, pollTask } from '../api';
 import { LazyScrollSelect } from '../components/LazyScrollSelect';
 import { JavaRuntimeSelect } from '../components/JavaRuntimeSelect';
-import { JavaEnvironmentStatus } from '../components/PathFields';
+import { JvmSettingsEditor } from '../components/JvmSettingsEditor';
 import '../deploy-error.css';
 
 type CoreType = 'paper' | 'fabric' | 'vanilla' | 'forge' | 'neoforge';
@@ -40,6 +40,8 @@ export function DeployPage() {
   const [name, setName] = useState('我的服务器');
   const [jvmArgs, setJvmArgs] = useState('-Xms1G -Xmx2G');
   const [javaRuntimeId, setJavaRuntimeId] = useState<string | null>(null);
+  const [javaMajor, setJavaMajor] = useState<number | null>(null);
+  const [jvmValid, setJvmValid] = useState(true);
   const [acceptEula, setAcceptEula] = useState(true);
   const [error, setError] = useState('');
   const [progress, setProgress] = useState<TaskInfo | null>(null);
@@ -52,7 +54,6 @@ export function DeployPage() {
   const pollAbortRef = useRef<AbortController | null>(null);
   const nameFieldId = useId();
   const coreTypeFieldId = useId();
-  const jvmArgsFieldId = useId();
   const eulaFieldId = useId();
   const errorPreview = useMemo(() => createErrorPreview(error), [error]);
   const hasErrorDetails = error.includes('\n') || error.length > ERROR_PREVIEW_MAX_LENGTH;
@@ -206,6 +207,10 @@ export function DeployPage() {
 
   async function deploy() {
     if (!coreType || !mcVersion) return;
+    if (!jvmValid) {
+      setError('请先修正 JVM 参数错误');
+      return;
+    }
     setBusy(true);
     setError('');
     setProgress(null);
@@ -355,22 +360,22 @@ export function DeployPage() {
             Forge/NeoForge 会下载官方 Installer 并在安装目录执行 --installServer，耗时可能较长。
           </p>
         )}
-        <JavaEnvironmentStatus />
         <JavaRuntimeSelect
           value={javaRuntimeId}
           onChange={setJavaRuntimeId}
           mcVersion={mcVersion || null}
           disabled={busy}
+          onResolvedMajorChange={setJavaMajor}
         />
-        <div className="field">
-          <label htmlFor={jvmArgsFieldId}>JVM 参数</label>
-          <input
-            id={jvmArgsFieldId}
-            value={jvmArgs}
-            disabled={busy}
-            onChange={(e) => setJvmArgs(e.target.value)}
-          />
-        </div>
+        <JvmSettingsEditor
+          value={jvmArgs}
+          onChange={setJvmArgs}
+          coreType={coreType || 'custom'}
+          javaMajor={javaMajor}
+          disabled={busy}
+          useRecommendedDefault
+          onValidityChange={setJvmValid}
+        />
         <label
           htmlFor={eulaFieldId}
           style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginBottom: '1rem' }}
@@ -488,7 +493,7 @@ export function DeployPage() {
         <button
           className="btn"
           type="button"
-          disabled={busy || !canDeploy}
+          disabled={busy || !canDeploy || !jvmValid}
           onClick={() => void deploy()}
         >
           {busy ? '部署中…' : '开始部署'}

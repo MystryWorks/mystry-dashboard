@@ -11,6 +11,7 @@ export function ConfirmDialog({
   confirmLabel = '确认',
   danger = false,
   busy = false,
+  confirmDisabled = false,
   requireText,
   onConfirm,
   onCancel,
@@ -21,6 +22,8 @@ export function ConfirmDialog({
   confirmLabel?: string;
   danger?: boolean;
   busy?: boolean;
+  /** 表单内容尚未通过校验时禁用确认，但不进入 busy 锁。 */
+  confirmDisabled?: boolean;
   /** 需要输入完全一致的确认文本（如实例名） */
   requireText?: string;
   onConfirm: () => void;
@@ -53,7 +56,7 @@ export function ConfirmDialog({
   }, [open]);
 
   const needText = Boolean(requireText);
-  const canConfirm = !busy && (!needText || typed === requireText);
+  const canConfirm = !busy && !confirmDisabled && (!needText || typed === requireText);
 
   return (
     <dialog

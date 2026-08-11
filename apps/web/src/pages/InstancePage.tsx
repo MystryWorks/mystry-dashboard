@@ -7,6 +7,7 @@ import { ConfirmDialog } from '../components/ConfirmDialog';
 import { ConfigTab } from '../components/ConfigTab';
 import { ConsolePanel } from '../components/ConsolePanel';
 import { JavaRuntimeSelect } from '../components/JavaRuntimeSelect';
+import { JvmSettingsEditor } from '../components/JvmSettingsEditor';
 
 const statusLabel: Record<string, string> = {
   stopped: '已停止',
@@ -51,6 +52,13 @@ function isValidRenameName(name: string): string | null {
   if (!trimmed) return '名称不能为空';
   if (trimmed.includes('/') || trimmed.includes('\\')) return '名称不能包含路径分隔符';
   return null;
+}
+
+function isAbortError(error: unknown): boolean {
+  return error !== null
+    && typeof error === 'object'
+    && 'name' in error
+    && error.name === 'AbortError';
 }
 
 function ConsoleTab({ instance }: { instance: InstanceInfo; onChange: () => void }) {
@@ -109,6 +117,8 @@ function FilesTab({ instanceId }: { instanceId: string }) {
   const editGenerationRef = useRef(0);
   /** 文件列表请求代次：切换目录后丢弃迟到的旧列表，避免覆盖当前视图。 */
   const loadGenerationRef = useRef(0);
+  const downloadControllersRef = useRef(new Set<AbortController>());
+  const downloadGenerationRef = useRef(0);
 
   const load = useCallback(async () => {
     const generation = loadGenerationRef.current + 1;
@@ -138,6 +148,16 @@ function FilesTab({ instanceId }: { instanceId: string }) {
     setLoaded(false);
     setLoading(true);
     setError('');
+  }, [instanceId]);
+
+  useEffect(() => {
+    downloadGenerationRef.current += 1;
+    setBusyPath(null);
+    return () => {
+      downloadGenerationRef.current += 1;
+      for (const controller of downloadControllersRef.current) controller.abort();
+      downloadControllersRef.current.clear();
+    };
   }, [instanceId]);
 
   useEffect(() => {
@@ -261,18 +281,25 @@ function FilesTab({ instanceId }: { instanceId: string }) {
 
   async function download(file: FileEntry) {
     if (file.isDirectory) return;
+    const generation = downloadGenerationRef.current;
+    const controller = new AbortController();
+    downloadControllersRef.current.add(controller);
     setBusyPath(file.path);
     setError('');
     try {
-      await downloadAuthenticated(instanceId, file.path);
+      await downloadAuthenticated(instanceId, file.path, controller.signal);
     } catch (err) {
+      if (controller.signal.aborted || isAbortError(err)) return;
       if (err instanceof ApiError && err.status === 429) {
         setError('下载繁忙，请稍后重试');
       } else {
         setError(err instanceof Error ? err.message : String(err));
       }
     } finally {
-      setBusyPath(null);
+      downloadControllersRef.current.delete(controller);
+      if (generation === downloadGenerationRef.current) {
+        setBusyPath((current) => (current === file.path ? null : current));
+      }
     }
   }
 
@@ -620,6 +647,8 @@ function SettingsTab({
   const [jvmArgs, setJvmArgs] = useState(instance.jvmArgs);
   const [acceptEula, setAcceptEula] = useState(instance.acceptEula);
   const [javaRuntimeId, setJavaRuntimeId] = useState<string | null>(instance.javaRuntimeId);
+  const [javaMajor, setJavaMajor] = useState<number | null>(null);
+  const [jvmValid, setJvmValid] = useState(true);
   const [originalSettings, setOriginalSettings] = useState<SettingsDraft>(() => settingsFromInstance(instance));
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
@@ -659,7 +688,7 @@ function SettingsTab({
   }, [instance.id]);
 
   async function save() {
-    if (!dirty || saving) return;
+    if (!dirty || saving || !jvmValid) return;
     setSaving(true);
     setSaved(false);
     try {
@@ -718,18 +747,6 @@ function SettingsTab({
           实例目录由面板托管，创建后不可修改。
         </p>
       </div>
-      <div className="field">
-        <label htmlFor="instance-settings-jvm-args">JVM 参数</label>
-        <input
-          id="instance-settings-jvm-args"
-          value={jvmArgs}
-          disabled={saving}
-          onChange={(e) => {
-            setJvmArgs(e.target.value);
-            setSaved(false);
-          }}
-        />
-      </div>
       <JavaRuntimeSelect
         value={javaRuntimeId}
         onChange={(nextRuntimeId) => {
@@ -738,6 +755,18 @@ function SettingsTab({
         }}
         mcVersion={instance.mcVersion}
         disabled={saving}
+        onResolvedMajorChange={setJavaMajor}
+      />
+      <JvmSettingsEditor
+        value={jvmArgs}
+        onChange={(next) => {
+          setJvmArgs(next);
+          setSaved(false);
+        }}
+        coreType={instance.coreType}
+        javaMajor={javaMajor}
+        disabled={saving}
+        onValidityChange={setJvmValid}
       />
       <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginBottom: '1rem' }}>
         <input
@@ -752,7 +781,7 @@ function SettingsTab({
         />
         <label htmlFor="instance-settings-accept-eula">启动时自动写入 eula=true</label>
       </div>
-      <button className="btn" type="button" disabled={!dirty || saving} onClick={() => void save()}>
+      <button className="btn" type="button" disabled={!dirty || saving || !jvmValid} onClick={() => void save()}>
         {saving ? '保存中…' : '保存设置'}
       </button>
 

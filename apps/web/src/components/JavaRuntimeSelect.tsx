@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
-import { recommendedJavaMajor, type JavaRuntimeInfo } from '@mmd/shared';
-import { listJavaRuntimes } from '../api';
+import { recommendedJavaMajor, type JavaDetectResult, type JavaRuntimeInfo } from '@mmd/shared';
+import { detectDefaultJava, listJavaRuntimes } from '../api';
 
 /**
  * Java 运行时选择器：
@@ -12,17 +12,20 @@ export function JavaRuntimeSelect({
   onChange,
   mcVersion,
   disabled = false,
+  onResolvedMajorChange,
 }: {
   value: string | null;
   onChange: (runtimeId: string | null) => void;
   mcVersion?: string | null;
   disabled?: boolean;
+  onResolvedMajorChange?: (major: number | null) => void;
 }) {
   const selectId = useId();
   const [runtimes, setRuntimes] = useState<JavaRuntimeInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
+  const [defaultJava, setDefaultJava] = useState<JavaDetectResult | null>(null);
   /** 加载代次：挂载加载与「重新探测」并发时，丢弃先发起但后到达的旧响应。 */
   const loadGenerationRef = useRef(0);
 
@@ -31,9 +34,13 @@ export function JavaRuntimeSelect({
     loadGenerationRef.current = generation;
     if (refresh) setRefreshing(true);
     try {
-      const result = await listJavaRuntimes(refresh);
+      const [result, detectedDefaultJava] = await Promise.all([
+        listJavaRuntimes(refresh),
+        detectDefaultJava(),
+      ]);
       if (generation !== loadGenerationRef.current) return;
       setRuntimes(result);
+      setDefaultJava(detectedDefaultJava);
       setError('');
     } catch (err) {
       if (generation !== loadGenerationRef.current) return;
@@ -55,9 +62,22 @@ export function JavaRuntimeSelect({
   const mismatch =
     selected?.available && selected.majorVersion != null && recommended != null && selected.majorVersion !== recommended;
 
+  useEffect(() => {
+    onResolvedMajorChange?.(value ? selected?.majorVersion ?? null : defaultJava?.majorVersion ?? null);
+  }, [defaultJava?.majorVersion, onResolvedMajorChange, selected?.majorVersion, value]);
+
   return (
     <div className="field">
       <label htmlFor={selectId}>Java 运行时</label>
+      <div className={`environment-status ${defaultJava?.available === false ? 'is-missing' : ''}`}>
+        <span className="environment-dot" />
+        {loading && defaultJava === null
+          ? '正在检查 PATH 中的 Java…'
+          : defaultJava?.available
+            ? `PATH 中的 Java 可用${defaultJava.version ? ` · ${defaultJava.version}` : ''}`
+            : 'PATH 中未找到可用的 Java'}
+      </div>
+      <p className="muted field-help">默认使用 PATH 中的 java，也可以选择面板探测并验证过的运行时。</p>
       <div className="btn-row" style={{ alignItems: 'stretch' }}>
         <select
           id={selectId}

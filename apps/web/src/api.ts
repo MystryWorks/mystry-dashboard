@@ -1,8 +1,13 @@
 import type {
+  ConfirmZipImportInput,
   ExistingServerSourceListResult,
   FileDownloadTicketResult,
   FileDownloadTicketStatusResult,
   JavaRuntimeListResult,
+  JavaDetectResult,
+  ImportPreviewInfo,
+  NodeInfo,
+  TaskInfo,
   TaskListResult,
 } from '@mmd/shared';
 
@@ -103,6 +108,53 @@ export function createConsoleTicket(
   );
 }
 
+const DOWNLOAD_STATUS_POLL_INTERVAL_MS = 3_000;
+const DOWNLOAD_STATUS_RATE_LIMIT_MAX_DELAY_MS = 15_000;
+
+function createDownloadAbortError(): DOMException {
+  return new DOMException('下载已取消', 'AbortError');
+}
+
+function throwIfDownloadAborted(signal?: AbortSignal): void {
+  if (signal?.aborted) throw createDownloadAbortError();
+}
+
+function isDownloadAbortError(error: unknown): boolean {
+  return error !== null
+    && typeof error === 'object'
+    && 'name' in error
+    && error.name === 'AbortError';
+}
+
+function waitForDownloadStatusPoll(delayMs: number, signal?: AbortSignal): Promise<void> {
+  throwIfDownloadAborted(signal);
+  return new Promise((resolve, reject) => {
+    let timer: number | null = null;
+    const cleanup = () => {
+      if (timer !== null) window.clearTimeout(timer);
+      signal?.removeEventListener('abort', onAbort);
+    };
+    const onAbort = () => {
+      cleanup();
+      reject(createDownloadAbortError());
+    };
+    timer = window.setTimeout(() => {
+      cleanup();
+      resolve();
+    }, delayMs);
+    signal?.addEventListener('abort', onAbort, { once: true });
+    if (signal?.aborted) onAbort();
+  });
+}
+
+/** Abort 信号已经触发时，取消请求不能复用该信号，否则浏览器会在发出前直接终止请求。 */
+function cancelReservedDownloadTicket(instanceId: string, ticket: string): void {
+  void api<unknown>(
+    `/api/instances/${encodeURIComponent(instanceId)}/files/download-ticket/${encodeURIComponent(ticket)}`,
+    { method: 'DELETE', keepalive: true },
+  ).catch(() => undefined);
+}
+
 /**
  * 认证下载：同步打开空白下载窗，再申请 ticket 并导航至流式 GET；轮询状态把失败回传 SPA。
  * 禁止使用 res.blob() / ArrayBuffer 整体缓冲文件体（见 KF-001 / KF-002）。
@@ -110,61 +162,70 @@ export function createConsoleTicket(
 export async function downloadAuthenticated(
   instanceId: string,
   relativePath: string,
+  signal?: AbortSignal,
 ): Promise<void> {
+  throwIfDownloadAborted(signal);
   const popup = window.open('about:blank', '_blank', 'noopener,noreferrer');
   if (!popup) {
     throw new Error('浏览器拦截了下载窗口，请允许弹窗后重试');
   }
 
-  let ticket: string;
-  let expiresInSeconds = 60;
+  let ticket: string | null = null;
   try {
     const issued = await api<FileDownloadTicketResult>(
       `/api/instances/${encodeURIComponent(instanceId)}/files/download-ticket`,
       { method: 'POST', json: { path: relativePath } },
     );
     ticket = issued.ticket;
-    expiresInSeconds = issued.expiresIn;
+    throwIfDownloadAborted(signal);
+
+    const url =
+      `/api/instances/${encodeURIComponent(instanceId)}/files/download`
+      + `?path=${encodeURIComponent(relativePath)}`
+      + `&ticket=${encodeURIComponent(ticket)}`;
+    popup.location.href = url;
+
+    let statusPollDelayMs = DOWNLOAD_STATUS_POLL_INTERVAL_MS;
+    for (;;) {
+      await waitForDownloadStatusPoll(statusPollDelayMs, signal);
+      let status: FileDownloadTicketStatusResult;
+      try {
+        status = await api<FileDownloadTicketStatusResult>(
+          `/api/instances/${encodeURIComponent(instanceId)}/files/download-ticket/${encodeURIComponent(ticket)}/status`,
+          { signal },
+        );
+      } catch (error) {
+        if (signal?.aborted || isDownloadAbortError(error)) throw error;
+        // 票据被服务端清理（过期等）时返回 404：关闭空白下载窗并明确报错。
+        if (error instanceof ApiError && error.status === 404) {
+          throw new Error('下载票据已过期，请重试');
+        }
+        if (error instanceof ApiError && error.status === 429) {
+          statusPollDelayMs = Math.min(
+            statusPollDelayMs * 2,
+            DOWNLOAD_STATUS_RATE_LIMIT_MAX_DELAY_MS,
+          );
+          continue;
+        }
+        throw error;
+      }
+      statusPollDelayMs = DOWNLOAD_STATUS_POLL_INTERVAL_MS;
+      if (status.status === 'consumed') return;
+      if (status.status === 'reserved' || status.status === 'streaming') continue;
+      if (status.status === 'failed') {
+        throw new Error(status.error || '文件下载失败');
+      }
+      if (status.status === 'expired') {
+        throw new Error(status.error || '下载票据已过期');
+      }
+    }
   } catch (error) {
+    if (ticket && (signal?.aborted || isDownloadAbortError(error))) {
+      cancelReservedDownloadTicket(instanceId, ticket);
+    }
     popup.close();
     throw error;
   }
-
-  const url =
-    `/api/instances/${encodeURIComponent(instanceId)}/files/download`
-    + `?path=${encodeURIComponent(relativePath)}`
-    + `&ticket=${encodeURIComponent(ticket)}`;
-  popup.location.href = url;
-
-  const deadline = Date.now() + expiresInSeconds * 1000;
-  while (Date.now() < deadline) {
-    await new Promise((resolve) => setTimeout(resolve, 400));
-    let status: FileDownloadTicketStatusResult;
-    try {
-      status = await api<FileDownloadTicketStatusResult>(
-        `/api/instances/${encodeURIComponent(instanceId)}/files/download-ticket/${encodeURIComponent(ticket)}/status`,
-      );
-    } catch (error) {
-      // 票据被服务端清理（过期等）时返回 404：关闭空白下载窗并明确报错。
-      if (error instanceof ApiError && error.status === 404) {
-        popup.close();
-        throw new Error('下载票据已过期，请重试');
-      }
-      popup.close();
-      throw error;
-    }
-    if (status.status === 'streaming' || status.status === 'consumed') return;
-    if (status.status === 'failed') {
-      popup.close();
-      throw new Error(status.error || '文件下载失败');
-    }
-    if (status.status === 'expired') {
-      popup.close();
-      throw new Error(status.error || '下载票据已过期');
-    }
-  }
-  popup.close();
-  throw new Error('下载票据已过期，请重试');
 }
 
 /** 任务中心：拉取最近的任务列表（含排队/进行中和已结束任务）。 */
@@ -181,10 +242,49 @@ export async function listJavaRuntimes(refresh = false) {
   return res.runtimes;
 }
 
+/** PATH 中默认 Java 的探测结果。 */
+export async function detectDefaultJava() {
+  return api<JavaDetectResult>('/api/system/java');
+}
+
+/** 当前节点清单；第一阶段只使用内置本机节点的主机内存。 */
+export async function listNodes() {
+  return api<NodeInfo[]>('/api/nodes');
+}
+
 /** 固定 DATA_DIR/imports 交接区中的已有服务端候选。 */
 export async function listExistingServerSources() {
   const res = await api<ExistingServerSourceListResult>('/api/import/sources');
   return res.sources;
+}
+
+export async function createImportPreview(file: File, signal?: AbortSignal) {
+  const form = new FormData();
+  form.append('file', file);
+  return apiForm<ImportPreviewInfo>('/api/import/previews', form, { signal });
+}
+
+export async function getImportPreview(id: string, signal?: AbortSignal) {
+  return api<ImportPreviewInfo>(`/api/import/previews/${encodeURIComponent(id)}`, { signal });
+}
+
+export async function confirmImportPreview(
+  id: string,
+  input: ConfirmZipImportInput,
+  signal?: AbortSignal,
+) {
+  return api<TaskInfo>(`/api/import/previews/${encodeURIComponent(id)}/confirm`, {
+    method: 'POST',
+    signal,
+    json: input,
+  });
+}
+
+export async function cancelImportPreview(id: string) {
+  return api<{ ok: true }>(`/api/import/previews/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+    keepalive: true,
+  });
 }
 
 export async function pollTask(

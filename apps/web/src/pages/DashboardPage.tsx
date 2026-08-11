@@ -5,6 +5,7 @@ import { isInstanceStopPendingResult } from '@mmd/shared';
 import { api } from '../api';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { JavaRuntimeSelect } from '../components/JavaRuntimeSelect';
+import { JvmSettingsEditor } from '../components/JvmSettingsEditor';
 
 const statusLabel: Record<string, string> = {
   stopped: '已停止',
@@ -49,6 +50,8 @@ export function DashboardPage() {
   const [emptyJvm, setEmptyJvm] = useState('-Xms1G -Xmx2G');
   const [emptyEula, setEmptyEula] = useState(true);
   const [emptyJavaRuntimeId, setEmptyJavaRuntimeId] = useState<string | null>(null);
+  const [emptyJavaMajor, setEmptyJavaMajor] = useState<number | null>(null);
+  const [emptyJvmValid, setEmptyJvmValid] = useState(true);
   const [emptyBusy, setEmptyBusy] = useState(false);
 
   const load = useCallback(async () => {
@@ -131,6 +134,10 @@ export function DashboardPage() {
   }
 
   async function confirmCreateEmpty() {
+    if (!emptyJvmValid) {
+      setActionError('请先修正 JVM 参数错误');
+      return;
+    }
     setEmptyBusy(true);
     setActionError('');
     try {
@@ -324,16 +331,17 @@ export function DashboardPage() {
               onChange={setEmptyJavaRuntimeId}
               mcVersion={null}
               disabled={emptyBusy}
+              onResolvedMajorChange={setEmptyJavaMajor}
             />
-            <div className="field">
-              <label htmlFor="empty-instance-jvm">JVM 参数</label>
-              <input
-                id="empty-instance-jvm"
-                value={emptyJvm}
-                disabled={emptyBusy}
-                onChange={(e) => setEmptyJvm(e.target.value)}
-              />
-            </div>
+            <JvmSettingsEditor
+              value={emptyJvm}
+              onChange={setEmptyJvm}
+              coreType="custom"
+              javaMajor={emptyJavaMajor}
+              disabled={emptyBusy}
+              useRecommendedDefault
+              onValidityChange={setEmptyJvmValid}
+            />
             <label htmlFor="empty-instance-eula" style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
               <input
                 id="empty-instance-eula"
@@ -348,6 +356,7 @@ export function DashboardPage() {
         }
         confirmLabel="创建并前往文件页"
         busy={emptyBusy}
+        confirmDisabled={!emptyJvmValid}
         onConfirm={() => void confirmCreateEmpty()}
         onCancel={() => setEmptyOpen(false)}
       />
