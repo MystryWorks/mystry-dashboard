@@ -78,7 +78,21 @@ export const importExistingServerBodySchema = {
     mcVersion: { type: 'string', maxLength: 64 },
     jvmArgs: { type: 'string', maxLength: 8192 },
     acceptEula: { type: 'boolean' },
-    javaRuntimeId: { type: ['string', 'null'] },
+    javaRuntimeId: { type: ['string', 'null'], maxLength: 255 },
+  },
+} as const;
+
+export const confirmZipImportBodySchema = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['name'],
+  properties: {
+    name: { type: 'string', minLength: 1, maxLength: 128 },
+    coreType: { type: 'string', enum: [...CORE_TYPE_ENUM] },
+    mcVersion: { type: 'string', maxLength: 64 },
+    jvmArgs: { type: 'string', maxLength: 8192 },
+    acceptEula: { type: 'boolean' },
+    javaRuntimeId: { type: ['string', 'null'], maxLength: 255 },
   },
 } as const;
 

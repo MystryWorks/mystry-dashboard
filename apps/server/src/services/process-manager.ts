@@ -10,6 +10,7 @@ import { assertSafeInstanceRoot, resolveDirFromRow, resolveSafePath } from '../u
 import { getMinecraftChildEnv } from '../utils/child-env.js';
 import { parseJvmArgs, serializeJvmArgFile } from '../utils/jvm-args.js';
 import { resolveJavaRuntimeCommand } from './java-runtime-service.js';
+import { normalizeAndAssertJvmArgs } from './jvm-validation-service.js';
 
 type ResourceLimits = {
   maxCommandBytes: number;
@@ -295,7 +296,11 @@ export class ProcessManager extends EventEmitter {
       fs.writeFileSync(eulaPath, 'eula=true\n', 'utf8');
     }
 
-    const jvmArgs = parseJvmArgs(instance.jvm_args);
+    const normalizedJvmArgs = normalizeAndAssertJvmArgs(instance.jvm_args, {
+      coreType: instance.core_type as import('@mmd/shared').CoreType,
+      javaRuntimeId: instance.java_runtime_id,
+    });
+    const jvmArgs = parseJvmArgs(normalizedJvmArgs);
     let args: string[];
 
     if (instance.jar_file.startsWith('@args:')) {

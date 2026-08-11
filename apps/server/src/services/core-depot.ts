@@ -21,6 +21,7 @@ import {
   removeTaskStagingTree,
 } from './task-staging-service.js';
 import { parseJvmArgs, serializeJvmArgFile } from '../utils/jvm-args.js';
+import { normalizeAndAssertJvmArgs } from './jvm-validation-service.js';
 import { getMinecraftChildEnv } from '../utils/child-env.js';
 import { resolveJavaRuntimeCommand } from './java-runtime-service.js';
 
@@ -751,6 +752,13 @@ export function writeUserJvmArgs(dir: string, jvmArgs: string): void {
  * 创建实例并后台下载核心。
  */
 export async function deployCore(input: DeployCoreInput) {
+  input = {
+    ...input,
+    jvmArgs: normalizeAndAssertJvmArgs(input.jvmArgs ?? '-Xms1G -Xmx2G', {
+      coreType: input.coreType,
+      javaRuntimeId: input.javaRuntimeId,
+    }),
+  };
   return runBackgroundTask(
     'deploy',
     `正在部署 ${input.coreType} ${input.mcVersion}`,

@@ -1,3 +1,5 @@
+import type { DetectedJvmConfig } from './jvm-config.js';
+
 /** 实例运行状态 */
 export type InstanceStatus = 'stopped' | 'starting' | 'running' | 'stopping' | 'crashed';
 
@@ -186,6 +188,8 @@ export interface ExistingServerSourceInfo {
   coreType: CoreType;
   modifiedAt: string;
   ready: boolean;
+  /** 从 user_jvm_args.txt 检测出的参数；不存在该文件时省略。 */
+  detectedJvmConfig?: DetectedJvmConfig;
   error?: string;
 }
 
@@ -208,6 +212,25 @@ export interface ImportExistingServerInput {
 export interface JavaDetectResult {
   available: boolean;
   version: string | null;
+  majorVersion: number | null;
+}
+
+/** ZIP 上传后等待用户确认 JVM 设置的临时预览。 */
+export interface ImportPreviewInfo {
+  id: string;
+  fileName: string;
+  sizeBytes: number;
+  expiresAt: string;
+  detectedJvmConfig?: DetectedJvmConfig;
+}
+
+export interface ConfirmZipImportInput {
+  name: string;
+  coreType?: CoreType;
+  mcVersion?: string;
+  jvmArgs?: string;
+  acceptEula?: boolean;
+  javaRuntimeId?: string | null;
 }
 
 /** 面板探测并执行 -version 验证过的 Java 运行时（绝对路径由面板扫描产生，不接受用户提交） */
@@ -297,6 +320,7 @@ export {
   updateInstanceBodySchema,
   deployCoreBodySchema,
   importExistingServerBodySchema,
+  confirmZipImportBodySchema,
   setupBodySchema,
   loginBodySchema,
   createNodeBodySchema,
@@ -304,3 +328,27 @@ export {
   fileDownloadTicketBodySchema,
   fileDownloadQuerySchema,
 } from './schemas.js';
+
+export type {
+  DetectedJvmConfig,
+  JvmPresetDefinition,
+  JvmPresetId,
+  JvmValidationContext,
+  JvmValidationIssue,
+  ParsedJvmConfig,
+} from './jvm-config.js';
+
+export {
+  JVM_PRESETS,
+  automaticInitialMemoryMiB,
+  buildJvmArgs,
+  firstJvmValidationError,
+  inspectJvmArgFile,
+  inspectJvmArgs,
+  parseJvmArgFile,
+  parseJvmArgs,
+  recommendedMaxMemoryMiB,
+  serializeJvmArgFile,
+  serializeJvmArgs,
+  validateJvmArgs,
+} from './jvm-config.js';

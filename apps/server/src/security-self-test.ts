@@ -219,9 +219,10 @@ async function main(): Promise<void> {
     deleteInstance(lockedInstance.id);
 
     const parsedJvmArgs = parseJvmArgs(
-      '-Xmx2G -Dconfig="C:\\Minecraft Server\\config.json" -Dlabel=\'Mystery Panel\'',
+      '-Xms1G -Xmx2G -Dconfig="C:\\Minecraft Server\\config.json" -Dlabel=\'Mystery Panel\'',
     );
     assert.deepEqual(parsedJvmArgs, [
+      '-Xms1G',
       '-Xmx2G',
       '-Dconfig=C:\\Minecraft Server\\config.json',
       '-Dlabel=Mystery Panel',
@@ -233,13 +234,13 @@ async function main(): Promise<void> {
     );
     assert.equal(
       serializeJvmArgFile(parsedJvmArgs),
-      '"-Xmx2G"\n"-Dconfig=C:\\\\Minecraft Server\\\\config.json"\n"-Dlabel=Mystery Panel"',
+      '"-Xms1G"\n"-Xmx2G"\n"-Dconfig=C:\\\\Minecraft Server\\\\config.json"\n"-Dlabel=Mystery Panel"',
     );
 
     const crashedInstance = createInstance({
       name: '崩溃状态实例',
       coreType: 'custom',
-      jvmArgs: '-Xmx2G -Dconfig="C:\\Minecraft Server\\config.json"',
+      jvmArgs: '-Xms1G -Xmx2G -Dconfig="C:\\Minecraft Server\\config.json"',
     });
     const crashedRow = getInstanceRow(crashedInstance.id)!;
     fs.writeFileSync(path.join(defaultInstanceDir(crashedInstance.id), 'server.jar'), 'jar', 'utf8');

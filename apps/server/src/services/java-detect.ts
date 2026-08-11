@@ -26,8 +26,18 @@ export async function detectJava(run: JavaDetectRunner = defaultRunner): Promise
     });
     const text = `${stderr}\n${stdout}`;
     const match = text.match(/version\s+"([^"]+)"/i) || text.match(/version\s+(\S+)/i);
-    return { available: true, version: match?.[1] ?? null };
+    const version = match?.[1] ?? null;
+    const majorVersion = version
+      ? Number(version.startsWith('1.') ? version.split('.')[1] : version.split('.')[0])
+      : null;
+    return {
+      available: true,
+      version,
+      majorVersion: Number.isInteger(majorVersion) && Number(majorVersion) > 0
+        ? majorVersion
+        : null,
+    };
   } catch {
-    return { available: false, version: null };
+    return { available: false, version: null, majorVersion: null };
   }
 }

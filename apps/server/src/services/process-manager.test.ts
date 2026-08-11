@@ -110,3 +110,45 @@ test('R0-03: 普通 stop 超时不得隐式 SIGKILL', async (t) => {
   assert.deepEqual(killSignals, []);
   assert.equal(manager.getStatus(row.id), 'stopping');
 });
+
+test('Forge 启动按规范参数重写 user_jvm_args.txt', async (t) => {
+  prepareTempDataRoot(t);
+  const { ProcessManager } = await import('./process-manager.js');
+  const { initDb } = await import('../db.js');
+  const { createInstance, getInstanceRow } = await import('./instance-service.js');
+  const { defaultInstanceDir } = await import('../utils/path.js');
+  const { parseJvmArgFile } = await import('@mmd/shared');
+
+  initDb();
+  const info = createInstance({
+    name: 'forge-args',
+    coreType: 'forge',
+    jarFile: '@args:libraries/net/minecraftforge/forge/win_args.txt',
+    jvmArgs: String.raw`-Xms1G -Xmx2G "-Dfolder=C:\Minecraft Server"`,
+  });
+  const instanceDir = defaultInstanceDir(info.id);
+  const argsFile = path.join(instanceDir, 'libraries', 'net', 'minecraftforge', 'forge', 'win_args.txt');
+  fs.mkdirSync(path.dirname(argsFile), { recursive: true });
+  fs.writeFileSync(argsFile, '--launchTarget forge_server', 'utf8');
+  const row = getInstanceRow(info.id)!;
+
+  let spawnedArgs: readonly string[] = [];
+  const manager = new ProcessManager(
+    (_command, args) => {
+      spawnedArgs = [...args];
+      return fakeChild();
+    },
+    async () => 'java',
+  );
+  await manager.start(row as InstanceRow);
+
+  assert.deepEqual(spawnedArgs, [
+    '@user_jvm_args.txt',
+    '@libraries/net/minecraftforge/forge/win_args.txt',
+    'nogui',
+  ]);
+  assert.deepEqual(
+    parseJvmArgFile(fs.readFileSync(path.join(instanceDir, 'user_jvm_args.txt'), 'utf8')),
+    ['-Xms1G', '-Xmx2G', String.raw`-Dfolder=C:\Minecraft Server`],
+  );
+});

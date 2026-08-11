@@ -14,6 +14,8 @@ import {
   resolveSafePath,
 } from '../utils/path.js';
 import { registerPromotedInstance, updateInstanceMeta } from './instance-service.js';
+import { normalizeAndAssertJvmArgs } from './jvm-validation-service.js';
+import { detectJvmConfigFile, jvmConfigFileFingerprint } from './jvm-detection-service.js';
 import { detectJarFile, detectServerLaunchTarget, isModLoaderScanLimitError, type ModLoaderScanBudget } from './server-launch-detect.js';
 import { recordTaskStaging, runBackgroundTask } from './task-service.js';
 import {
@@ -29,6 +31,7 @@ type SourceScan = {
 
 type PrecheckCacheEntry = {
   mtimeMs: number;
+  jvmFingerprint: string;
   info: ExistingServerSourceInfo;
 };
 
@@ -86,10 +89,18 @@ async function inspectSource(sourceId: string): Promise<ExistingServerSourceInfo
   try {
     const sourceDir = resolveExistingServerSource(sourceId);
     const stat = fs.statSync(sourceDir);
+    const jvmFingerprint = jvmConfigFileFingerprint(sourceDir);
     const cached = sourcePrecheckCache.get(sourceId);
-    if (cached && cached.mtimeMs === stat.mtimeMs) {
+    if (cached && cached.mtimeMs === stat.mtimeMs && cached.jvmFingerprint === jvmFingerprint) {
       return cached.info;
     }
+
+    const completeInfo = (info: ExistingServerSourceInfo): ExistingServerSourceInfo => {
+      const detectedJvmConfig = detectJvmConfigFile(sourceDir, info.coreType);
+      const complete = detectedJvmConfig ? { ...info, detectedJvmConfig } : info;
+      sourcePrecheckCache.set(sourceId, { mtimeMs: stat.mtimeMs, jvmFingerprint, info: complete });
+      return complete;
+    };
 
     if (fs.existsSync(resolveSafePath(sourceDir, OWNERSHIP_MARKER_FILE))) {
       throw new Error('目录包含面板实例标记，不能作为交接源');
@@ -110,8 +121,7 @@ async function inspectSource(sourceId: string): Promise<ExistingServerSourceInfo
         modifiedAt: stat.mtime.toISOString(),
         ready: true,
       };
-      sourcePrecheckCache.set(sourceId, { mtimeMs: stat.mtimeMs, info });
-      return info;
+      return completeInfo(info);
     }
 
     try {
@@ -124,8 +134,7 @@ async function inspectSource(sourceId: string): Promise<ExistingServerSourceInfo
           modifiedAt: stat.mtime.toISOString(),
           ready: true,
         };
-        sourcePrecheckCache.set(sourceId, { mtimeMs: stat.mtimeMs, info });
-        return info;
+        return completeInfo(info);
       }
     } catch (error) {
       if (isModLoaderScanLimitError(error)) {
@@ -137,8 +146,7 @@ async function inspectSource(sourceId: string): Promise<ExistingServerSourceInfo
           ready: false,
           error: '快速预检未找到启动文件；请提交导入任务进行完整校验',
         };
-        sourcePrecheckCache.set(sourceId, { mtimeMs: stat.mtimeMs, info });
-        return info;
+        return completeInfo(info);
       }
       throw error;
     }
@@ -151,8 +159,7 @@ async function inspectSource(sourceId: string): Promise<ExistingServerSourceInfo
       ready: false,
       error: '未找到服务端 jar 或 ModLoader args 文件',
     };
-    sourcePrecheckCache.set(sourceId, { mtimeMs: stat.mtimeMs, info });
-    return info;
+    return completeInfo(info);
   } catch (error) {
     return {
       id: sourceId,
@@ -340,6 +347,13 @@ async function copySourceDirectory(
 export async function importExistingServerDirectory(input: ImportExistingServerInput) {
   // 在占用任务队列前先拒绝路径型或不存在的 sourceId；任务执行时仍会再次校验。
   resolveExistingServerSource(input.sourceId);
+  input = {
+    ...input,
+    jvmArgs: normalizeAndAssertJvmArgs(input.jvmArgs ?? '-Xms1G -Xmx2G', {
+      coreType: input.coreType,
+      javaRuntimeId: input.javaRuntimeId,
+    }),
+  };
 
   return runBackgroundTask('import', '等待复制已有服务端…', async (taskId, signal, report) => {
     let instanceId: string | null = null;

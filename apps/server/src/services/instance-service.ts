@@ -21,6 +21,9 @@ import {
 import { processManager } from './process-manager.js';
 import { nodeExists } from './node-service.js';
 import { getJavaRuntime } from './java-runtime-service.js';
+import { normalizeAndAssertJvmArgs } from './jvm-validation-service.js';
+
+const DEFAULT_JVM_ARGS = '-Xms1G -Xmx2G';
 
 /** 校验运行时引用：只能引用注册表中已验证的运行时，null 表示 PATH 中的 java。 */
 function assertValidJavaRuntime(javaRuntimeId: string | null | undefined): void {
@@ -111,6 +114,10 @@ export function createInstance(input: CreateInstanceInput): InstanceInfo {
   let directoryCreatedByCall = false;
 
   assertValidJavaRuntime(input.javaRuntimeId);
+  const jvmArgs = normalizeAndAssertJvmArgs(input.jvmArgs ?? DEFAULT_JVM_ARGS, {
+    coreType: input.coreType ?? 'custom',
+    javaRuntimeId: input.javaRuntimeId,
+  });
 
   try {
     const existedBefore = fs.existsSync(dir);
@@ -146,7 +153,7 @@ export function createInstance(input: CreateInstanceInput): InstanceInfo {
         input.mcVersion ?? null,
         input.jarFile ?? 'server.jar',
         'java',
-        input.jvmArgs ?? '-Xms1G -Xmx2G',
+        jvmArgs,
         input.acceptEula ? 1 : 0,
         null,
         ownershipMarker,
@@ -177,6 +184,10 @@ export function registerPromotedInstance(id: string, input: CreateInstanceInput)
     throw new Error('远程节点暂不支持创建实例，敬请期待后续版本');
   }
   assertValidJavaRuntime(input.javaRuntimeId);
+  const jvmArgs = normalizeAndAssertJvmArgs(input.jvmArgs ?? DEFAULT_JVM_ARGS, {
+    coreType: input.coreType ?? 'custom',
+    javaRuntimeId: input.javaRuntimeId,
+  });
 
   const dir = defaultInstanceDir(id);
   if (!fs.existsSync(dir)) {
@@ -206,7 +217,7 @@ export function registerPromotedInstance(id: string, input: CreateInstanceInput)
         input.mcVersion ?? null,
         input.jarFile ?? 'server.jar',
         'java',
-        input.jvmArgs ?? '-Xms1G -Xmx2G',
+        jvmArgs,
         input.acceptEula ? 1 : 0,
         null,
         ownershipMarker,
@@ -230,6 +241,14 @@ export function updateInstance(id: string, input: UpdateInstanceInput): Instance
   const existing = getInstanceRow(id);
   if (!existing) throw new Error('实例不存在');
   assertValidJavaRuntime(input.javaRuntimeId);
+  const normalizedJvmArgs = normalizeAndAssertJvmArgs(input.jvmArgs ?? existing.jvm_args, {
+    coreType: existing.core_type as InstanceInfo['coreType'],
+    javaRuntimeId: input.javaRuntimeId === undefined
+      ? existing.java_runtime_id
+      : input.javaRuntimeId,
+  });
+  // 未提交 JVM 参数时只做校验，不静默改写旧实例中的原始文本。
+  const jvmArgs = input.jvmArgs === undefined ? existing.jvm_args : normalizedJvmArgs;
 
   const now = nowIso();
   getDb()
@@ -248,7 +267,7 @@ export function updateInstance(id: string, input: UpdateInstanceInput): Instance
       input.name ?? existing.name,
       input.jarFile ?? existing.jar_file,
       'java',
-      input.jvmArgs ?? existing.jvm_args,
+      jvmArgs,
       input.acceptEula !== undefined ? (input.acceptEula ? 1 : 0) : existing.accept_eula,
       input.javaRuntimeId === undefined ? existing.java_runtime_id : input.javaRuntimeId,
       now,
