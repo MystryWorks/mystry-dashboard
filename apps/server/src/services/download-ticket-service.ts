@@ -14,13 +14,14 @@ type DownloadTicketRecord = {
   status: FileDownloadTicketStatus;
   error?: string;
   releaseSlot: () => void;
+  expiresTimer: NodeJS.Timeout | null;
 };
 
 /** @deprecated 仅测试兼容；生产路径应使用 reserveDownloadTicket。 */
 export type ClaimedDownloadTicket = {
   userId: string;
   ticket: string;
-  record: Omit<DownloadTicketRecord, 'releaseSlot' | 'status' | 'error'> & {
+  record: Omit<DownloadTicketRecord, 'releaseSlot' | 'status' | 'error' | 'expiresTimer'> & {
     expiresAt: number;
   };
 };
@@ -35,6 +36,12 @@ const EXPIRED_TOMBSTONE_MS = 60_000;
 const consumedTickets = new Map<string, { userId: string; expiresAt: number }>();
 const CONSUMED_TOMBSTONE_MS = 60_000;
 
+/** 失败下载的短时 tombstone：让浏览器持续轮询时能收到具体失败原因。 */
+const failedTickets = new Map<string, { userId: string; error: string; expiresAt: number }>();
+const FAILED_TOMBSTONE_MS = 60_000;
+
+export type CancelReservedDownloadTicketResult = 'cancelled' | 'streaming' | 'not_found';
+
 function noopRelease(): void {}
 
 function releaseTicketSlot(record: DownloadTicketRecord): void {
@@ -42,21 +49,44 @@ function releaseTicketSlot(record: DownloadTicketRecord): void {
   record.releaseSlot = noopRelease;
 }
 
+function clearReservedExpiry(record: DownloadTicketRecord): void {
+  if (!record.expiresTimer) return;
+  clearTimeout(record.expiresTimer);
+  record.expiresTimer = null;
+}
+
+function expireReservedTicket(ticket: string, record: DownloadTicketRecord, now = Date.now()): void {
+  if (tickets.get(ticket) !== record || record.status !== 'reserved' || record.expiresAt > now) return;
+  clearReservedExpiry(record);
+  releaseTicketSlot(record);
+  tickets.delete(ticket);
+  expiredTickets.set(ticket, { userId: record.userId, expiresAt: now + EXPIRED_TOMBSTONE_MS });
+}
+
+function scheduleReservedExpiry(ticket: string, record: DownloadTicketRecord): void {
+  clearReservedExpiry(record);
+  const delay = Math.max(0, record.expiresAt - Date.now());
+  record.expiresTimer = setTimeout(() => {
+    record.expiresTimer = null;
+    expireReservedTicket(ticket, record);
+  }, delay);
+  record.expiresTimer.unref?.();
+}
+
 function pruneExpired(now = Date.now()): void {
   for (const [ticket, value] of tickets) {
-    if (value.expiresAt > now) continue;
-    if (value.status === 'reserved' || value.status === 'streaming') {
-      releaseTicketSlot(value);
+    if (value.status === 'reserved' && value.expiresAt <= now) {
+      expireReservedTicket(ticket, value, now);
     }
-    value.status = 'expired';
-    tickets.delete(ticket);
-    expiredTickets.set(ticket, { userId: value.userId, expiresAt: now + EXPIRED_TOMBSTONE_MS });
   }
   for (const [ticket, value] of expiredTickets) {
     if (value.expiresAt <= now) expiredTickets.delete(ticket);
   }
   for (const [ticket, value] of consumedTickets) {
     if (value.expiresAt <= now) consumedTickets.delete(ticket);
+  }
+  for (const [ticket, value] of failedTickets) {
+    if (value.expiresAt <= now) failedTickets.delete(ticket);
   }
 }
 
@@ -70,14 +100,17 @@ export function reserveDownloadTicket(
   const now = Date.now();
   pruneExpired(now);
   const ticket = randomBytes(32).toString('base64url');
-  tickets.set(ticket, {
+  const record: DownloadTicketRecord = {
     userId,
     instanceId,
     path: relativePath,
     expiresAt: now + config.fileDownloadTicketTtlSeconds * 1000,
     status: 'reserved',
     releaseSlot,
-  });
+    expiresTimer: null,
+  };
+  tickets.set(ticket, record);
+  scheduleReservedExpiry(ticket, record);
   return { ticket, expiresIn: config.fileDownloadTicketTtlSeconds };
 }
 
@@ -99,9 +132,6 @@ export function getDownloadTicketStatus(
   const value = tickets.get(ticket);
   if (value) {
     if (value.userId !== userId) return null;
-    if (value.expiresAt <= now) {
-      return { status: 'expired', error: '下载票据已过期' };
-    }
     return {
       status: value.status,
       ...(value.error ? { error: value.error } : {}),
@@ -114,6 +144,10 @@ export function getDownloadTicketStatus(
   const consumed = consumedTickets.get(ticket);
   if (consumed && consumed.userId === userId) {
     return { status: 'consumed' };
+  }
+  const failed = failedTickets.get(ticket);
+  if (failed && failed.userId === userId) {
+    return { status: 'failed', error: failed.error };
   }
   return null;
 }
@@ -128,25 +162,43 @@ export function beginDownloadStream(
   pruneExpired(now);
   const value = tickets.get(ticket);
   if (!value) return null;
-  if (value.expiresAt <= now) {
-    if (value.status === 'reserved') releaseTicketSlot(value);
-    value.status = 'expired';
-    tickets.delete(ticket);
-    return null;
-  }
   if (value.instanceId !== instanceId || value.path !== relativePath) {
     return null;
   }
   if (value.status !== 'reserved') return null;
+  clearReservedExpiry(value);
   value.status = 'streaming';
   return { userId: value.userId };
+}
+
+/** 仅允许签发该票据的用户在原生 GET 开流前取消预占槽位。 */
+export function cancelReservedDownloadTicket(
+  ticket: string,
+  userId: string,
+  instanceId: string,
+): CancelReservedDownloadTicketResult {
+  pruneExpired();
+  const value = tickets.get(ticket);
+  if (!value || value.userId !== userId || value.instanceId !== instanceId) return 'not_found';
+  if (value.status === 'streaming') return 'streaming';
+  if (value.status !== 'reserved') return 'not_found';
+
+  clearReservedExpiry(value);
+  releaseTicketSlot(value);
+  tickets.delete(ticket);
+  failedTickets.set(ticket, {
+    userId: value.userId,
+    error: '下载已取消',
+    expiresAt: Date.now() + FAILED_TOMBSTONE_MS,
+  });
+  return 'cancelled';
 }
 
 export function completeDownloadStream(ticket: string): void {
   const value = tickets.get(ticket);
   if (!value) return;
+  clearReservedExpiry(value);
   releaseTicketSlot(value);
-  value.status = 'consumed';
   tickets.delete(ticket);
   consumedTickets.set(ticket, {
     userId: value.userId,
@@ -157,11 +209,14 @@ export function completeDownloadStream(ticket: string): void {
 export function failDownloadStream(ticket: string, error: string): void {
   const value = tickets.get(ticket);
   if (!value) return;
-  if (value.status === 'reserved' || value.status === 'streaming') {
-    releaseTicketSlot(value);
-  }
-  value.status = 'failed';
-  value.error = error;
+  clearReservedExpiry(value);
+  releaseTicketSlot(value);
+  tickets.delete(ticket);
+  failedTickets.set(ticket, {
+    userId: value.userId,
+    error,
+    expiresAt: Date.now() + FAILED_TOMBSTONE_MS,
+  });
 }
 
 /**
@@ -192,12 +247,17 @@ export function restoreDownloadTicket(claimed: ClaimedDownloadTicket): void {
   const value = tickets.get(claimed.ticket);
   if (!value || value.status !== 'streaming') return;
   if (value.expiresAt <= Date.now()) {
+    clearReservedExpiry(value);
     releaseTicketSlot(value);
-    value.status = 'expired';
     tickets.delete(claimed.ticket);
+    expiredTickets.set(claimed.ticket, {
+      userId: value.userId,
+      expiresAt: Date.now() + EXPIRED_TOMBSTONE_MS,
+    });
     return;
   }
   value.status = 'reserved';
+  scheduleReservedExpiry(claimed.ticket, value);
 }
 
 /** 校验并立即消费 ticket；无论是否匹配，成功找到的 ticket 都不会再次可用。 */
@@ -215,9 +275,11 @@ export function consumeDownloadTicket(
 /** 测试专用：清空内存票据。 */
 export function resetDownloadTicketsForTests(): void {
   for (const value of tickets.values()) {
+    clearReservedExpiry(value);
     releaseTicketSlot(value);
   }
   tickets.clear();
   expiredTickets.clear();
   consumedTickets.clear();
+  failedTickets.clear();
 }

@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { Readable } from 'node:stream';
 import test from 'node:test';
 
 function prepareTempDataRoot(t: test.TestContext): string {
@@ -66,4 +67,114 @@ test('R0-05: 重命名冲突应对外映射为 HTTP 409', async (t) => {
     assert.ok(err instanceof FileRenameConflictError);
     assert.equal(fileServiceErrorHttpStatus(err), 409);
   }
+});
+
+test('上传覆盖重命名失败时应恢复旧文件且清理临时文件', async (t) => {
+  prepareTempDataRoot(t);
+  const { initDb } = await import('../db.js');
+  const { config } = await import('../config.js');
+  const { createInstance } = await import('./instance-service.js');
+  const { saveUploadedFile } = await import('./file-service.js');
+  const { defaultInstanceDir } = await import('../utils/path.js');
+
+  initDb();
+  const inst = createInstance({ name: 'upload-rollback' });
+  const root = defaultInstanceDir(inst.id);
+  const target = path.join(root, 'server.jar');
+  fs.writeFileSync(target, 'old-content');
+  let renameCalls = 0;
+
+  await assert.rejects(
+    () => saveUploadedFile(
+      inst.id,
+      '',
+      'server.jar',
+      Readable.from('new-content'),
+      {
+        renameSync(source, destination) {
+          renameCalls += 1;
+          if (renameCalls === 2) throw new Error('injected replacement failure');
+          fs.renameSync(source, destination);
+        },
+      },
+    ),
+    /injected replacement failure/,
+  );
+
+  assert.equal(fs.readFileSync(target, 'utf8'), 'old-content');
+  assert.equal(
+    fs.readdirSync(root).some((entry) => entry.includes('.mmd-upload-backup-')),
+    false,
+  );
+  assert.equal(
+    fs.existsSync(config.uploadDir)
+      && fs.readdirSync(config.uploadDir).some((entry) => entry.startsWith('.tmp-file-')),
+    false,
+  );
+});
+
+test('上传覆盖成功时应替换内容且不遗留备份文件', async (t) => {
+  prepareTempDataRoot(t);
+  const { initDb } = await import('../db.js');
+  const { config } = await import('../config.js');
+  const { createInstance } = await import('./instance-service.js');
+  const { saveUploadedFile } = await import('./file-service.js');
+  const { defaultInstanceDir } = await import('../utils/path.js');
+
+  initDb();
+  const inst = createInstance({ name: 'upload-replace' });
+  const root = defaultInstanceDir(inst.id);
+  const target = path.join(root, 'server.jar');
+  fs.writeFileSync(target, 'old-content');
+
+  await saveUploadedFile(inst.id, '', 'server.jar', Readable.from('new-content'));
+
+  assert.equal(fs.readFileSync(target, 'utf8'), 'new-content');
+  assert.equal(
+    fs.readdirSync(root).some((entry) => entry.includes('.mmd-upload-backup-')),
+    false,
+  );
+  assert.equal(
+    fs.existsSync(config.uploadDir)
+      && fs.readdirSync(config.uploadDir).some((entry) => entry.startsWith('.tmp-file-')),
+    false,
+  );
+});
+
+test('上传覆盖后备份清理失败仍应返回成功并保留可识别备份', async (t) => {
+  prepareTempDataRoot(t);
+  const { initDb } = await import('../db.js');
+  const { createInstance } = await import('./instance-service.js');
+  const { saveUploadedFile } = await import('./file-service.js');
+  const { defaultInstanceDir } = await import('../utils/path.js');
+
+  initDb();
+  const inst = createInstance({ name: 'upload-backup-cleanup' });
+  const root = defaultInstanceDir(inst.id);
+  const target = path.join(root, 'server.jar');
+  fs.writeFileSync(target, 'old-content');
+  let backupPath = '';
+  const warnings: unknown[][] = [];
+  t.mock.method(console, 'warn', (...args: unknown[]) => {
+    warnings.push(args);
+  });
+
+  const saved = await saveUploadedFile(
+    inst.id,
+    '',
+    'server.jar',
+    Readable.from('new-content'),
+    {
+      unlinkSync(filePath) {
+        backupPath = String(filePath);
+        throw new Error('injected backup cleanup failure');
+      },
+    },
+  );
+
+  assert.equal(saved, 'server.jar');
+  assert.equal(fs.readFileSync(target, 'utf8'), 'new-content');
+  assert.ok(backupPath.includes('.mmd-upload-backup-'));
+  assert.equal(fs.readFileSync(backupPath, 'utf8'), 'old-content');
+  assert.match(String(warnings[0]?.[0]), /上传已完成，但无法删除旧文件备份/);
 });

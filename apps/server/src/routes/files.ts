@@ -1,4 +1,5 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+import { EventEmitter } from 'node:events';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileDownloadQuerySchema, fileDownloadTicketBodySchema } from '@mmd/shared';
@@ -19,6 +20,7 @@ import {
 } from '../services/file-service.js';
 import {
   beginDownloadStream,
+  cancelReservedDownloadTicket,
   completeDownloadStream,
   failDownloadStream,
   getDownloadTicketStatus,
@@ -105,6 +107,47 @@ function contentDispositionAttachment(fileName: string): string {
 function isDownloadRoute(req: FastifyRequest): boolean {
   const routePath = req.routeOptions.url;
   return routePath === '/api/instances/:id/files/download';
+}
+
+export function waitForDownloadStreamOpen(stream: EventEmitter): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const cleanup = () => {
+      stream.off('open', onOpen);
+      stream.off('error', onError);
+      stream.off('close', onClose);
+    };
+    const onOpen = () => {
+      cleanup();
+      resolve();
+    };
+    const onError = (error: Error) => {
+      cleanup();
+      reject(error);
+    };
+    const onClose = () => {
+      cleanup();
+      reject(new Error('文件下载连接已中止'));
+    };
+    stream.once('open', onOpen);
+    stream.once('error', onError);
+    stream.once('close', onClose);
+  });
+}
+
+type DownloadTicketCancelRouteResult =
+  | { statusCode: 204 }
+  | { statusCode: 409; error: string }
+  | { statusCode: 404; error: string };
+
+export function cancelDownloadTicketRoute(
+  ticket: string,
+  userId: string,
+  instanceId: string,
+): DownloadTicketCancelRouteResult {
+  const result = cancelReservedDownloadTicket(ticket, userId, instanceId);
+  if (result === 'cancelled') return { statusCode: 204 };
+  if (result === 'streaming') return { statusCode: 409, error: '下载已开始，无法取消票据' };
+  return { statusCode: 404, error: '下载票据不存在或无权取消' };
 }
 
 export async function fileRoutes(app: FastifyInstance): Promise<void> {
@@ -244,6 +287,15 @@ export async function fileRoutes(app: FastifyInstance): Promise<void> {
     },
   );
 
+  app.delete<{ Params: { id: string; ticket: string } }>(
+    '/api/instances/:id/files/download-ticket/:ticket',
+    async (req, reply) => {
+      const result = cancelDownloadTicketRoute(req.params.ticket, req.user.id, req.params.id);
+      if (result.statusCode === 204) return reply.code(204).send();
+      return reply.code(result.statusCode).send({ error: result.error });
+    },
+  );
+
   app.get<{ Params: { id: string }; Querystring: { path: string; ticket?: string } }>(
     '/api/instances/:id/files/download',
     { attachValidation: true, schema: { querystring: fileDownloadQuerySchema } },
@@ -265,16 +317,19 @@ export async function fileRoutes(app: FastifyInstance): Promise<void> {
         const stream = fs.createReadStream(abs);
         let responseStarted = false;
         let cleaned = false;
-        const releaseResources = () => {
+        function releaseResources(): void {
           try {
             reply.raw.setTimeout(0);
           } catch {
             // 响应可能已经关闭。
           }
+          reply.raw.off('finish', finishSuccess);
+          reply.raw.off('close', onConnectionClosed);
+          stream.off('error', onStreamError);
+          stream.off('close', onStreamClosed);
           if (!stream.destroyed) stream.destroy();
-          reply.raw.off('close', releaseResources);
-        };
-        const finishSuccess = () => {
+        }
+        function finishSuccess(): void {
           if (cleaned) return;
           cleaned = true;
           releaseDownload?.();
@@ -283,8 +338,8 @@ export async function fileRoutes(app: FastifyInstance): Promise<void> {
             activeTicket = null;
           }
           releaseResources();
-        };
-        const finishFailure = (errorMessage: string) => {
+        }
+        function finishFailure(errorMessage: string): void {
           if (cleaned) return;
           cleaned = true;
           releaseDownload?.();
@@ -293,33 +348,35 @@ export async function fileRoutes(app: FastifyInstance): Promise<void> {
             activeTicket = null;
           }
           releaseResources();
-        };
-        const onStreamError = (error: Error) => {
+        }
+        function onStreamError(error: Error): void {
           finishFailure(error.message || '文件读取失败');
-          if (responseStarted && !reply.sent) {
-            void reply.code(400).send({ error: '文件读取失败' });
+          if (responseStarted && !reply.raw.destroyed) {
+            reply.raw.destroy();
           }
-        };
-        stream.once('end', finishSuccess);
-        stream.once('close', finishSuccess);
+        }
+        function onStreamClosed(): void {
+          if (stream.readableEnded) return;
+          finishFailure('文件下载连接已中止');
+          if (responseStarted && !reply.raw.destroyed) reply.raw.destroy();
+        }
+        function onConnectionClosed(): void {
+          if (!reply.raw.writableFinished) finishFailure('文件下载连接已中止');
+        }
+        stream.once('close', onStreamClosed);
         stream.once('error', onStreamError);
-        reply.raw.once('close', finishSuccess);
+        reply.raw.once('finish', finishSuccess);
+        reply.raw.once('close', onConnectionClosed);
         reply.raw.setTimeout(config.fileDownloadIdleTimeoutMs, () => {
-          stream.destroy(new Error('文件下载空闲超时'));
+          if (cleaned) return;
+          finishFailure('文件下载空闲超时');
           if (!reply.raw.destroyed) reply.raw.destroy();
         });
-        await new Promise<void>((resolve, reject) => {
-          const onOpen = () => {
-            stream.off('error', onError);
-            resolve();
-          };
-          const onError = (error: Error) => {
-            stream.off('open', onOpen);
-            reject(error);
-          };
-          stream.once('open', onOpen);
-          stream.once('error', onError);
-        });
+        if (reply.raw.destroyed) {
+          finishFailure('文件下载连接已中止');
+          throw new Error('文件下载连接已中止');
+        }
+        await waitForDownloadStreamOpen(stream);
         responseStarted = true;
         return reply
           .header('Content-Disposition', contentDispositionAttachment(path.basename(abs)))
@@ -335,6 +392,7 @@ export async function fileRoutes(app: FastifyInstance): Promise<void> {
         if (isFileDownloadCapacityError(err)) {
           return reply.code(429).send({ error: err.message });
         }
+        if (reply.raw.destroyed) return reply;
         const message = err instanceof Error && /^(文件不存在|目标不是普通文件)$/.test(err.message)
           ? err.message
           : '文件打开失败';

@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { randomBytes } from 'node:crypto';
 import type { Readable } from 'node:stream';
 import type { FileEntry } from '@mmd/shared';
 import { config } from '../config.js';
@@ -230,11 +231,27 @@ export function getAbsoluteFilePath(instanceId: string, relativePath: string): s
   return target;
 }
 
+type UploadReplaceOperations = {
+  renameSync?: typeof fs.renameSync;
+  unlinkSync?: typeof fs.unlinkSync;
+};
+
+function createUploadBackupPath(target: string): string {
+  const directory = path.dirname(target);
+  const name = path.basename(target);
+  for (let attempt = 0; attempt < 10; attempt += 1) {
+    const backup = path.join(directory, `.${name}.mmd-upload-backup-${randomBytes(12).toString('hex')}`);
+    if (!fs.existsSync(backup)) return backup;
+  }
+  throw new Error('无法创建上传覆盖备份文件');
+}
+
 export async function saveUploadedFile(
   instanceId: string,
   relativeDir: string,
   filename: string,
   input: Readable,
+  replaceOperations: UploadReplaceOperations = { renameSync: fs.renameSync },
 ): Promise<string> {
   const root = getInstanceDir(instanceId);
   const safeName = path.posix.basename(filename.replace(/\\/g, '/'));
@@ -242,15 +259,39 @@ export async function saveUploadedFile(
   assertMutableTarget(root, target);
   fs.mkdirSync(path.dirname(target), { recursive: true, mode: 0o700 });
   const temp = await streamToUploadTemp(input, 'file');
+  const renameSync = replaceOperations.renameSync ?? fs.renameSync;
+  const unlinkSync = replaceOperations.unlinkSync ?? fs.unlinkSync;
+  let backup: string | null = null;
   try {
     if (fs.existsSync(target)) {
       const existing = fs.lstatSync(target);
       if (existing.isSymbolicLink() || !existing.isFile()) {
         throw new Error('目标不是普通文件');
       }
-      fs.unlinkSync(target);
+      backup = createUploadBackupPath(target);
+      renameSync(target, backup);
     }
-    fs.renameSync(temp, target);
+    try {
+      renameSync(temp, target);
+    } catch (error) {
+      if (backup) {
+        try {
+          renameSync(backup, target);
+          backup = null;
+        } catch {
+          throw new Error('上传覆盖失败，且旧文件恢复失败');
+        }
+      }
+      throw error;
+    }
+    if (backup) {
+      try {
+        unlinkSync(backup);
+        backup = null;
+      } catch (error) {
+        console.warn(`上传已完成，但无法删除旧文件备份，需手动清理：${backup}`, error);
+      }
+    }
     return path.relative(root, target).replace(/\\/g, '/');
   } finally {
     if (fs.existsSync(temp)) removeUploadTemp(temp);
