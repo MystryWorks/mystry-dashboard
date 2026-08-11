@@ -130,3 +130,12 @@ export function assertUploadPath(filePath: string): string {
   }
   return safe;
 }
+
+/** ZIP 预览只能引用专用前缀的受控上传临时文件。 */
+export function assertImportPreviewUploadPath(filePath: string): string {
+  const safe = resolveSafePath(config.uploadDir, path.basename(filePath));
+  if (!path.basename(safe).startsWith('.tmp-import-preview-')) {
+    throw new Error('非法 ZIP 预览临时文件');
+  }
+  return safe;
+}

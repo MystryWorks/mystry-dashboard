@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { createInflateRaw } from 'node:zlib';
 import { pipeline } from 'node:stream/promises';
-import { Readable, Transform } from 'node:stream';
+import { Readable, Transform, Writable } from 'node:stream';
 import { nanoid } from 'nanoid';
 import type { CoreType } from '@mmd/shared';
 import { config } from '../config.js';
@@ -20,9 +20,15 @@ import {
   prepareTaskStaging,
   promoteTaskStagingToInstance,
   removeTaskStagingTree,
+  stagingMarkerMatches,
+  STAGING_MARKER_FILE,
+  type TaskStagingMarker,
 } from './task-staging-service.js';
 import { assertUploadPath } from './upload-service.js';
 import { removeUploadTemp } from './upload-service.js';
+import { normalizeAndAssertJvmArgs } from './jvm-validation-service.js';
+import { MAX_DETECTED_JVM_ARGS_BYTES } from './jvm-detection-service.js';
+import { inspectJvmArgFile, type DetectedJvmConfig } from '@mmd/shared';
 
 type ZipEntry = {
   name: string;
@@ -76,18 +82,27 @@ function readZipEntries(zipPath: string, signal: AbortSignal): ZipEntry[] {
     const tail = readAt(fd, fileSize - tailLength, tailLength);
     let eocd = -1;
     for (let i = tail.length - 22; i >= 0; i -= 1) {
-      if (tail.readUInt32LE(i) === 0x06054b50) {
+      if (
+        tail.readUInt32LE(i) === 0x06054b50
+        && i + 22 + tail.readUInt16LE(i + 20) === tail.length
+      ) {
         eocd = i;
         break;
       }
     }
     if (eocd < 0) throw new Error('不是有效的 ZIP 文件');
 
+    const diskNumber = tail.readUInt16LE(eocd + 4);
+    const centralDisk = tail.readUInt16LE(eocd + 6);
+    const entriesOnDisk = tail.readUInt16LE(eocd + 8);
     const totalEntries = tail.readUInt16LE(eocd + 10);
     const centralSize = tail.readUInt32LE(eocd + 12);
     const centralOffset = tail.readUInt32LE(eocd + 16);
     if (totalEntries === 0xffff || centralSize === 0xffffffff || centralOffset === 0xffffffff) {
       throw new Error('暂不支持 ZIP64 文件');
+    }
+    if (diskNumber !== 0 || centralDisk !== 0 || entriesOnDisk !== totalEntries) {
+      throw new Error('暂不支持分卷 ZIP 文件');
     }
     if (totalEntries > config.maxZipEntries) throw new Error('ZIP 条目数量超过限制');
     if (centralSize > config.maxZipCentralDirectoryBytes) {
@@ -232,6 +247,95 @@ async function extractZipEntry(
   }
 }
 
+async function readZipEntryText(
+  zipPath: string,
+  entry: ZipEntry,
+  signal: AbortSignal,
+): Promise<string> {
+  if (entry.uncompressedSize > MAX_DETECTED_JVM_ARGS_BYTES) {
+    throw new Error('user_jvm_args.txt 超过 64 KiB，不能自动沿用');
+  }
+  const fd = fs.openSync(zipPath, 'r');
+  let dataStart: number;
+  try {
+    const local = readAt(fd, entry.localHeaderOffset, 30);
+    if (local.readUInt32LE(0) !== 0x04034b50) throw new Error(`ZIP entry 头非法：${entry.name}`);
+    dataStart = entry.localHeaderOffset + 30 + local.readUInt16LE(26) + local.readUInt16LE(28);
+    if (dataStart + entry.compressedSize > fs.statSync(zipPath).size) {
+      throw new Error(`ZIP entry 数据越界：${entry.name}`);
+    }
+  } finally {
+    fs.closeSync(fd);
+  }
+
+  const chunks: Buffer[] = [];
+  let bytes = 0;
+  const sink = new Writable({
+    write(chunk: Buffer, _encoding, callback) {
+      bytes += chunk.length;
+      if (bytes > MAX_DETECTED_JVM_ARGS_BYTES) {
+        callback(new Error('user_jvm_args.txt 超过 64 KiB，不能自动沿用'));
+        return;
+      }
+      chunks.push(Buffer.from(chunk));
+      callback();
+    },
+  });
+  const source = entry.compressedSize === 0
+    ? Readable.from([])
+    : fs.createReadStream(zipPath, {
+        start: dataStart,
+        end: dataStart + entry.compressedSize - 1,
+      });
+  if (entry.compression === 0) {
+    await pipeline(source, sink, { signal });
+  } else if (entry.compression === 8) {
+    await pipeline(source, createInflateRaw(), sink, { signal });
+  } else {
+    throw new Error(`user_jvm_args.txt 使用了不受支持的 ZIP compression method：${entry.compression}`);
+  }
+  if (bytes !== entry.uncompressedSize) throw new Error('user_jvm_args.txt 解压大小不匹配');
+  return Buffer.concat(chunks).toString('utf8');
+}
+
+function invalidDetectedJvmConfig(message: string): DetectedJvmConfig {
+  return {
+    source: 'user_jvm_args.txt',
+    raw: '',
+    canonicalArgs: null,
+    issues: [{ code: 'ZIP_ARGFILE_ERROR', severity: 'error', message }],
+  };
+}
+
+/** ZIP 预览只读取中央目录和受限的 user_jvm_args.txt，不解压完整安装包。 */
+export async function inspectZipJvmConfig(
+  zipPath: string,
+  signal: AbortSignal = new AbortController().signal,
+): Promise<DetectedJvmConfig | undefined> {
+  const entries = readZipEntries(zipPath, signal);
+  const files = entries.filter((entry) => !entry.directory);
+  const topLevels = new Set(files.map((entry) => entry.normalizedName.split('/')[0]!.toLowerCase()));
+  const singleRoot = topLevels.size === 1
+    && files.every((entry) => entry.normalizedName.includes('/'))
+    ? [...topLevels][0]
+    : null;
+  const candidates = files.filter((entry) => {
+    const normalized = entry.normalizedName.toLowerCase();
+    return normalized === 'user_jvm_args.txt'
+      || (singleRoot !== null && normalized === `${singleRoot}/user_jvm_args.txt`);
+  });
+  if (candidates.length === 0) return undefined;
+  if (candidates.length > 1) {
+    return invalidDetectedJvmConfig('ZIP 中存在多个 user_jvm_args.txt，不能自动沿用');
+  }
+  try {
+    const raw = await readZipEntryText(zipPath, candidates[0]!, signal);
+    return inspectJvmArgFile(raw);
+  } catch (error) {
+    return invalidDetectedJvmConfig(error instanceof Error ? error.message : String(error));
+  }
+}
+
 /** 流式解压 ZIP；只在内存中保留中央目录，不会把整个上传包读入内存。 */
 export async function safeExtract(
   zipPath: string,
@@ -256,11 +360,19 @@ export async function safeExtract(
 }
 
 /** 若解压后只有一层目录，则上移内容到实例根目录。 */
-function flattenSingleRoot(dir: string, signal: AbortSignal): void {
+function flattenSingleRoot(
+  dir: string,
+  signal: AbortSignal,
+  stagingMarker: TaskStagingMarker,
+): void {
   throwIfAborted(signal);
   const entries = fs.readdirSync(dir, { withFileTypes: true });
-  if (entries.length !== 1 || !entries[0]!.isDirectory()) return;
-  const nested = path.join(dir, entries[0]!.name);
+  const hasExpectedStagingMarker = stagingMarkerMatches(dir, stagingMarker);
+  const contentEntries = entries.filter(
+    (entry) => entry.name !== STAGING_MARKER_FILE || !hasExpectedStagingMarker,
+  );
+  if (contentEntries.length !== 1 || !contentEntries[0]!.isDirectory()) return;
+  const nested = path.join(dir, contentEntries[0]!.name);
   const nestedEntries = fs.readdirSync(nested);
   for (const name of nestedEntries) {
     throwIfAborted(signal);
@@ -300,8 +412,16 @@ export async function importZipPackage(options: {
   jvmArgs?: string;
   acceptEula?: boolean;
   javaRuntimeId?: string | null;
+  preserveUploadOnEnqueueFailure?: boolean;
 }) {
   const zipPath = assertUploadPath(options.zipPath);
+  options = {
+    ...options,
+    jvmArgs: normalizeAndAssertJvmArgs(options.jvmArgs ?? '-Xms1G -Xmx2G', {
+      coreType: options.coreType,
+      javaRuntimeId: options.javaRuntimeId,
+    }),
+  };
   try {
     return await runBackgroundTask('import', '正在导入安装包…', async (taskId, signal, report) => {
     let instanceId: string | null = null;
@@ -311,12 +431,18 @@ export async function importZipPackage(options: {
       throwIfAborted(signal);
       instanceId = nanoid(12);
       stagingToken = nanoid(32);
+      const stagingMarker: TaskStagingMarker = {
+        version: 1,
+        taskId,
+        instanceId,
+        token: stagingToken,
+      };
       recordTaskStaging(taskId, instanceId, stagingToken);
       const staging = prepareTaskStaging(taskId, instanceId, stagingToken);
       throwIfAborted(signal);
       report(20, '流式解压安装包…');
       await safeExtract(zipPath, staging, signal);
-      flattenSingleRoot(staging, signal);
+      flattenSingleRoot(staging, signal, stagingMarker);
 
       throwIfAborted(signal);
       report(70, '校验实例文件…');
@@ -383,7 +509,7 @@ export async function importZipPackage(options: {
     });
   } catch (err) {
     // 任务未进入队列（队列满/面板关闭中）时任务回调不会执行，兜底清理上传临时文件。
-    if (fs.existsSync(zipPath)) {
+    if (!options.preserveUploadOnEnqueueFailure && fs.existsSync(zipPath)) {
       try {
         removeUploadTemp(zipPath);
       } catch {

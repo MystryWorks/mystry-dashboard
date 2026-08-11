@@ -133,6 +133,9 @@ export const config = {
   maxUploadBytes: parsePositiveInt('MAX_UPLOAD_BYTES', 512 * 1024 * 1024),
   uploadIdleTimeoutMs: parsePositiveInt('UPLOAD_IDLE_TIMEOUT_MS', 30_000),
   maxConcurrentUploads: parsePositiveInt('MAX_CONCURRENT_UPLOADS', 1),
+  /** ZIP 导入预览有效期与全局容量。 */
+  importPreviewTtlSeconds: parsePositiveInt('IMPORT_PREVIEW_TTL_SECONDS', 30 * 60),
+  maxImportPreviews: parsePositiveInt('MAX_IMPORT_PREVIEWS', 2),
   maxConcurrentFileDownloads: parsePositiveInt('MAX_CONCURRENT_FILE_DOWNLOADS', 4),
   fileDownloadIdleTimeoutMs: parsePositiveInt('FILE_DOWNLOAD_IDLE_TIMEOUT_MS', 60_000),
   maxConcurrentTasks: parsePositiveInt('MAX_CONCURRENT_TASKS', 1),

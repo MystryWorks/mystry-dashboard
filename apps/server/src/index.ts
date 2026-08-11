@@ -31,6 +31,10 @@ import {
   acquirePanelDataLock,
   type PanelDataLock,
 } from './services/data-lock-service.js';
+import {
+  initializeImportPreviews,
+  shutdownImportPreviews,
+} from './services/import-preview-service.js';
 
 export type BuildAppOptions = LauncherRouteOptions & {
   isShuttingDown?: () => boolean;
@@ -52,6 +56,7 @@ export async function buildApp(options: BuildAppOptions = {}) {
   try {
     initDb();
     const taskRecovery = recoverInterruptedTasks();
+    const previewRecovery = initializeImportPreviews();
 
   const app = Fastify({
     logger: {
@@ -78,6 +83,12 @@ export async function buildApp(options: BuildAppOptions = {}) {
   if (taskRecovery.interrupted > 0) {
     app.log.warn(taskRecovery, '已将上次面板进程遗留的任务标记为失败');
   }
+  if (previewRecovery.purged > 0) {
+    app.log.info(previewRecovery, '已清理上次面板进程遗留的 ZIP 导入预览');
+  }
+  app.addHook('onClose', async () => {
+    shutdownImportPreviews();
+  });
 
   await app.register(cors, { origin: config.corsOrigins, credentials: true });
   await app.register(jwt, {
@@ -170,6 +181,7 @@ export async function buildApp(options: BuildAppOptions = {}) {
 
   return app;
   } catch (error) {
+    shutdownImportPreviews();
     releasePanelDataLock();
     throw error;
   }
