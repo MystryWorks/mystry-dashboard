@@ -79,6 +79,23 @@ function archiveExtension(platform) {
   return platform === 'win32' ? 'zip' : 'tar.gz';
 }
 
+export async function createReleaseMetadata(outputDir, execute = run) {
+  await execute(
+    '生成 SBOM',
+    process.execPath,
+    [
+      path.join(scriptDir, 'create-sbom.mjs'),
+      '--output',
+      path.join(outputDir, 'sbom.cdx.json'),
+    ],
+  );
+  await execute(
+    '生成校验和',
+    process.execPath,
+    [path.join(scriptDir, 'create-checksums.mjs'), outputDir],
+  );
+}
+
 async function main() {
   const args = parseArguments(process.argv.slice(2));
   const outputDir = path.resolve(args['output-dir'] || 'release');
@@ -143,20 +160,7 @@ async function main() {
     );
   }
 
-  run(
-    '生成校验和',
-    process.execPath,
-    [path.join(scriptDir, 'create-checksums.mjs'), outputDir],
-  );
-  run(
-    '生成 SBOM',
-    process.execPath,
-    [
-      path.join(scriptDir, 'create-sbom.mjs'),
-      '--output',
-      path.join(outputDir, 'sbom.cdx.json'),
-    ],
-  );
+  await createReleaseMetadata(outputDir);
 
   const artifacts = (await fsp.readdir(outputDir)).sort((left, right) =>
     left.localeCompare(right),

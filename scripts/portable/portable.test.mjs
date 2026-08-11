@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import fsp from 'node:fs/promises';
 import os from 'node:os';
@@ -6,6 +7,8 @@ import path from 'node:path';
 import test from 'node:test';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { createChecksums } from './create-checksums.mjs';
+import { createReleaseMetadata } from './package-release.mjs';
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 
@@ -41,6 +44,54 @@ test('校验和脚本稳定排序并排除自身', async () => {
     assert.match(lines[0], /  a\.txt$/);
     assert.match(lines[1], /  b\.txt$/);
     assert.equal(lines.some((line) => line.includes('SHA256SUMS')), false);
+  } finally {
+    await fsp.rm(root, { recursive: true, force: true });
+  }
+});
+
+test('发布元数据在每次覆盖 SBOM 后重新生成校验和', async () => {
+  const root = await fsp.mkdtemp(path.join(os.tmpdir(), 'mmd-release-metadata-test-'));
+  try {
+    await fsp.writeFile(path.join(root, 'mmd-v0.0.0-test.zip'), 'archive', 'utf8');
+    const calls = [];
+    let sbomVersion = 0;
+    const execute = async (label, command, args) => {
+      const script = path.basename(args[0]);
+      calls.push({ label, command, script });
+      if (script === 'create-sbom.mjs') {
+        const outputIndex = args.indexOf('--output');
+        assert.notEqual(outputIndex, -1);
+        await fsp.writeFile(args[outputIndex + 1], `SBOM ${++sbomVersion}`, 'utf8');
+        return;
+      }
+      assert.equal(script, 'create-checksums.mjs');
+      assert.deepEqual(args.slice(1), [root]);
+      await createChecksums(args[1]);
+    };
+    const checksumForCurrentSbom = async () => {
+      const sbom = await fsp.readFile(path.join(root, 'sbom.cdx.json'));
+      return crypto.createHash('sha256').update(sbom).digest('hex');
+    };
+    const recordedSbomChecksum = async () => {
+      const sums = await fsp.readFile(path.join(root, 'SHA256SUMS'), 'utf8');
+      return sums.match(/^([a-f0-9]{64})  sbom\.cdx\.json$/m)?.[1];
+    };
+
+    await createReleaseMetadata(root, execute);
+    const firstChecksum = await recordedSbomChecksum();
+    assert.equal(firstChecksum, await checksumForCurrentSbom());
+
+    await createReleaseMetadata(root, execute);
+    const secondChecksum = await recordedSbomChecksum();
+    assert.equal(secondChecksum, await checksumForCurrentSbom());
+    assert.notEqual(secondChecksum, firstChecksum);
+    assert.deepEqual(calls.map((call) => call.script), [
+      'create-sbom.mjs',
+      'create-checksums.mjs',
+      'create-sbom.mjs',
+      'create-checksums.mjs',
+    ]);
+    assert.equal(calls.every((call) => call.command === process.execPath), true);
   } finally {
     await fsp.rm(root, { recursive: true, force: true });
   }
