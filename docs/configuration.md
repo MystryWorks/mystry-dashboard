@@ -60,6 +60,8 @@ node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"
 | `MAX_CONCURRENT_TASKS` | `1` | 同时执行的部署 / 导入任务数上限 |
 | `MAX_QUEUED_TASKS` | `2` | 等待执行的任务数上限 |
 | `TASK_TIMEOUT_MS` | `1800000` | 单个任务超时，30 分钟 |
+| `IMPORT_PREVIEW_TTL_SECONDS` | `1800` | 待确认 ZIP 导入预览有效期，默认 30 分钟 |
+| `MAX_IMPORT_PREVIEWS` | `2` | 全局同时保留的待确认 ZIP 预览上限；每个登录用户最多一个 |
 
 部署和导入任务受并发数与队列数共同限制。达到 `MAX_CONCURRENT_TASKS` 后，新任务会进入 `pending` 排队；队列已满时请求返回 **429**。任务开始执行后，超过 `TASK_TIMEOUT_MS` 会失败并清理；前端应持续显示并轮询 `pending` / `running` 状态，不能把排队误判为失败。任务 worker 仍位于内存中，面板重启不会断点续跑；启动时会把遗留任务标记为失败，并尝试清理任务已创建的半成品实例。
 
@@ -111,6 +113,8 @@ node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"
 
 普通文件或 zip 上传超过 `MAX_UPLOAD_BYTES` 时返回 **413**；上传并发槽位已满时返回 **429**。ZIP 还会继续执行条目数、单条目、总解压大小和 central directory 配额校验。
 
+Web 的 ZIP 导入先把文件写入 `uploads/.tmp-import-preview-*` 并执行预检，再由用户确认配置后交给后台任务。预览按登录用户隔离，默认 30 分钟过期；面板关闭或重启时全部删除，不跨进程恢复。全局预览容量已满返回 **429**，任务队列已满时预览仍会保留以便重试确认。
+
 同机已有服务端只能从 `DATA_DIR/imports/<目录名>` 的直接子目录读取，API 只接收目录名而不是系统路径。复制任务会拒绝 symlink/junction、特殊文件和面板 ownership marker，并检查条目数、总字节数、任务超时与目标磁盘剩余空间。源目录只读且在成功后仍保留；确认实例可用后由管理员自行处理交接副本。
 
 ### 数据目录
@@ -131,7 +135,7 @@ node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"
 | `instances/<id>/` | 对应实例的全部文件、jar 和工作目录 |
 | `imports/<目录名>/` | 同机已有服务端交接区；只作为复制源，不是实例工作目录 |
 | `cache/cores/` | 核心 jar 下载缓存 |
-| `uploads/` | 上传临时目录 |
+| `uploads/` | 上传临时目录；`.tmp-import-preview-*` 为不跨重启保留的待确认 ZIP |
 
 无论最终数据目录来自 `MMD_DATA_DIR` 还是 `DATA_DIR`，实例始终只能位于该目录的 `instances/<id>`。部署、导入、创建和启动都使用这一目录；不支持自定义实例安装目录，也不提供从整台机器选择目录的功能。实例文件 API 的路径只是相对于该实例根目录的逻辑路径。
 

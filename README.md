@@ -18,6 +18,8 @@
 - `server.properties` 可视化编辑与 EULA 确认
 - 一键部署 **Vanilla / Paper / Fabric / Forge / NeoForge**
 - 从固定 `DATA_DIR/imports` 交接区复制接管同机已有服务端，或上传现有服务端 **zip**
+- 统一 JVM 配置器：推荐内存、兼容/G1/Paper Aikar 预设、高级参数校验和最终参数预览
+- ZIP 二阶段导入：上传预检 `user_jvm_args.txt`，确认配置后再进入后台任务
 - 首启创建管理员 + JWT 登录
 - 检测 PATH 中 `java` 的状态，并扫描、验证可选择的 Java 运行时
 

@@ -26,6 +26,8 @@
 | D-015 | Adopted | 面板外已有服务端通过固定 `DATA_DIR/imports` 交接区复制接管，不直接绑定原目录 | 保持 D-001/D-007 的托管与目录浏览边界；客户端只提交单层目录 ID，源目录只读并保留，复制任务拒绝链接、特殊文件、ownership marker、超配额与空间不足；`existing-server-import-service.ts` |
 | D-016 | Adopted | 部署/导入任务先写入 `DATA_DIR/.mmd-staging/<taskId>/<instanceId>`，成功后再原子移动到 `instances/<id>`；崩溃恢复只清理 marker 匹配的 staging，保留已注册实例与最终目录 | R0-04；`task-staging-service.ts`、`task-service.ts` 与部署/导入 worker |
 | D-017 | Adopted | 同一 `DATA_DIR` 只允许一个面板进程在 `initDb` / 任务恢复前取得 `.mmd-panel-lock/`；存活 PID 拒绝启动，仅原 PID 明确不存在时可 quarantine 旧锁 | R0-01；`data-lock-service.ts`、`index.ts` |
+| D-018 | Adopted | 四个实例入口统一使用结构化 JVM 配置器，但数据库继续只保存规范化 `jvmArgs` 字符串 | 不引入 schema 迁移；共享包负责解析、预设和诊断，服务端在保存、任务入队和启动前复验；`jvm-config.ts`、`JvmSettingsEditor.tsx`、`jvm-validation-service.ts` |
+| D-019 | Adopted | Web 的 ZIP 导入使用“上传预检 → 确认配置 → 后台任务”二阶段内存预览；旧一阶段 API 仅兼容保留 | 在消费大文件前展示并确认检测到的 JVM 参数；预览随机 ID 绑定用户、限时限量、不写数据库且不跨重启，队列满不消费；`import-preview-service.ts`、`cores.ts`、`ImportPage.tsx` |
 
 ## 更新规则
 

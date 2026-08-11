@@ -51,11 +51,12 @@ Java 状态响应准确结构为：
 ```json
 {
   "available": true,
-  "version": "21.0.3"
+  "version": "21.0.3",
+  "majorVersion": 21
 }
 ```
 
-找不到 Java 时返回 `{ "available": false, "version": null }`。面板不提供全盘目录浏览接口。
+找不到 Java 时返回 `{ "available": false, "version": null, "majorVersion": null }`。面板不提供全盘目录浏览接口。
 
 `/api/system/java-runtimes` 返回面板探测并验证过的 Java 运行时注册表；带 `?refresh=1` 请求重新扫描。并发扫描会合并为一个任务，连续强制刷新受 30 秒冷却限制；普通读取默认使用 60 秒缓存。候选路径只来自 `JAVA_HOME` 和常见安装目录扫描，且必须文件名为 `java`/`java.exe`、`-version` 输出可解析出版本号才会入表。实例可通过 `javaRuntimeId` 绑定表内条目（创建、更新、部署请求均接受该可选字段；`null` 表示使用 PATH 中的 `java`），请求不能提交任意可执行路径。绑定运行时在启动或 Forge/NeoForge Installer 执行前会再次验证；最近一次扫描未发现的条目会以 `available: false` 返回。
 
@@ -119,6 +120,8 @@ Authorization: Bearer <token>
 | `acceptEula` | boolean | 是否写入 `eula=true` |
 | `createdAt` / `updatedAt` | string | ISO 时间 |
 
+`jvmArgs` 保存与启动前都会经过 `@mmd/shared` 的同一套校验：必须各有一个 `Xms` / `Xmx`，拒绝未闭合引号、重复或冲突 GC、`Xms > Xmx`，也拒绝 `-jar`、classpath、模块启动、`@argfile` 和 `nogui` 等由面板负责的启动参数。请求省略 `jvmArgs` 时，创建、部署和导入仍使用兼容默认值 `-Xms1G -Xmx2G`。旧实例文本不会仅因读取而被改写，但非法旧值必须先修正才能保存或启动。
+
 ## 文件与配置 `/api/instances/:id`
 
 | 方法 | 路径 | 说明 |
@@ -130,12 +133,18 @@ Authorization: Bearer <token>
 | POST | `/files/mkdir` | Body：`{ path }` |
 | POST | `/files/rename` | Body：`{ from, to }` |
 | GET | `/files/download?path=` | 二进制流；可选 `ticket=` 一次性下载票据；响应含 `Content-Disposition: attachment` |
-| POST | `/files/download-ticket` | Body：`{ path }`；签发短生命周期一次性下载 ticket |
+| POST | `/files/download-ticket` | Body：`{ path }`；签发并预占下载槽位 |
+| GET | `/files/download-ticket/:ticket/status` | 查询所属下载票据的生命周期状态 |
+| DELETE | `/files/download-ticket/:ticket` | 取消尚未开流的所属下载票据 |
 | POST | `/files/upload?path=` | multipart 单文件 |
 | GET | `/config/server.properties` | 键值对象 |
 | PUT | `/config/server.properties` | Body：`Record<string, string>` |
 
-所有 `path` 均为**相对于 `DATA_DIR/instances/<id>` 的逻辑路径**，服务端会校验并拒绝 `..` 逃逸；这些接口不能访问实例根目录以外的文件。下载仅允许普通文件；`Content-Disposition` 仅使用 basename（含 RFC 5987 `filename*`）。浏览器原生下载可先 `POST .../download-ticket` 取得 ticket，再以 `GET .../download?path=&ticket=` 触发（无需 Authorization header）；无 ticket 时仍可用 Bearer JWT。ticket 在请求受理时即从池中取出以防重放；若随后因路径无效、并发容量耗尽（429）或开流失败而未能开始传输，服务端会归还未过期 ticket 供重试。过期或 path/instance 不匹配的 ticket 不会归还。带 ticket 的下载会先领取票据以防重放；若随后路径校验失败或下载并发容量耗尽（429），未过期 ticket 会归还以便重试；过期或 `path`/`instance` 不匹配的 ticket 仍立即销毁。
+所有 `path` 均为**相对于 `DATA_DIR/instances/<id>` 的逻辑路径**，服务端会校验并拒绝 `..` 逃逸；这些接口不能访问实例根目录以外的文件。下载仅允许普通文件；`Content-Disposition` 仅使用 basename（含 RFC 5987 `filename*`）。无 ticket 的下载使用 Bearer JWT；浏览器原生下载可先使用 Bearer JWT 调用 `POST .../download-ticket`，再以 `GET .../download?path=&ticket=` 触发流式下载（该 GET 不带 Authorization header）。
+
+下载 ticket 的签发有效期由 `FILE_DOWNLOAD_TICKET_TTL_SECONDS` 控制，默认 60 秒。签发时状态为 `reserved` 并预占下载并发槽；原生 GET 校验 `instance` 与 `path` 后原子转为 `streaming`，签发有效期不会回收已开流的槽位。状态查询返回 `reserved`、`streaming`、`consumed`、`failed` 或 `expired`：成功传输为 `consumed`，读流错误、连接中止、下载空闲超时及取消为 `failed`，未开流而签发期到期为 `expired`。`expired`、`consumed` 和 `failed` 都按所属用户保留 60 秒短时 tombstone，供状态查询返回终态；超过该期限或无权查询时返回 404。
+
+已认证的 `DELETE .../download-ticket/:ticket` 仅在 ticket、当前用户和 URL 中的实例 ID 三者都匹配，且 ticket 仍为 `reserved` 时取消并立即释放预占槽位，返回 **204**。已进入 `streaming` 时不改变流或槽位，返回 **409**；票据不存在、所属用户或实例不匹配时统一返回 **404**。
 
 上传文件超过 `MAX_UPLOAD_BYTES` 时返回 **413**；上传并发容量已满时返回 **429**。HTTP 请求、连接和上传空闲超时分别由 `HTTP_REQUEST_TIMEOUT_MS`、`HTTP_CONNECTION_TIMEOUT_MS` 和 `UPLOAD_IDLE_TIMEOUT_MS` 控制。文件下载受 `MAX_CONCURRENT_FILE_DOWNLOADS` 限制，并发容量已满时返回 **429**；下载在 `FILE_DOWNLOAD_IDLE_TIMEOUT_MS` 内无数据活动会被关闭并释放下载并发资源。
 
@@ -151,7 +160,11 @@ Authorization: Bearer <token>
 | POST | `/api/cores/deploy` | Body：`DeployCoreInput`，返回 `TaskInfo` |
 | GET | `/api/import/sources` | 列出 `DATA_DIR/imports` 的直接子目录及启动文件探测结果 |
 | POST | `/api/import/existing` | Body：`ImportExistingServerInput`，复制交接目录并返回 `TaskInfo` |
-| POST | `/api/import` | multipart：`name`、`file`（zip），可选 `coreType`、`mcVersion`、`jvmArgs`、`acceptEula`、`javaRuntimeId` |
+| POST | `/api/import/previews` | multipart 上传单个 ZIP，验证中央目录并返回 `ImportPreviewInfo` |
+| GET | `/api/import/previews/:id` | 恢复当前登录用户的待确认预览 |
+| POST | `/api/import/previews/:id/confirm` | Body：`ConfirmZipImportInput`，确认配置并返回 `TaskInfo` |
+| DELETE | `/api/import/previews/:id` | 取消预览并删除临时 ZIP |
+| POST | `/api/import` | 兼容的一阶段 multipart 导入；字段同旧版，Web 不再使用 |
 | GET | `/api/tasks/:id` | 查询任务进度 `TaskInfo` |
 | GET | `/api/tasks` | 任务中心列表，按创建时间倒序返回最近 50 条 `{ tasks: TaskInfo[] }` |
 
@@ -169,7 +182,13 @@ Authorization: Bearer <token>
       "launchTarget": "paper.jar",
       "coreType": "paper",
       "modifiedAt": "2026-08-02T10:00:00.000Z",
-      "ready": true
+      "ready": true,
+      "detectedJvmConfig": {
+        "source": "user_jvm_args.txt",
+        "raw": "-Xms1G\n-Xmx4G\n",
+        "canonicalArgs": "-Xms1G -Xmx4G",
+        "issues": []
+      }
     }
   ]
 }
@@ -190,6 +209,53 @@ Authorization: Bearer <token>
 ```
 
 提交前应停止原服务器。任务会只读扫描交接源，拒绝路径逃逸、symlink/junction、特殊文件和 ownership marker，并按 `MAX_EXISTING_IMPORT_ENTRIES`、`MAX_EXISTING_IMPORT_BYTES`、`TASK_TIMEOUT_MS` 与目标磁盘空间执行复制。成功或失败都不会删除源目录；失败时会清理新建的半成品托管实例。
+
+目录根部存在普通 `user_jvm_args.txt` 时，来源信息可包含 `detectedJvmConfig`。文件最大 64 KiB；不读取子目录文件，不跟随链接，也不解析或执行 `.bat` / `.sh`。检测到参数后，Web 要求用户明确选择沿用、面板推荐或自定义；解析失败时 `canonicalArgs` 为 `null`，不能沿用。
+
+### ZIP 二阶段导入
+
+第一步仅上传文件：
+
+```http
+POST /api/import/previews
+Content-Type: multipart/form-data
+
+file=<server.zip>
+```
+
+服务端流式写入受控临时目录，验证 ZIP 中央目录、条目配额、ZIP64、链接/特殊文件和重复 entry；只额外解压根目录或单一顶层目录中的 `user_jvm_args.txt`，且最多 64 KiB。成功响应：
+
+```json
+{
+  "id": "不可猜测的随机预览 ID",
+  "fileName": "server.zip",
+  "sizeBytes": 10485760,
+  "expiresAt": "2026-08-11T12:30:00.000Z",
+  "detectedJvmConfig": {
+    "source": "user_jvm_args.txt",
+    "raw": "-Xms1G\n-Xmx4G\n",
+    "canonicalArgs": "-Xms1G -Xmx4G",
+    "issues": []
+  }
+}
+```
+
+第二步确认配置：
+
+```json
+{
+  "name": "生存服",
+  "coreType": "paper",
+  "mcVersion": "1.21.1",
+  "jvmArgs": "-Xms4G -Xmx4G -XX:+UseG1GC",
+  "acceptEula": true,
+  "javaRuntimeId": null
+}
+```
+
+预览 ID 绑定登录用户：非所有者和不存在的 ID 返回 **404**，过期返回 **410**，正在确认或重复确认返回 **409**。每个用户最多一个预览，全局容量由 `MAX_IMPORT_PREVIEWS` 控制；新 ZIP 预检成功后才替换旧预览。只有后台任务成功入队才消费预览，任务队列满返回 **429** 且保留预览供重试。预览默认由 `IMPORT_PREVIEW_TTL_SECONDS=1800` 控制，取消、过期、面板关闭或重启都会删除临时 ZIP，不写入数据库也不跨重启恢复。
+
+兼容接口 `POST /api/import` 仍接受旧 multipart 字段并直接创建任务，但会执行相同的服务端 JVM 校验；新 Web 流程只使用预览接口。
 
 核心版本、构建和 loader 元数据受 `MAX_CORE_METADATA_BYTES` 与 `CORE_METADATA_TIMEOUT_MS` 限制；核心文件下载先写入临时文件，完整完成后才原子发布到 `DATA_DIR/cache/cores/`，不复用未完成缓存。队列已满时创建任务返回 **429**。
 

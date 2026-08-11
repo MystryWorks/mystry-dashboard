@@ -13,6 +13,7 @@
 - 控制台前端按 ECMA-48 / ISO 6429 对 INFO（绿）、WARN（黄）、ERROR（红）等日志级别着色；服务端仍转发原始纯文本。
 - 多实例创建、编辑、删除、启动、停止、强制停止、重启和控制台命令。
 - Vanilla、Paper、Fabric、Forge、NeoForge 部署及 ZIP 导入。
+- ZIP 导入采用二阶段预览：Web 先调用 `/api/import/previews` 流式上传并验证中央目录，只读取根目录或单一顶层目录中最大 64 KiB 的 `user_jvm_args.txt`；确认后同一临时 ZIP 才交给后台任务。预览随机 ID 按用户隔离、默认 30 分钟、每用户一个/全局两个，队列满保留，取消/过期/关闭/重启清理且不写数据库；旧 `/api/import` 兼容保留。
 - 面板外已有服务端交接：只列出 `DATA_DIR/imports` 直接子目录，只读扫描并以后台任务复制到新托管实例；拒绝 symlink/junction、特殊文件、ownership marker、超配额和磁盘空间不足，源目录始终保留。
 - 实例目录内文件列表、上传、文本读写、删除、同目录重命名；目标已存在时重命名返回 `409` 且不覆盖。普通文件通过一次性 download ticket 流式下载（JWT 签发、并发槽预留、`GET` 状态查询、失败回传 SPA；禁止 `blob()` 整包缓存），Web 文件页提供下载与重命名入口。票据完成（`consumed`）或过期（`expired`）后保留 60 秒按用户隔离的内存 tombstone，状态查询返回终态而非 404，避免前端轮询把成功下载误判为过期。
 - 同 `DATA_DIR` 仅允许一个面板进程进入 `initDb` / 任务恢复：`.mmd-panel-lock/` 目录锁 + `owner.json`（存活 PID 拒绝启动；仅原 PID 不存在时可 quarantine 后接管）。
@@ -31,8 +32,9 @@
 - 前端任一请求收到 401（登录/setup/status 除外）会清空登录态并自动跳回登录页。
 - server.properties 编辑为引导化表单：常用键按「基础/多人与权限/世界/性能」分组；服务端保留注释、空行、重复键与 `:` 分隔符，引导保存只改每个 key 的最后一次定义，并原子写入。应用使用 Data Router 支持 SPA 导航阻塞；配置与实例设置页跟踪未保存状态，无变化时禁用保存，保存期间锁定表单，切换页面前使用统一确认弹窗，浏览器离开则使用 beforeunload；配置保存后明确提示重启生效。
 - 总览提供「创建空实例」：`POST /api/instances`（custom）成功后跳转实例文件页上传 Jar。
+- 部署、导入、创建空实例和实例设置共用 `JvmSettingsEditor`：基础区为内存与兼容/G1/Paper Aikar 预设，高级区为手动 Xms 与附加参数，显示规范化参数预览和结构化诊断。预设常量含版本、适用核心/Java、来源与复核日期；服务端在实例保存、部署/导入入队和启动前使用同一共享校验。旧实例非法文本保持原样，但修正前不能保存或启动（见 D-018）。
 - 任务中心区分首次读取、空列表和轮询失败；失败时显示「状态可能已过期」、上次成功刷新时间与重试，弹层打开后接收焦点并支持 Escape 返回入口。部署/导入表单提交后锁定，进度值限制在 0–100 并带 progressbar 语义；已有服务端来源列表仅做有界 ModLoader 预检，完整扫描在导入任务中执行。
-- Java 多运行时：`GET /api/system/java-runtimes` 扫描 JAVA_HOME 与常见安装目录，候选必须文件名为 java/java.exe 且 `-version` 输出可解析才写入 `java_runtimes` 注册表；`detectJava` / 执行前复验 / Minecraft 与 installer 子进程均使用 `getMinecraftChildEnv()` 脱敏环境（不继承面板密钥与 `DATA_DIR`）。实例可通过 `javaRuntimeId` 绑定运行时（默认仍用 PATH 中的 java），启动和 Forge/NeoForge Installer 会在执行前再次验证绑定条目；部署页与实例设置页提供选择器，并按 MC 版本给出推荐 Java 版本与 mismatch 告警（`recommendedJavaMajor`：1.20.5+ → 21，1.17–1.20.4 → 17，更早 → 8）。
+- Java 多运行时：`GET /api/system/java-runtimes` 扫描 JAVA_HOME 与常见安装目录，候选必须文件名为 java/java.exe 且 `-version` 输出可解析才写入 `java_runtimes` 注册表；`detectJava` / 执行前复验 / Minecraft 与 installer 子进程均使用 `getMinecraftChildEnv()` 脱敏环境（不继承面板密钥与 `DATA_DIR`）。实例可通过 `javaRuntimeId` 绑定运行时（默认仍用 PATH 中的 java），启动和 Forge/NeoForge Installer 会在执行前再次验证绑定条目；四个 JVM 配置入口共用运行时选择器的加载结果和实际 Java 主版本，并按 MC 版本给出推荐 Java 版本与 mismatch 告警（`recommendedJavaMajor`：1.20.5+ → 21，1.17–1.20.4 → 17，更早 → 8）。
 - 新建数据根与子目录在 Unix 上默认 `0700`、敏感文件 `0600`，过宽权限会拒绝启动；Windows 上记录 ACL 无法自动校验时的阻断级警告（见 `data-dir-permissions.ts`）。
 - `PanelManager.ps1` 安全停服：`Get-PanelHealth` 校验 PID、状态文件指纹与健康 JSON 一致后才发送 `X-Launcher-Token`（伪造健康服务测试断言永不发送 token）。
 - Paper/Fabric 等 core 缓存键基于解析后的不可变版本/build，旧 `latest` 键不再误命中。

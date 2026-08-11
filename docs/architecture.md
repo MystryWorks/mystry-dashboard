@@ -38,7 +38,7 @@ flowchart LR
   JavaStatus -->|exec java -version| Java
 ```
 
-核心边界是：实例唯一工作目录为 `DATA_DIR/instances/<id>`。`DATA_DIR` 可相对于项目根目录配置，也可使用绝对路径；实例服务、文件服务、部署和导入目标都只解析这个托管根目录。同机已有服务端只能先放到固定 `DATA_DIR/imports/<目录名>` 交接区，客户端只提交单层目录 ID，服务端只读扫描后复制到新托管实例。不存在用户可指定的安装目录，也不存在面向整台机器的目录浏览能力。实例默认通过 PATH 中的 `java` 启动；也只能按 ID 使用面板扫描、注册并在执行前复验的运行时，客户端不能提交路径。
+核心边界是：实例唯一工作目录为 `DATA_DIR/instances/<id>`。`DATA_DIR` 可相对于项目根目录配置，也可使用绝对路径；实例服务、文件服务、部署和导入目标都只解析这个托管根目录。同机已有服务端只能先放到固定 `DATA_DIR/imports/<目录名>` 交接区，客户端只提交单层目录 ID，服务端只读扫描后复制到新托管实例。ZIP 预览只在 `uploads/.tmp-import-preview-*` 暂存，绑定登录用户且不跨重启，确认入队后由导入任务接管清理。不存在用户可指定的安装目录，也不存在面向整台机器的目录浏览能力。实例默认通过 PATH 中的 `java` 启动；也只能按 ID 使用面板扫描、注册并在执行前复验的运行时，客户端不能提交路径。
 
 当前为多机扩展**阶段一**：内置本机节点 `local` 承担全部执行；远程节点创建与 Agent 连接尚未开放（由共享常量 `REMOTE_NODE_CREATION_ENABLED` 控制）。
 
@@ -114,7 +114,10 @@ minecraft-mystery-dashboard/
 | `config-service` | `server.properties` 解析与写入 |
 | `core-depot` | Vanilla / Paper / Fabric 下载与部署任务 |
 | `import-service` | zip 解压导入到托管实例目录 |
+| `import-preview-service` | 管理按用户隔离、限时限量且不持久化的 ZIP 待确认预览 |
 | `existing-server-import-service` | 枚举固定交接区，只读校验并流式复制已有服务端 |
+| `jvm-detection-service` | 有界读取根目录 `user_jvm_args.txt` 并返回结构化诊断 |
+| `jvm-validation-service` | 使用共享规则在保存、任务入队和启动前规范化与复验 JVM 参数 |
 | `server-launch-detect` | 探测普通 jar 与现代 Forge/NeoForge args 启动目标 |
 | `task-service` | 内存任务调度、持久化状态、启动中断收敛与半成品清理 |
 | `java-detect` | 执行 `java -version` 并返回可用状态与版本 |
@@ -175,6 +178,8 @@ DATA_DIR/
 
 工作目录固定为 `DATA_DIR/instances/<id>`。未绑定时 `java` 由运行面板的进程环境通过 PATH 解析；绑定时只允许使用注册表 ID 对应、且执行前重新通过 `-version` 验证的运行时。数据库和请求均不能替换为任意可执行路径。
 
+共享包的 `jvm-config.ts` 负责直接参数与 Java argfile 解析、内存公式、版本化预设和结构化诊断。数据库不保存配置器字段，只继续保存规范化 `jvmArgs` 字符串。普通 jar 将解析后的 JVM 参数直接放在 `-jar` 前；Forge / NeoForge 在启动前把同一规范参数重写为 `user_jvm_args.txt`，再组合面板控制的两个 argfile 和 `nogui`。
+
 ## 前端结构
 
 | 路径 | 说明 |
@@ -184,6 +189,7 @@ DATA_DIR/
 | `src/api.ts` | `fetch` 封装、任务轮询 |
 | `src/pages/*` | 各功能页 |
 | `src/components/ConsolePanel.tsx` | xterm + WebSocket |
+| `src/components/JvmSettingsEditor.tsx` | 四处复用的内存、预设、高级参数、检测选择与诊断界面 |
 
 路由表：
 
@@ -214,7 +220,7 @@ DATA_DIR/
 
 下载文件可缓存在 `DATA_DIR/cache/cores/` 以减少重复拉取；下载大小和超时受对应环境变量限制。
 
-核心缓存下载先写入临时文件，完整下载并通过校验后才原子发布到最终缓存路径，失败、取消或超时不会留下可复用的部分文件。部署 / 导入任务由并发槽位和等待队列调度，队列满时拒绝新任务；任务执行超过配置的超时会被取消，Installer 结束时先等待 `INSTALLER_KILL_GRACE_MS` 再强制结束。任务 worker 不跨进程恢复；启动时遗留的 `pending` / `running` 会转为失败，并尝试删除任务已关联的半成品实例。
+核心缓存下载先写入临时文件，完整下载并通过校验后才原子发布到最终缓存路径，失败、取消或超时不会留下可复用的部分文件。ZIP Web 导入先创建不持久化的用户预览，只有确认且后台任务成功入队才消费；队列满时保留预览。部署 / 导入任务由并发槽位和等待队列调度，队列满时拒绝新任务；任务执行超过配置的超时会被取消，Installer 结束时先等待 `INSTALLER_KILL_GRACE_MS` 再强制结束。任务 worker 不跨进程恢复；启动时遗留的 `pending` / `running` 会转为失败，并尝试删除任务已关联的半成品实例。
 
 HTTP 请求与上传还有总请求、连接、keep-alive 和上传空闲超时。上传大小超限返回 413，上传并发容量或任务队列耗尽返回 429。实例文件下载受 `MAX_CONCURRENT_FILE_DOWNLOADS=4` 并发槽位限制，容量耗尽返回 429；`FILE_DOWNLOAD_IDLE_TIMEOUT_MS=60000` 空闲超时会关闭下载并释放槽位。控制台 transport、并发连接、命令速率、stdin 待处理输入和历史输出均有独立字节 / 数量上限。
 
