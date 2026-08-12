@@ -1,6 +1,14 @@
-import { useEffect, useId, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 
 const PAGE_SIZE = 10;
+const PANEL_MAX_HEIGHT = 400;
+const PANEL_GAP = 4;
+const VIEWPORT_MARGIN = 8;
+
+type PanelLayout = {
+  direction: 'above' | 'below';
+  maxHeight: number;
+};
 
 type LazyScrollSelectProps<T extends string | number> = {
   value: T | '';
@@ -47,6 +55,32 @@ export function LazyScrollSelect<T extends string | number>({
   const listRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const listboxId = useId();
+  const [panelLayout, setPanelLayout] = useState<PanelLayout>({
+    direction: 'below',
+    maxHeight: PANEL_MAX_HEIGHT,
+  });
+
+  const updatePanelLayout = useCallback(() => {
+    const rect = triggerRef.current?.getBoundingClientRect();
+    if (!rect) return;
+
+    // visualViewport 能排除移动端浏览器工具栏和软键盘占用的不可见区域。
+    const viewportTop = window.visualViewport?.offsetTop ?? 0;
+    const viewportHeight = window.visualViewport?.height ?? document.documentElement.clientHeight;
+    const viewportBottom = viewportTop + viewportHeight;
+    const availableBelow = Math.max(0, viewportBottom - rect.bottom - PANEL_GAP - VIEWPORT_MARGIN);
+    const availableAbove = Math.max(0, rect.top - viewportTop - PANEL_GAP - VIEWPORT_MARGIN);
+    const direction =
+      availableBelow < PANEL_MAX_HEIGHT && availableAbove > availableBelow ? 'above' : 'below';
+    const availableHeight = direction === 'above' ? availableAbove : availableBelow;
+    const maxHeight = Math.min(PANEL_MAX_HEIGHT, availableHeight);
+
+    setPanelLayout((current) =>
+      current.direction === direction && Math.abs(current.maxHeight - maxHeight) < 1
+        ? current
+        : { direction, maxHeight },
+    );
+  }, []);
 
   // 选项变化时重置可见数量
   useEffect(() => {
@@ -67,6 +101,27 @@ export function LazyScrollSelect<T extends string | number>({
     if (!open) return;
     listRef.current?.focus();
   }, [open]);
+
+  // 在浏览器绘制面板前完成首次定位，避免固定向下展开造成一帧越界。
+  useLayoutEffect(() => {
+    if (!open) return;
+    updatePanelLayout();
+  }, [open, updatePanelLayout]);
+
+  useEffect(() => {
+    if (!open) return;
+    const visualViewport = window.visualViewport;
+    window.addEventListener('resize', updatePanelLayout);
+    window.addEventListener('scroll', updatePanelLayout, true);
+    visualViewport?.addEventListener('resize', updatePanelLayout);
+    visualViewport?.addEventListener('scroll', updatePanelLayout);
+    return () => {
+      window.removeEventListener('resize', updatePanelLayout);
+      window.removeEventListener('scroll', updatePanelLayout, true);
+      visualViewport?.removeEventListener('resize', updatePanelLayout);
+      visualViewport?.removeEventListener('scroll', updatePanelLayout);
+    };
+  }, [open, updatePanelLayout]);
 
   // 点击外部关闭
   useEffect(() => {
@@ -92,6 +147,7 @@ export function LazyScrollSelect<T extends string | number>({
     if (disabled) return;
     const index = value === '' ? -1 : options.indexOf(value as T);
     setVisibleCount(countForSelectedIndex(index, options.length));
+    updatePanelLayout();
     setOpen(true);
     onOpen?.();
   }
@@ -191,7 +247,10 @@ export function LazyScrollSelect<T extends string | number>({
     visibleActiveIndex >= 0 ? `${listboxId}-option-${visibleActiveIndex}` : undefined;
 
   return (
-    <div className={`lazy-select${open ? ' is-open' : ''}`} ref={rootRef}>
+    <div
+      className={`lazy-select${open ? ' is-open' : ''}${panelLayout.direction === 'above' ? ' opens-up' : ''}`}
+      ref={rootRef}
+    >
       <button
         ref={triggerRef}
         type="button"
@@ -215,6 +274,7 @@ export function LazyScrollSelect<T extends string | number>({
           aria-label={ariaLabel}
           aria-activedescendant={activeOptionId}
           ref={listRef}
+          style={{ maxHeight: panelLayout.maxHeight }}
           onScroll={handleScroll}
           onKeyDown={onPanelKeyDown}
           tabIndex={-1}
