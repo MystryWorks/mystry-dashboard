@@ -40,7 +40,7 @@ function makeStoredZip(name: string, content: Buffer): Buffer {
 
 async function main(): Promise<void> {
   const dataRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'mmd-security-self-test-'));
-  process.env.DATA_DIR = dataRoot;
+  process.env.MMD_DATA_DIR = dataRoot;
   process.env.JWT_SECRET = 'a'.repeat(64);
   process.env.SETUP_TOKEN = 'b'.repeat(64);
   process.env.LAUNCHER_TOKEN = 'c'.repeat(64);
@@ -473,6 +473,55 @@ async function main(): Promise<void> {
       payload: { username: 'abcdef', password: 'abcdef' },
     });
     assert.equal(shortLogin.statusCode, 401);
+
+    // 正确密码不应消耗失败配额，避免正常管理员因重复登录被锁定。
+    for (let attempt = 0; attempt <= config.authRateLimitMax; attempt += 1) {
+      const successfulLogin = await app.inject({
+        method: 'POST',
+        url: '/api/auth/login',
+        payload: { username: 'admin12', password: 'password1234' },
+      });
+      assert.equal(successfulLogin.statusCode, 200);
+    }
+
+    // 少于阈值的失败后，正确登录应恢复可用并清除该用户的失败记录。
+    for (let attempt = 0; attempt < config.authRateLimitMax - 1; attempt += 1) {
+      const failedLogin = await app.inject({
+        method: 'POST',
+        url: '/api/auth/login',
+        payload: { username: 'admin12', password: 'wrong-password' },
+      });
+      assert.equal(failedLogin.statusCode, 401);
+    }
+    const recoveredLogin = await app.inject({
+      method: 'POST',
+      url: '/api/auth/login',
+      payload: { username: 'admin12', password: 'password1234' },
+    });
+    assert.equal(recoveredLogin.statusCode, 200);
+
+    for (let attempt = 0; attempt < config.authRateLimitMax; attempt += 1) {
+      const failedLogin = await app.inject({
+        method: 'POST',
+        url: '/api/auth/login',
+        payload: { username: 'admin12', password: 'wrong-password' },
+      });
+      assert.equal(failedLogin.statusCode, 401);
+    }
+    const blockedLogin = await app.inject({
+      method: 'POST',
+      url: '/api/auth/login',
+      payload: { username: 'admin12', password: 'wrong-password' },
+    });
+    assert.equal(blockedLogin.statusCode, 429);
+    assert.equal(blockedLogin.headers['x-ratelimit-limit'], String(config.authRateLimitMax));
+
+    const anotherUser = await app.inject({
+      method: 'POST',
+      url: '/api/auth/login',
+      payload: { username: 'another-admin', password: 'wrong-password' },
+    });
+    assert.equal(anotherUser.statusCode, 401);
 
     const ticket = issueConsoleTicket('user', 'instance');
     assert.equal(consumeConsoleTicket(ticket.ticket, 'instance')?.userId, 'user');

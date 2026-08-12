@@ -185,7 +185,7 @@ export const config = {
   fileDownloadTicketTtlSeconds: parsePositiveInt('FILE_DOWNLOAD_TICKET_TTL_SECONDS', 60),
   rateLimitMax: parsePositiveInt('RATE_LIMIT_MAX', 120),
   rateLimitWindowMs: parsePositiveInt('RATE_LIMIT_WINDOW_MS', 60_000),
-  authRateLimitMax: parsePositiveInt('AUTH_RATE_LIMIT_MAX', 5),
-  authRateLimitWindowMs: parsePositiveInt('AUTH_RATE_LIMIT_WINDOW_MS', 15 * 60_000),
+  authRateLimitMax: parsePositiveInt('AUTH_RATE_LIMIT_MAX', 10),
+  authRateLimitWindowMs: parsePositiveInt('AUTH_RATE_LIMIT_WINDOW_MS', 5 * 60_000),
   webDist: path.resolve(__dirname, '../../web/dist'),
 };

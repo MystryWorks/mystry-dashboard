@@ -18,7 +18,7 @@ function prepareTempDataRoot(t: test.TestContext): string {
     }
     fs.rmSync(dataRoot, { recursive: true, force: true });
   });
-  process.env.DATA_DIR = dataRoot;
+  process.env.MMD_DATA_DIR = dataRoot;
   process.env.JWT_SECRET = 'a'.repeat(64);
   process.env.SETUP_TOKEN = 'b'.repeat(64);
   return dataRoot;
@@ -36,7 +36,7 @@ test('R0-04: recoverInterruptedTasks 不得因 result.instanceId 删除最终实
   recordTaskInstance(task.id, inst.id);
   getDb().prepare("UPDATE tasks SET status = 'running' WHERE id = ?").run(task.id);
 
-  const instanceDir = path.join(process.env.DATA_DIR!, 'instances', inst.id);
+  const instanceDir = path.join(process.env.MMD_DATA_DIR!, 'instances', inst.id);
   assert.ok(fs.existsSync(instanceDir), '前置：实例目录应已创建');
 
   recoverInterruptedTasks();

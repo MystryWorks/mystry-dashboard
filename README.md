@@ -44,7 +44,7 @@ chmod +x mmdctl
 |------|------|
 | Node.js | **≥ 22**（使用内置 `node:sqlite`，无需原生 SQLite 模块） |
 | Java | 默认使用 PATH 中的 `java`；也可选择面板扫描并验证的本机运行时，面板不接受手填完整路径 |
-| 操作系统 | 源码管理器仅面向 Windows；便携包按 Windows x64 / Linux x64 构建和验证 |
+| 操作系统 | 源码管理器支持 Windows（`PanelManager.cmd`）与 Linux / WSL（`PanelManager.sh`）；便携包按 Windows x64 / Linux x64 构建和验证 |
 
 ## 快速开始
 
@@ -69,6 +69,38 @@ PanelManager.cmd logs
 PanelManager.cmd rebuild
 PanelManager.cmd status
 ```
+
+### Linux / WSL 源码管理器
+
+安装 Node.js 22 或更高版本后，在仓库根目录执行：
+
+```bash
+chmod +x PanelManager.sh
+./PanelManager.sh start
+```
+
+启动器会按 `package-lock.json` 补装依赖、构建 shared / server / web，然后复用带 PID 指纹、健康检查和安全停止的跨平台控制器。首次启动会在 `config/panel.env` 自动生成互不相同的 `JWT_SECRET`、`SETUP_TOKEN` 和 `LAUNCHER_TOKEN`；不要分享或提交该文件。创建管理员后，控制器会自动移除 `SETUP_TOKEN`。
+
+要让测试配置和数据完全位于 WSL 的独立目录，请在同一个终端先设置：
+
+```bash
+export MMD_CONFIG_PATH=/home/mocha/data/mystrydashboard-test/config/panel.env
+export MMD_DATA_DIR=/home/mocha/data/mystrydashboard-test
+./PanelManager.sh start
+```
+
+之后在同一终端可使用：
+
+```bash
+./PanelManager.sh foreground
+./PanelManager.sh stop
+./PanelManager.sh restart
+./PanelManager.sh logs
+./PanelManager.sh rebuild
+./PanelManager.sh status
+```
+
+`rebuild` 会重新构建并安全重启；`restart` 只安全重启当前构建。默认访问地址为 `http://127.0.0.1:3000`。
 
 ### 手动安装
 

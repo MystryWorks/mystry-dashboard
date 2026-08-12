@@ -76,7 +76,7 @@ minecraft-mystery-dashboard/
 
 工作区 `@mmd/shared` 会被物理复制到 `app/node_modules/@mmd/shared`，发布包拒绝符号链接，避免 Windows ZIP 保留指向构建仓库的 junction。`config/`、`data/` 和 `logs/` 在发布产物中为空。
 
-`mmdctl.cmd` 和 `mmdctl` 只负责调用包内 Node；跨平台生命周期逻辑位于 `app/mmdctl.mjs`。后台启动会记录 PID、随机进程指纹、启动时间和健康地址，并通过 `LAUNCHER_TOKEN` 调用回环关闭接口。若 PID 被复用或健康检查不匹配，控制器不会直接强杀未知进程。
+便携包的 `mmdctl.cmd` 和 `mmdctl` 只负责调用包内 Node；Linux / WSL 源码入口 `PanelManager.sh` 先完成 Node 版本、依赖和构建预检，再调用同一跨平台生命周期控制器 `scripts/portable/mmdctl.mjs`。后台启动会记录 PID、随机进程指纹、启动时间和健康地址，并通过 `LAUNCHER_TOKEN` 调用回环关闭接口。若 PID 被复用或健康检查不匹配，控制器不会直接强杀未知进程。
 
 运行目录由 `MMD_HOME` 定位；配置和数据可分别通过 `MMD_CONFIG_PATH`、`MMD_DATA_DIR` 解耦。默认实例边界仍为便携根目录的 `data/instances/<id>`。
 

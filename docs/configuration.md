@@ -8,7 +8,7 @@
 
 - `JWT_SECRET`：64 位十六进制字符串，用于 JWT 签名。
 - `SETUP_TOKEN`：64 位十六进制字符串，用于首次 setup 请求的 `X-Setup-Token` header。
-- `LAUNCHER_TOKEN`：PanelManager 自动生成的独立本机关闭令牌；手动运行且不使用管理器时可以不配置。
+- `LAUNCHER_TOKEN`：PanelManager / mmdctl 自动生成的独立本机关闭令牌；手动运行且不使用管理器时可以不配置。
 
 已配置的密钥必须分别使用不同的随机值。Node.js 生成命令如下；文档和模板不提供可用固定密钥：
 
@@ -30,13 +30,13 @@ node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"
 | `PORT` | `3000` | 监听端口 |
 | `JWT_SECRET` | 无；初次启动前必填 | 64 位十六进制 JWT 签名密钥，不要使用固定示例值 |
 | `SETUP_TOKEN` | 无；初次 setup 前必填 | 64 位十六进制初始化令牌；setup 完成后可移除 |
-| `LAUNCHER_TOKEN` | 无；使用 PanelManager 时自动生成 | 64 位十六进制本机关闭令牌；仅回环地址可使用 |
+| `LAUNCHER_TOKEN` | 无；使用 PanelManager / mmdctl 时自动生成 | 64 位十六进制本机关闭令牌；仅回环地址可使用 |
 | `JWT_EXPIRES_IN` | `2h` | JWT 有效期 |
 | `CORS_ORIGINS` | `http://127.0.0.1:5173,http://localhost:5173` | 精确 CORS 来源白名单，逗号分隔，不要填写 `*` |
 | `RATE_LIMIT_MAX` | `120` | 普通请求限流窗口内的最大次数 |
 | `RATE_LIMIT_WINDOW_MS` | `60000` | 普通请求限流窗口，毫秒 |
-| `AUTH_RATE_LIMIT_MAX` | `5` | 登录和 setup 限流窗口内的最大次数 |
-| `AUTH_RATE_LIMIT_WINDOW_MS` | `900000` | 登录和 setup 限流窗口，毫秒 |
+| `AUTH_RATE_LIMIT_MAX` | `10` | 登录失败、初始化和本机关闭接口在窗口内的最大次数；登录成功会清除该用户名与 IP 的失败计数 |
+| `AUTH_RATE_LIMIT_WINDOW_MS` | `300000` | 认证限流窗口，毫秒 |
 | `CONSOLE_TICKET_TTL_SECONDS` | `60` | 控制台 ticket 有效期；每个 ticket 只能建立一次 WebSocket 连接 |
 | `FILE_DOWNLOAD_TICKET_TTL_SECONDS` | `60` | 文件下载 ticket 有效期；每个 ticket 只能下载一次 |
 

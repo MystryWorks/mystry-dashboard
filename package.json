@@ -28,7 +28,7 @@
     "knowledge:check": "node scripts/check-project-knowledge.mjs",
     "knowledge:test": "node --test scripts/check-project-knowledge.test.mjs",
     "test:static": "npm run test:static -w @mmd/server",
-    "verify": "npm run knowledge:check && npm run knowledge:test && npm run portable:test && npm run windows:test && npm run build -w @mmd/shared && npm run typecheck && npm run test:security -w @mmd/server && npm run test:regression -w @mmd/server && npm run build && npm run test:static",
+    "verify": "npm run knowledge:check && npm run knowledge:test && npm run portable:test && npm run windows:test && npm run linux:test && npm run build -w @mmd/shared && npm run typecheck && npm run test:security -w @mmd/server && npm run test:regression -w @mmd/server && npm run build && npm run test:static",
     "audit:production": "node scripts/check-production-audit.mjs",
     "package:release": "node scripts/portable/package-release.mjs",
     "portable:package": "node scripts/portable/package-portable.mjs",
@@ -37,7 +37,8 @@
     "portable:test": "node --test scripts/portable/portable.test.mjs",
     "windows:test": "node --test scripts/windows/panel-manager.test.mjs",
     "sbom": "node scripts/portable/create-sbom.mjs --output sbom.cdx.json",
-    "start": "npm run start -w @mmd/server"
+    "start": "npm run start -w @mmd/server",
+    "linux:test": "node --test scripts/linux/panel-manager.test.mjs"
   },
   "engines": {
     "node": ">=22"

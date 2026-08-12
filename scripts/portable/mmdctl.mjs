@@ -43,9 +43,12 @@ const stdoutLog = path.join(logDir, 'panel.stdout.log');
 const stderrLog = path.join(logDir, 'panel.stderr.log');
 const portableServerEntry = path.join(homeDir, 'app', 'server', 'dist', 'index.js');
 const repositoryServerEntry = path.join(homeDir, 'apps', 'server', 'dist', 'index.js');
-const serverEntry = fs.existsSync(portableServerEntry)
+const portableMode = fs.existsSync(portableServerEntry);
+const serverEntry = portableMode
   ? portableServerEntry
   : repositoryServerEntry;
+const managerLabel = portableMode ? '便携版' : '源码版';
+const managerCommand = portableMode ? 'mmdctl' : 'PanelManager.sh';
 const bundledNode = process.platform === 'win32'
   ? path.join(homeDir, 'runtime', 'node.exe')
   : path.join(homeDir, 'runtime', 'bin', 'node');
@@ -155,7 +158,7 @@ async function ensureConfiguration() {
   const original = existed
     ? await fsp.readFile(configPath, 'utf8')
     : [
-        '# Minecraft Mystery Dashboard 便携版配置',
+        '# Minecraft Mystery Dashboard 配置',
         '# 本文件包含密钥，不要上传、分享或放入版本控制。',
         'HOST=127.0.0.1',
         'PORT=3000',
@@ -210,7 +213,7 @@ async function ensureConfiguration() {
     content += '\n';
     await writeAtomic(configPath, content);
     if (backup) console.log(`配置已备份：${backup}`);
-    if (!existed) console.log(`已创建便携版配置：${configPath}`);
+    if (!existed) console.log(`已创建${managerLabel}配置：${configPath}`);
     if (repaired) console.warn('检测到缺失或无效密钥，已备份配置并生成新的随机密钥。');
   }
 
@@ -360,7 +363,7 @@ async function acquireManagerLock() {
       }
       const ownerText = await fsp.readFile(lockPath, 'utf8').catch(() => '');
       const owner = Number(ownerText.trim());
-      if (isProcessAlive(owner)) throw new Error('另一个 mmdctl 正在运行，请稍后再试。');
+      if (isProcessAlive(owner)) throw new Error(`另一个 ${managerCommand} 正在运行，请稍后再试。`);
       await fsp.unlink(lockPath).catch(() => {});
     }
   }
@@ -707,7 +710,7 @@ async function stopPanel() {
     }
     await new Promise((resolve) => setTimeout(resolve, 500));
   }
-  throw new Error('面板安全停止超时；为保护游戏数据，mmdctl 不会按 PID 强制结束进程。');
+  throw new Error(`面板安全停止超时；为保护游戏数据，${managerCommand} 不会按 PID 强制结束进程。`);
 }
 
 async function showStatus() {
@@ -756,9 +759,9 @@ async function showLogs() {
 
 function printHelp() {
   console.log([
-    'Minecraft Mystery Dashboard 便携版管理器',
+    `Minecraft Mystery Dashboard ${managerLabel}管理器`,
     '',
-    '用法：mmdctl <command>',
+    `用法：${managerCommand} <command>`,
     '',
     '命令：',
     '  start       后台启动面板',
@@ -770,7 +773,7 @@ function printHelp() {
     '  open        打开管理页面',
     '  help        显示帮助',
     '',
-    '便携版不会注册系统服务，也不会配置开机启动。',
+    '启动器不会注册系统服务，也不会配置开机启动。',
   ].join('\n'));
 }
 
@@ -784,7 +787,7 @@ async function interactiveMenu() {
     && await getHealth(values, state.fingerprint),
   );
   console.log('============================================================');
-  console.log('Minecraft Mystery Dashboard 便携版');
+  console.log(`Minecraft Mystery Dashboard ${managerLabel}`);
   console.log('============================================================');
   console.log(running ? '状态：运行中' : '状态：未运行');
   console.log('');

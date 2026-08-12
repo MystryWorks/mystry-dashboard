@@ -55,7 +55,7 @@ function createStoredZip(entries: readonly StoredZipEntry[]): Buffer {
 
 test('ZIP 单一外层目录在 staging marker 存在时仍应被扁平化并导入', async (t) => {
   const dataRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'mmd-import-service-test-'));
-  process.env.DATA_DIR = dataRoot;
+  process.env.MMD_DATA_DIR = dataRoot;
   t.after(async () => {
     try {
       const { closeDb } = await import('../db.js');
@@ -105,7 +105,7 @@ test('ZIP 单一外层目录在 staging marker 存在时仍应被扁平化并导
 
 test('ZIP 外层目录内的伪造 staging marker 应被拒绝', async (t) => {
   const dataRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'mmd-import-service-test-'));
-  process.env.DATA_DIR = dataRoot;
+  process.env.MMD_DATA_DIR = dataRoot;
   t.after(async () => {
     try {
       const { closeDb } = await import('../db.js');

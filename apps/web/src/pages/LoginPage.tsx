@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useAuth } from '../auth';
 
 export function LoginPage() {
@@ -8,9 +8,12 @@ export function LoginPage() {
   const [setupToken, setSetupToken] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const submittingRef = useRef(false);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (submittingRef.current) return;
+    submittingRef.current = true;
     setBusy(true);
     setError('');
     try {
@@ -19,6 +22,7 @@ export function LoginPage() {
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
+      submittingRef.current = false;
       setBusy(false);
     }
   }

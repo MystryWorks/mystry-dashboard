@@ -10,7 +10,8 @@
     "server": "apps/server/src/index.ts",
     "web": "apps/web/src/App.tsx",
     "panelManager": "PanelManager.cmd",
-    "portableManager": "scripts/portable/mmdctl.mjs"
+    "portableManager": "scripts/portable/mmdctl.mjs",
+    "linuxPanelManager": "PanelManager.sh"
   },
   "routeModules": [
     {
@@ -116,7 +117,8 @@
     "windows:test": "node --test scripts/windows/panel-manager.test.mjs",
     "test:static": "npm run test:static -w @mmd/server",
     "audit:production": "node scripts/check-production-audit.mjs",
-    "verify": "npm run knowledge:check && npm run knowledge:test && npm run portable:test && npm run windows:test && npm run build -w @mmd/shared && npm run typecheck && npm run test:security -w @mmd/server && npm run test:regression -w @mmd/server && npm run build && npm run test:static"
+    "verify": "npm run knowledge:check && npm run knowledge:test && npm run portable:test && npm run windows:test && npm run linux:test && npm run build -w @mmd/shared && npm run typecheck && npm run test:security -w @mmd/server && npm run test:regression -w @mmd/server && npm run build && npm run test:static",
+    "linux:test": "node --test scripts/linux/panel-manager.test.mjs"
   },
   "knowledgeDocuments": [
     "docs/ai/README.md",
@@ -144,6 +146,8 @@
     "packages/shared/src/index.ts",
     "packages/shared/src/jvm-config.ts",
     "packages/shared/src/schemas.ts",
+    "PanelManager.sh",
+    "scripts/linux/panel-manager.test.mjs",
     "scripts/windows/panel-manager.ps1",
     "scripts/portable/mmdctl.mjs",
     "scripts/portable/package-portable.mjs",

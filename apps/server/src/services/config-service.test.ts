@@ -19,7 +19,7 @@ function prepareTempDataRoot(t: test.TestContext): string {
     }
     fs.rmSync(dataRoot, { recursive: true, force: true });
   });
-  process.env.DATA_DIR = dataRoot;
+  process.env.MMD_DATA_DIR = dataRoot;
   return dataRoot;
 }
 
@@ -71,7 +71,7 @@ test('首次写入不存在的 server.properties：值含换行不产生额外�
 
   initDb();
   const inst = createInstance({ name: 'props-newline' });
-  const instanceDir = path.join(process.env.DATA_DIR!, 'instances', inst.id);
+  const instanceDir = path.join(process.env.MMD_DATA_DIR!, 'instances', inst.id);
   assert.ok(!fs.existsSync(path.join(instanceDir, 'server.properties')), '前置：文件尚不存在');
 
   writeServerProperties(inst.id, { motd: 'line1\nmalicious=value' });
@@ -92,7 +92,7 @@ test('首次写入不存在的 server.properties：值以反斜杠结尾不吞�
 
   initDb();
   const inst = createInstance({ name: 'props-trailing-slash' });
-  const instanceDir = path.join(process.env.DATA_DIR!, 'instances', inst.id);
+  const instanceDir = path.join(process.env.MMD_DATA_DIR!, 'instances', inst.id);
 
   writeServerProperties(inst.id, { motd: 'foo\\' });
   const content = fs.readFileSync(path.join(instanceDir, 'server.properties'), 'utf8');

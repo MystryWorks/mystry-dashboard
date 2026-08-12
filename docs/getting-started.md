@@ -17,7 +17,7 @@ chmod +x mmdctl
 |------|------|
 | Node.js | **≥ 22**（使用内置 `node:sqlite`，无需编译原生 SQLite 模块） |
 | Java | 默认使用 PATH 中的 `java`；部署页和实例设置可选择面板扫描并验证的本机运行时 |
-| 操作系统 | 源码管理器在 Windows 使用；便携产物由 Windows x64 与 Linux x64 分别构建和冒烟验证 |
+| 操作系统 | 源码管理器支持 Windows（`PanelManager.cmd`）与 Linux / WSL（`PanelManager.sh`）；便携产物由 Windows x64 与 Linux x64 分别构建和冒烟验证 |
 
 面板不接受手填 Java 完整路径。先在运行面板的同一用户环境中执行 `java -version` 检查默认 PATH；需要其他已安装 Java 时，在部署页或实例设置中使用「重新探测」后的选择器。
 
@@ -50,6 +50,27 @@ PanelManager.cmd status --lang zh-CN
 后台停止和重启会先取消部署/导入任务，再逐个安全停止正在运行的 Minecraft 实例；不要直接在任务管理器中强杀 Node 进程。
 
 若已有 `.env` 中的密钥不是 64 位十六进制字符串，PanelManager 会先将原文件备份到 `data/launcher/config-backups/`，再生成合规的新密钥。更换 `JWT_SECRET` 会使旧登录令牌失效，但不会删除管理员、实例或 Minecraft 存档。
+
+## Linux / WSL 源码一键管理
+
+在仓库根目录执行：
+
+```bash
+chmod +x PanelManager.sh
+./PanelManager.sh start
+```
+
+`PanelManager.sh` 检查 Node.js 22、按锁文件补装依赖并构建源码，再复用跨平台控制器完成随机配置、PID 指纹、健康检查和安全停止。它默认把配置写到 `config/panel.env`、数据写到仓库 `data/`；两者均被 Git 忽略。
+
+如需隔离 WSL 测试数据，请在启动、停止、查看状态等每次操作前使用相同的环境变量：
+
+```bash
+export MMD_CONFIG_PATH=/home/mocha/data/mystrydashboard-test/config/panel.env
+export MMD_DATA_DIR=/home/mocha/data/mystrydashboard-test
+./PanelManager.sh start
+```
+
+首次空用户库会自动生成三个不同的随机密钥，并在终端显示或复制 setup token；不要把 token 或 `panel.env` 分享到聊天、仓库或截图中。可用命令为 `start`、`foreground`、`stop`、`restart`、`logs`、`rebuild`、`status` 和 `open`；其中 `rebuild` 会构建后安全重启。
 
 ## 手动安装与首次配置
 

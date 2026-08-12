@@ -12,7 +12,7 @@ function prepareTempDataRoot(t: test.TestContext): string {
   t.after(() => {
     fs.rmSync(dataRoot, { recursive: true, force: true });
   });
-  process.env.DATA_DIR = dataRoot;
+  process.env.MMD_DATA_DIR = dataRoot;
   process.env.JWT_SECRET = 'a'.repeat(64);
   process.env.SETUP_TOKEN = 'b'.repeat(64);
   process.env.LAUNCHER_TOKEN = 'c'.repeat(64);
