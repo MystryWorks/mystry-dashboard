@@ -203,6 +203,7 @@ async function main() {
       alreadyShuttingDown,
     };
     shuttingDown = true;
+    processManager.beginShutdown();
     return summary;
   };
 

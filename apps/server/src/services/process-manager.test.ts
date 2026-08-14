@@ -244,3 +244,83 @@ test('删除须等待未完成的 start，启动中不得拆掉目录', async (t
   await assert.rejects(deletePromise, /请先停止实例再删除/);
   assert.equal(processManager.isRunning(info.id), true);
 });
+
+async function waitForStatus(
+  manager: { getStatus(id: string): string },
+  instanceId: string,
+  expected: string,
+): Promise<void> {
+  for (let attempt = 0; attempt < 50; attempt += 1) {
+    if (manager.getStatus(instanceId) === expected) return;
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  assert.equal(manager.getStatus(instanceId), expected);
+}
+
+test('关闭时取消尚未 spawn 的启动，不留下无主进程', async (t) => {
+  prepareTempDataRoot(t);
+  const { ProcessManager } = await import('./process-manager.js');
+  const { initDb } = await import('../db.js');
+  const { createInstance, getInstanceRow } = await import('./instance-service.js');
+  const { defaultInstanceDir } = await import('../utils/path.js');
+
+  initDb();
+  const info = createInstance({ name: 'shutdown-cancel-start' });
+  fs.writeFileSync(path.join(defaultInstanceDir(info.id), 'server.jar'), 'stub-jar');
+  const row = getInstanceRow(info.id)!;
+
+  let spawnCount = 0;
+  let releaseJava!: () => void;
+  const javaGate = new Promise<void>((resolve) => {
+    releaseJava = resolve;
+  });
+  const manager = new ProcessManager(
+    () => {
+      spawnCount += 1;
+      return fakeChild();
+    },
+    async () => {
+      await javaGate;
+      return 'java';
+    },
+  );
+
+  const startPromise = manager.start(row as InstanceRow);
+  await waitForStatus(manager, info.id, 'starting');
+  const stopAllPromise = manager.stopAll();
+  releaseJava();
+
+  await assert.rejects(startPromise, /面板正在关闭，已取消启动/);
+  const result = await stopAllPromise;
+  assert.equal(spawnCount, 0);
+  assert.equal(manager.getRunningCount(), 0);
+  assert.equal(manager.getStatus(info.id), 'stopped');
+  assert.equal(result.attempted, 0);
+});
+
+test('关闭后拒绝新的 start', async (t) => {
+  prepareTempDataRoot(t);
+  const { ProcessManager } = await import('./process-manager.js');
+  const { initDb } = await import('../db.js');
+  const { createInstance, getInstanceRow } = await import('./instance-service.js');
+  const { defaultInstanceDir } = await import('../utils/path.js');
+
+  initDb();
+  const info = createInstance({ name: 'shutdown-reject-start' });
+  fs.writeFileSync(path.join(defaultInstanceDir(info.id), 'server.jar'), 'stub-jar');
+  const row = getInstanceRow(info.id)!;
+
+  let spawnCount = 0;
+  const manager = new ProcessManager(
+    () => {
+      spawnCount += 1;
+      return fakeChild();
+    },
+    async () => 'java',
+  );
+  manager.beginShutdown();
+
+  await assert.rejects(() => manager.start(row as InstanceRow), /面板正在关闭，无法启动实例/);
+  assert.equal(spawnCount, 0);
+  assert.equal(manager.getRunningCount(), 0);
+});

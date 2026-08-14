@@ -143,6 +143,7 @@ export class ProcessManager extends EventEmitter {
   private processes = new Map<string, ManagedProcess>();
   private snapshots = new Map<string, ProcessSnapshot>();
   private operationTails = new Map<string, Promise<void>>();
+  private shuttingDown = false;
 
   constructor(
     private readonly spawnMinecraft: MinecraftProcessSpawner = (command, args, options) =>
@@ -173,7 +174,15 @@ export class ProcessManager extends EventEmitter {
     return this.processes.size;
   }
 
+  /** 面板进入关闭流程：拒绝新的启动，并让尚未 spawn 的 start 在解析 Java 后退出。 */
+  beginShutdown(): void {
+    this.shuttingDown = true;
+  }
+
   async start(instance: InstanceRow): Promise<void> {
+    if (this.shuttingDown) {
+      throw new Error('面板正在关闭，无法启动实例');
+    }
     return this.withInstanceOperation(instance.id, () => this.startWithinLock(instance));
   }
 
@@ -192,6 +201,9 @@ export class ProcessManager extends EventEmitter {
 
   /** 面板退出前逐个安全停止所有由当前进程管理的实例。 */
   async stopAll(): Promise<{ attempted: number; errors: string[]; stillStopping: string[] }> {
+    this.beginShutdown();
+    // 先等未完成的启停/删除：正在 resolveJava 的 start 会看到关闭标志并取消 spawn。
+    await Promise.allSettled([...this.operationTails.values()]);
     const instanceIds = [...this.processes.keys()];
     const errors: string[] = [];
     const stillStopping: string[] = [];
@@ -290,6 +302,9 @@ export class ProcessManager extends EventEmitter {
   }
 
   private async startWithinLock(instance: InstanceRow): Promise<void> {
+    if (this.shuttingDown) {
+      throw new Error('面板正在关闭，无法启动实例');
+    }
     if (this.isRunning(instance.id)) {
       throw new InstanceOperationConflictError('实例已在运行或正在启停');
     }
@@ -344,6 +359,9 @@ export class ProcessManager extends EventEmitter {
 
     try {
       const javaCommand = await this.resolveJavaCommand(instance.java_runtime_id);
+      if (this.shuttingDown) {
+        throw new Error('面板正在关闭，已取消启动');
+      }
       ensureServerPropertiesDefaults(instance.id);
       const child = this.spawnMinecraft(javaCommand, args, {
         cwd,

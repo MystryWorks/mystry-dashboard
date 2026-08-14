@@ -459,10 +459,10 @@ export async function importZipPackage(options: {
       throwIfAborted(signal);
       report(85, '写入实例目录…');
       promoteTaskStagingToInstance(taskId, instanceId);
+      // promote 之后目录已在 instances/<id>，不得再因超时/关闭中止，必须继续注册。
       const dir = path.join(config.instancesDir, instanceId);
       assertSafeInstanceRoot(dir);
 
-      throwIfAborted(signal);
       report(90, '注册实例…');
       registerPromotedInstance(instanceId, {
         name: options.name,
