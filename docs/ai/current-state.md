@@ -39,7 +39,7 @@
 - `PanelManager.ps1` 安全停服：`Get-PanelHealth` 校验 PID、状态文件指纹与健康 JSON 一致后才发送 `X-Launcher-Token`（伪造健康服务测试断言永不发送 token）。
 - Paper/Fabric 等 core 缓存键基于解析后的不可变版本/build，旧 `latest` 键不再误命中。
 - 发布工作流（`.github/workflows/portable-release.yml`）：Actions 使用固定 commit SHA；Windows job 显式 `npm run windows:test`；`RELEASE_GPG_FINGERPRINT` 与仓库内发布公钥/指纹文件用于签名链门禁；`package-portable.mjs` 优先 `git rev-parse HEAD`，脏工作树拒绝正式打包。**本机未验证** GitHub Environment 私钥注入、真实 GPG 签名与双平台 Actions smoke 结果。
-- 亮/暗双主题：CSS 变量按 `[data-theme]` 拆分，index.html 内联脚本在渲染前定主题（默认跟随 `prefers-color-scheme`），选择持久化 `mmd_theme`；切换按钮在侧边栏底部与移动顶栏，控制台终端区域保持暗色。
+- 三套主题各含暗/亮：`dark` / `light`（Mystery 粉紫）、`codex` / `codex-light`（暖灰青绿）、`grok` / `grok-light`（近黑或白底高对比）。CSS 变量按 `[data-theme]` 拆分，硬编码强调色已改为 `color-mix` 跟随 `--accent`。index.html 内联脚本在渲染前定主题（未保存时仅在 Mystery 暗/亮之间跟随 `prefers-color-scheme`），选择持久化 `mmd_theme`；选择器按套分组，入口在侧边栏底部、移动顶栏与登录页，控制台终端区域保持暗色。
 
 主要事实源：
 
