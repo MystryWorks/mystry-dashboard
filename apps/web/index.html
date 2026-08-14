@@ -5,11 +5,19 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Minecraft Mystery Dashboard</title>
     <script>
-      // 渲染前确定主题，避免亮/暗闪烁；默认跟随系统偏好
+      // 渲染前确定主题，避免闪烁。已保存则用 mmd_theme；
+      // 未保存时仅在 Mystery 暗/亮之间跟随系统偏好。
       (function () {
         try {
           var t = localStorage.getItem('mmd_theme');
-          if (t !== 'light' && t !== 'dark') {
+          if (
+            t !== 'light' &&
+            t !== 'dark' &&
+            t !== 'codex' &&
+            t !== 'codex-light' &&
+            t !== 'grok' &&
+            t !== 'grok-light'
+          ) {
             t = window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
           }
           document.documentElement.dataset.theme = t;
@@ -21,7 +29,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap"
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600;700&family=Source+Sans+3:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
   </head>

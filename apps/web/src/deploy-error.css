@@ -7,10 +7,10 @@
   min-width: 0;
   margin: 0 0 1rem;
   padding: 0.75rem 0.85rem;
-  border: 1px solid rgba(255, 93, 125, 0.36);
+  border: 1px solid color-mix(in srgb, var(--danger) 36%, transparent);
   border-left: 3px solid var(--danger);
   border-radius: 8px;
-  background: rgba(95, 25, 49, 0.22);
+  background: color-mix(in srgb, var(--danger) 14%, transparent);
 }
 
 .error-summary-content {
@@ -98,9 +98,9 @@
   margin: 1rem 1.1rem;
   padding: 0.85rem;
   overflow: auto;
-  color: #ffd8e8;
-  background: #0b080c;
-  border: 1px solid #3a2634;
+  color: var(--text);
+  background: var(--console-bg);
+  border: 1px solid var(--editor-border);
   border-radius: 8px;
   font-family: var(--mono);
   font-size: 0.8rem;

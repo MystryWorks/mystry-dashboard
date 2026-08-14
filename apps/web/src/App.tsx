@@ -117,7 +117,7 @@ function Shell({ children }: { children: React.ReactNode }) {
         </nav>
         <div className="sidebar-footer">
           <TaskCenter placement="sidebar" />
-          <ThemeToggle />
+          <ThemeToggle placement="sidebar" />
           <span className="sidebar-user">{user?.username}</span>
           <button className="btn btn-ghost sidebar-logout" type="button" onClick={logout}>
             退出
@@ -138,7 +138,7 @@ function Shell({ children }: { children: React.ReactNode }) {
           <span>{sidebarOpen ? '关闭' : '菜单'}</span>
         </button>
         <div className="topbar-task-center">
-          <ThemeToggle />
+          <ThemeToggle placement="topbar" />
           <TaskCenter placement="topbar" />
         </div>
       </div>
