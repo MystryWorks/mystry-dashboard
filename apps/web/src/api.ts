@@ -156,6 +156,24 @@ function cancelReservedDownloadTicket(instanceId: string, ticket: string): void 
 }
 
 /**
+ * 在用户手势里打开同源下载窗。
+ * 不能把 noopener/noreferrer 放进 window.open 的 feature：现代浏览器会因此返回 null，
+ * 前端会误判为弹窗拦截，ticket 都来不及申请。改为打开后再断开 opener。
+ */
+export function openDownloadPopup(): Window {
+  const popup = window.open('about:blank', '_blank');
+  if (!popup) {
+    throw new Error('浏览器拦截了下载窗口，请允许弹窗后重试');
+  }
+  try {
+    popup.opener = null;
+  } catch {
+    // 部分浏览器清空 opener 时可能抛错，不影响随后导航到同源下载地址。
+  }
+  return popup;
+}
+
+/**
  * 认证下载：同步打开空白下载窗，再申请 ticket 并导航至流式 GET；轮询状态把失败回传 SPA。
  * 禁止使用 res.blob() / ArrayBuffer 整体缓冲文件体（见 KF-001 / KF-002）。
  */
@@ -165,10 +183,7 @@ export async function downloadAuthenticated(
   signal?: AbortSignal,
 ): Promise<void> {
   throwIfDownloadAborted(signal);
-  const popup = window.open('about:blank', '_blank', 'noopener,noreferrer');
-  if (!popup) {
-    throw new Error('浏览器拦截了下载窗口，请允许弹窗后重试');
-  }
+  const popup = openDownloadPopup();
 
   let ticket: string | null = null;
   try {
@@ -210,7 +225,14 @@ export async function downloadAuthenticated(
         throw error;
       }
       statusPollDelayMs = DOWNLOAD_STATUS_POLL_INTERVAL_MS;
-      if (status.status === 'consumed') return;
+      if (status.status === 'consumed') {
+        try {
+          popup.close();
+        } catch {
+          // 下载窗可能已被浏览器改成文件保存对话框。
+        }
+        return;
+      }
       if (status.status === 'reserved' || status.status === 'streaming') continue;
       if (status.status === 'failed') {
         throw new Error(status.error || '文件下载失败');

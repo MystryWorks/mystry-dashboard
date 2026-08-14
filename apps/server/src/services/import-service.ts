@@ -473,9 +473,9 @@ export async function importZipPackage(options: {
         acceptEula: options.acceptEula,
         javaRuntimeId: options.javaRuntimeId ?? null,
       });
+      completed = true;
 
       if (options.acceptEula) {
-        throwIfAborted(signal);
         fs.writeFileSync(resolveSafePath(dir, 'eula.txt'), 'eula=true\n', 'utf8');
       }
 
@@ -487,8 +487,6 @@ export async function importZipPackage(options: {
       });
 
       report(100, '导入完成');
-      throwIfAborted(signal);
-      completed = true;
       return { instanceId };
     } finally {
       if (!completed && instanceId && stagingToken) {

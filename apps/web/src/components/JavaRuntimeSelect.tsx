@@ -59,8 +59,10 @@ export function JavaRuntimeSelect({
 
   const recommended = recommendedJavaMajor(mcVersion);
   const selected = value ? runtimes.find((runtime) => runtime.id === value) ?? null : null;
+  const resolvedMajor = value ? selected?.majorVersion ?? null : defaultJava?.majorVersion ?? null;
+  const resolvedAvailable = value ? Boolean(selected?.available) : Boolean(defaultJava?.available);
   const mismatch =
-    selected?.available && selected.majorVersion != null && recommended != null && selected.majorVersion !== recommended;
+    resolvedAvailable && resolvedMajor != null && recommended != null && resolvedMajor !== recommended;
 
   useEffect(() => {
     onResolvedMajorChange?.(value ? selected?.majorVersion ?? null : defaultJava?.majorVersion ?? null);
@@ -106,9 +108,9 @@ export function JavaRuntimeSelect({
       {recommended != null && (
         <p className="muted field-help">当前 Minecraft {mcVersion} 推荐使用 Java {recommended}。</p>
       )}
-      {mismatch && selected && (
+      {mismatch && (
         <p className="field-warn" role="alert">
-          所选运行时为 Java {selected.majorVersion}，与推荐版本 Java {recommended} 不匹配，实例可能无法启动。
+          {value ? '所选运行时' : 'PATH 中的 Java'}为 Java {resolvedMajor}，与推荐版本 Java {recommended} 不匹配，实例可能无法启动。
         </p>
       )}
       {value && !loading && (!selected || !selected.available) && (

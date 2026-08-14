@@ -30,7 +30,7 @@ export type PropertiesDocument = {
 const DEFAULT_PROPERTIES: PropertiesMap = {
   'server-port': '25565',
   gamemode: 'survival',
-  difficulty: 'easy',
+  difficulty: 'normal',
   'max-players': '20',
   motd: 'A Minecraft Server',
   'online-mode': 'true',
@@ -298,6 +298,14 @@ export function readServerProperties(instanceId: string): PropertiesMap {
   }
   assertMutablePropertiesFile(instanceId, file);
   return parseProperties(fs.readFileSync(file, 'utf8'));
+}
+
+/** 首次启动前写入面板默认配置；已有 server.properties 保持不变。 */
+export function ensureServerPropertiesDefaults(instanceId: string): void {
+  const root = getInstanceDir(instanceId);
+  const file = resolveSafePath(root, 'server.properties');
+  if (fs.existsSync(file)) return;
+  writeServerProperties(instanceId, {});
 }
 
 export function previewServerPropertiesWrite(instanceId: string, patch: PropertiesMap): string {

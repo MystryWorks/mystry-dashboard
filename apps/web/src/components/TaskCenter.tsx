@@ -163,13 +163,13 @@ export function TaskCenter({ placement }: { placement: 'sidebar' | 'topbar' }) {
                 {task.status === 'failed' && task.error && (
                   <p className="task-item-error" title={task.error}>{task.error}</p>
                 )}
-                {task.status === 'completed' && task.result?.instanceId && (
+                {task.result?.instanceId && (task.status === 'completed' || task.status === 'failed') && (
                   <Link
                     className="task-item-link"
                     to={`/instances/${task.result.instanceId}`}
                     onClick={() => setOpen(false)}
                   >
-                    查看实例 →
+                    {task.status === 'failed' ? '查看已创建的实例 →' : '查看实例 →'}
                   </Link>
                 )}
               </li>

@@ -9,6 +9,7 @@ import { config } from '../config.js';
 import { assertSafeInstanceRoot, resolveDirFromRow, resolveSafePath } from '../utils/path.js';
 import { getMinecraftChildEnv } from '../utils/child-env.js';
 import { parseJvmArgs, serializeJvmArgFile } from '../utils/jvm-args.js';
+import { ensureServerPropertiesDefaults } from './config-service.js';
 import { resolveJavaRuntimeCommand } from './java-runtime-service.js';
 import { normalizeAndAssertJvmArgs } from './jvm-validation-service.js';
 
@@ -264,6 +265,11 @@ export class ProcessManager extends EventEmitter {
     this.snapshots.delete(instanceId);
   }
 
+  /** 删除/接管与启停共用同一把实例锁，避免并发拆掉正在启动的目录。 */
+  runExclusive<T>(instanceId: string, operation: () => Promise<T>): Promise<T> {
+    return this.withInstanceOperation(instanceId, operation);
+  }
+
   private async withInstanceOperation<T>(instanceId: string, operation: () => Promise<T>): Promise<T> {
     const previous = this.operationTails.get(instanceId) ?? Promise.resolve();
     let release!: () => void;
@@ -338,6 +344,7 @@ export class ProcessManager extends EventEmitter {
 
     try {
       const javaCommand = await this.resolveJavaCommand(instance.java_runtime_id);
+      ensureServerPropertiesDefaults(instance.id);
       const child = this.spawnMinecraft(javaCommand, args, {
         cwd,
         env: getMinecraftChildEnv(),

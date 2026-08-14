@@ -293,7 +293,7 @@ async function executeTask(item: QueuedTask, controller: AbortController): Promi
           updateTask(item.task.id, { progress, message: msg, status: 'running' });
         }
       });
-      if (controller.signal.aborted) throw abortError(controller.signal);
+      // worker 正常返回即视为成功。超时/关闭若落在返回之后，不得把已落地实例改写成失败。
     } catch (error) {
       failure = error;
       failed = true;
@@ -368,6 +368,18 @@ export async function shutdownTasks(): Promise<void> {
   }
 
   await Promise.allSettled([...runningExecutions.values()]);
+}
+
+/** 测试专用：恢复内存队列，避免 shutdownTasks 污染后续用例。 */
+export function resetTaskRuntimeForTests(): void {
+  shuttingDown = false;
+  taskQueue.length = 0;
+  runningTasks = 0;
+  for (const controller of runningControllers.values()) {
+    if (!controller.signal.aborted) controller.abort(new Error('测试重置'));
+  }
+  runningControllers.clear();
+  runningExecutions.clear();
 }
 
 export { readTaskStagingMarker };

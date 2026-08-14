@@ -74,3 +74,40 @@ test('R0-04: 仅清理 .mmd-staging 内 marker 匹配且任务未完成的半成
   assert.equal(fs.existsSync(taskStagingDir(task.id, instanceId, dataRoot)), false);
   assert.ok(fs.existsSync(finalDir), '与任务无关的最终目录必须保留');
 });
+
+test('worker 正常返回后即使任务已中止也保持成功', async (t) => {
+  prepareTempDataRoot(t);
+  const { initDb } = await import('../db.js');
+  const { createInstance, getInstanceRow } = await import('./instance-service.js');
+  const {
+    runBackgroundTask,
+    getTask,
+    shutdownTasks,
+    resetTaskRuntimeForTests,
+  } = await import('./task-service.js');
+
+  t.after(() => {
+    resetTaskRuntimeForTests();
+  });
+
+  initDb();
+  const inst = createInstance({ name: 'task-keep-success' });
+  let workerEntered!: () => void;
+  const entered = new Promise<void>((resolve) => {
+    workerEntered = resolve;
+  });
+
+  const task = await runBackgroundTask('import', 'verify success after abort', async () => {
+    workerEntered();
+    await new Promise((resolve) => setTimeout(resolve, 80));
+    return { instanceId: inst.id };
+  });
+
+  await entered;
+  await shutdownTasks();
+
+  const current = getTask(task.id);
+  assert.equal(current?.status, 'completed');
+  assert.equal(current?.result?.instanceId, inst.id);
+  assert.ok(getInstanceRow(inst.id));
+});

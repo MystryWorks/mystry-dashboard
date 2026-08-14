@@ -277,33 +277,39 @@ export function updateInstance(id: string, input: UpdateInstanceInput): Instance
   return getInstance(id)!;
 }
 
-export function deleteInstance(id: string): void {
-  if (processManager.isRunning(id)) {
-    throw new Error('请先停止实例再删除');
-  }
-  const row = getInstanceRow(id);
-  if (!row) return;
-  if (row.install_path !== null) {
-    getDb().prepare('DELETE FROM instances WHERE id = ?').run(id);
+export async function deleteInstance(id: string): Promise<void> {
+  return processManager.runExclusive(id, async () => {
+    if (processManager.isRunning(id)) {
+      throw new Error('请先停止实例再删除');
+    }
+    const row = getInstanceRow(id);
+    if (!row) return;
+    if (row.install_path !== null) {
+      getDb().prepare('DELETE FROM instances WHERE id = ?').run(id);
+      processManager.forget(id);
+      return;
+    }
+    const dir = defaultInstanceDir(row.id);
+    const canRemoveDirectory = hasValidOwnershipMarker(row);
+    // 保持先删目录后删 DB 行的顺序：安全自检 R1 断言「目录删除失败时数据库记录必须保留」。
+    if (canRemoveDirectory && fs.existsSync(dir)) {
+      assertSafeInstanceRoot(dir);
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+    const result = getDb().prepare('DELETE FROM instances WHERE id = ?').run(id);
+    if (Number(result.changes) !== 1) {
+      throw new Error('删除实例失败：数据库记录未删除');
+    }
     processManager.forget(id);
-    return;
-  }
-  const dir = defaultInstanceDir(row.id);
-  const canRemoveDirectory = hasValidOwnershipMarker(row);
-  // 保持先删目录后删 DB 行的顺序：安全自检 R1 断言「目录删除失败时数据库记录必须保留」。
-  if (canRemoveDirectory && fs.existsSync(dir)) {
-    assertSafeInstanceRoot(dir);
-    fs.rmSync(dir, { recursive: true, force: true });
-  }
-  const result = getDb().prepare('DELETE FROM instances WHERE id = ?').run(id);
-  if (Number(result.changes) !== 1) {
-    throw new Error('删除实例失败：数据库记录未删除');
-  }
-  processManager.forget(id);
+  });
 }
 
 /** 接管同一实例 ID 对应的默认目录，不读取或操作旧的外部目录。 */
-export function adoptManagedDirectory(id: string): InstanceInfo {
+export async function adoptManagedDirectory(id: string): Promise<InstanceInfo> {
+  return processManager.runExclusive(id, async () => adoptManagedDirectoryWithinLock(id));
+}
+
+function adoptManagedDirectoryWithinLock(id: string): InstanceInfo {
   if (processManager.isRunning(id)) {
     throw new Error('请先停止实例再接管目录');
   }

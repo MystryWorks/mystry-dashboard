@@ -868,6 +868,7 @@ export async function deployCore(input: DeployCoreInput) {
           acceptEula: input.acceptEula,
           javaRuntimeId: input.javaRuntimeId ?? null,
         });
+        completed = true;
         updateInstanceMeta(instanceId, {
           core_type: input.coreType,
           mc_version: input.mcVersion,
@@ -875,8 +876,6 @@ export async function deployCore(input: DeployCoreInput) {
           accept_eula: input.acceptEula ? 1 : 0,
         });
         report(100, '部署完成');
-        throwIfAborted(signal);
-        completed = true;
         return { instanceId };
         }
 
@@ -938,15 +937,13 @@ export async function deployCore(input: DeployCoreInput) {
           acceptEula: input.acceptEula,
           javaRuntimeId: input.javaRuntimeId ?? null,
         });
+        completed = true;
         updateInstanceMeta(instanceId, {
           core_type: input.coreType,
           mc_version: input.mcVersion,
           jar_file: 'server.jar',
           accept_eula: input.acceptEula ? 1 : 0,
         });
-
-        throwIfAborted(signal);
-        completed = true;
         return { instanceId };
       } finally {
         if (!completed && instanceId) {

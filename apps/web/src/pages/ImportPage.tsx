@@ -288,7 +288,7 @@ export function ImportPage() {
                   {sources.map((source) => (
                     <option key={source.id} value={source.id} disabled={!source.ready}>
                       {source.ready
-                        ? `${source.id} · ${source.launchTarget}`
+                        ? `${source.id} · ${source.launchTarget ?? '待完整校验'}`
                         : `${source.id} · 不可用：${source.error}`}
                     </option>
                   ))}
@@ -305,10 +305,13 @@ export function ImportPage() {
               {!sourcesLoading && sources.length === 0 ? (
                 <p className="muted field-help">交接区暂无目录，请完成上面的复制步骤后刷新。</p>
               ) : null}
-              {selectedSource?.ready ? (
+              {selectedSource?.ready && selectedSource.launchTarget ? (
                 <p className="muted field-help">
                   已探测启动目标：<code>{selectedSource.launchTarget}</code>
                 </p>
+              ) : null}
+              {selectedSource?.ready && selectedSource.error ? (
+                <p className="muted field-help">{selectedSource.error}</p>
               ) : null}
               {sourcesError ? <p className="error">无法读取交接目录：{sourcesError}</p> : null}
             </div>

@@ -143,8 +143,8 @@ async function inspectSource(sourceId: string): Promise<ExistingServerSourceInfo
           launchTarget: null,
           coreType: 'custom',
           modifiedAt: stat.mtime.toISOString(),
-          ready: false,
-          error: '快速预检未找到启动文件；请提交导入任务进行完整校验',
+          ready: true,
+          error: '快速预检未找到启动文件；提交后将在导入任务中做完整校验',
         };
         return completeInfo(info);
       }
@@ -404,6 +404,7 @@ export async function importExistingServerDirectory(input: ImportExistingServerI
         acceptEula: input.acceptEula,
         javaRuntimeId: input.javaRuntimeId ?? null,
       });
+      completed = true;
       updateInstanceMeta(instanceId, {
         core_type: input.coreType ?? copiedLaunchTarget.coreType,
         mc_version: input.mcVersion?.trim() || null,
@@ -416,8 +417,6 @@ export async function importExistingServerDirectory(input: ImportExistingServerI
       }
 
       report(100, '已有服务端已复制到面板托管目录');
-      throwIfAborted(signal);
-      completed = true;
       return { instanceId };
     } finally {
       if (!completed && instanceId) {

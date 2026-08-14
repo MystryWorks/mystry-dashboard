@@ -31,7 +31,7 @@ node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"
 | `JWT_SECRET` | 无；初次启动前必填 | 64 位十六进制 JWT 签名密钥，不要使用固定示例值 |
 | `SETUP_TOKEN` | 无；初次 setup 前必填 | 64 位十六进制初始化令牌；setup 完成后可移除 |
 | `LAUNCHER_TOKEN` | 无；使用 PanelManager / mmdctl 时自动生成 | 64 位十六进制本机关闭令牌；仅回环地址可使用 |
-| `JWT_EXPIRES_IN` | `2h` | JWT 有效期 |
+| `JWT_EXPIRES_IN` | `2h` | JWT 有效期。纯数字按毫秒（内部转成 `Nms` 交给 `@fastify/jwt`，因其把 number 当作秒）；也可写 `2h` / `30m` / `7d` |
 | `CORS_ORIGINS` | `http://127.0.0.1:5173,http://localhost:5173` | 精确 CORS 来源白名单，逗号分隔，不要填写 `*` |
 | `RATE_LIMIT_MAX` | `120` | 普通请求限流窗口内的最大次数 |
 | `RATE_LIMIT_WINDOW_MS` | `60000` | 普通请求限流窗口，毫秒 |

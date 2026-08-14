@@ -95,7 +95,7 @@ export async function instanceRoutes(app: FastifyInstance): Promise<void> {
     '/api/instances/:id/adopt-managed-directory',
     async (req, reply) => {
       try {
-        return adoptManagedDirectory(req.params.id);
+        return await adoptManagedDirectory(req.params.id);
       } catch (err) {
         return reply.code(400).send({ error: err instanceof Error ? err.message : String(err) });
       }
@@ -104,7 +104,7 @@ export async function instanceRoutes(app: FastifyInstance): Promise<void> {
 
   app.delete<{ Params: { id: string } }>('/api/instances/:id', async (req, reply) => {
     try {
-      deleteInstance(req.params.id);
+      await deleteInstance(req.params.id);
       return { ok: true };
     } catch (err) {
       return reply.code(400).send({ error: err instanceof Error ? err.message : String(err) });

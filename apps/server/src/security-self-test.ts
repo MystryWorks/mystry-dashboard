@@ -210,13 +210,13 @@ async function main(): Promise<void> {
       return originalRmSync(target, options);
     }) as typeof fs.rmSync;
     try {
-      assert.throws(() => deleteInstance(lockedInstance.id), /模拟 Windows 文件锁/);
+      await assert.rejects(() => deleteInstance(lockedInstance.id), /模拟 Windows 文件锁/);
     } finally {
       fs.rmSync = originalRmSync;
     }
     assert.notEqual(getInstanceRow(lockedInstance.id), null);
     assert.equal(fs.existsSync(lockedDirectory), true);
-    deleteInstance(lockedInstance.id);
+    await deleteInstance(lockedInstance.id);
 
     const parsedJvmArgs = parseJvmArgs(
       '-Xms1G -Xmx2G -Dconfig="C:\\Minecraft Server\\config.json" -Dlabel=\'Mystery Panel\'',
@@ -266,7 +266,7 @@ async function main(): Promise<void> {
     assert.match(isolatedProcessManager.getHistory(crashedInstance.id), /模拟崩溃输出/);
     assert.match(isolatedProcessManager.getHistory(crashedInstance.id), /code=1/);
     assert.equal(isolatedProcessManager.getRunningCount(), 0);
-    deleteInstance(crashedInstance.id);
+    await deleteInstance(crashedInstance.id);
 
     const setup = await app.inject({
       method: 'POST',

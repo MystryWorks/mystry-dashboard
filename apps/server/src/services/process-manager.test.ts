@@ -79,6 +79,40 @@ test('R0-02: 并发 start 只应 spawn 一个受管 Minecraft 进程', async (t)
   assert.equal(spawnCount, 1);
 });
 
+test('首次启动写入普通难度，已有 server.properties 不覆盖', async (t) => {
+  prepareTempDataRoot(t);
+  const { ProcessManager } = await import('./process-manager.js');
+  const { initDb } = await import('../db.js');
+  const { createInstance, getInstanceRow } = await import('./instance-service.js');
+  const { defaultInstanceDir } = await import('../utils/path.js');
+
+  initDb();
+  const missing = createInstance({ name: 'start-default-difficulty' });
+  const existing = createInstance({ name: 'start-preserve-difficulty' });
+  const missingDir = defaultInstanceDir(missing.id);
+  const existingDir = defaultInstanceDir(existing.id);
+  fs.writeFileSync(path.join(missingDir, 'server.jar'), 'stub-jar');
+  fs.writeFileSync(path.join(existingDir, 'server.jar'), 'stub-jar');
+  const existingProperties = 'difficulty=hard\nmotd=keep\n';
+  fs.writeFileSync(path.join(existingDir, 'server.properties'), existingProperties, 'utf8');
+
+  const manager = new ProcessManager(
+    () => fakeChild(),
+    async () => 'java',
+  );
+  await manager.start(getInstanceRow(missing.id)! as InstanceRow);
+  await manager.start(getInstanceRow(existing.id)! as InstanceRow);
+
+  assert.match(
+    fs.readFileSync(path.join(missingDir, 'server.properties'), 'utf8'),
+    /^difficulty=normal$/m,
+  );
+  assert.equal(
+    fs.readFileSync(path.join(existingDir, 'server.properties'), 'utf8'),
+    existingProperties,
+  );
+});
+
 test('R0-03: 普通 stop 超时不得隐式 SIGKILL', async (t) => {
   prepareTempDataRoot(t);
   process.env.MMD_TEST_STOP_GRACE_MS = '40';
@@ -151,4 +185,62 @@ test('Forge 启动按规范参数重写 user_jvm_args.txt', async (t) => {
     parseJvmArgFile(fs.readFileSync(path.join(instanceDir, 'user_jvm_args.txt'), 'utf8')),
     ['-Xms1G', '-Xmx2G', String.raw`-Dfolder=C:\Minecraft Server`],
   );
+});
+
+test('删除须等待未完成的 start，启动中不得拆掉目录', async (t) => {
+  prepareTempDataRoot(t);
+  const { processManager } = await import('./process-manager.js');
+  const { initDb } = await import('../db.js');
+  const { createInstance, deleteInstance, getInstanceRow } = await import('./instance-service.js');
+  const { defaultInstanceDir } = await import('../utils/path.js');
+
+  initDb();
+  const info = createInstance({ name: 'delete-lock' });
+  const instanceDir = defaultInstanceDir(info.id);
+  fs.writeFileSync(path.join(instanceDir, 'server.jar'), 'stub-jar');
+  const row = getInstanceRow(info.id)!;
+
+  let releaseJava!: () => void;
+  const javaGate = new Promise<void>((resolve) => {
+    releaseJava = resolve;
+  });
+  const singleton = processManager as unknown as {
+    spawnMinecraft: (...args: unknown[]) => ChildProcessWithoutNullStreams;
+    resolveJavaCommand: (id: string | null) => Promise<string>;
+  };
+  const originalSpawn = singleton.spawnMinecraft;
+  const originalResolve = singleton.resolveJavaCommand;
+  singleton.spawnMinecraft = () => {
+    const child = fakeChild({
+      onKill() {
+        Object.assign(child, { exitCode: 1 });
+        child.emit('exit', 1, 'SIGKILL');
+      },
+    });
+    return child;
+  };
+  singleton.resolveJavaCommand = async () => {
+    await javaGate;
+    return 'java';
+  };
+  t.after(async () => {
+    singleton.spawnMinecraft = originalSpawn;
+    singleton.resolveJavaCommand = originalResolve;
+    try {
+      await processManager.stop(info.id, true);
+    } catch {
+      /* 实例可能已经停掉 */
+    }
+  });
+
+  const startPromise = processManager.start(row as InstanceRow);
+  const deletePromise = deleteInstance(info.id);
+  await new Promise((resolve) => setTimeout(resolve, 40));
+  assert.ok(fs.existsSync(instanceDir), 'start 持锁期间删除不得先拆目录');
+  assert.ok(getInstanceRow(info.id), 'start 持锁期间删除不得先删库行');
+
+  releaseJava();
+  await startPromise;
+  await assert.rejects(deletePromise, /请先停止实例再删除/);
+  assert.equal(processManager.isRunning(info.id), true);
 });

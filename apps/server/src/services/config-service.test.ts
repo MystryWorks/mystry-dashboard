@@ -63,6 +63,18 @@ test('parseProperties 对重复键取最后有效值', async () => {
   assert.deepEqual(map, { a: '2', b: '3' });
 });
 
+test('缺少 server.properties 时默认难度为普通', async (t) => {
+  prepareTempDataRoot(t);
+  const { initDb } = await import('../db.js');
+  const { createInstance } = await import('./instance-service.js');
+  const { readServerProperties } = await import('./config-service.js');
+
+  initDb();
+  const inst = createInstance({ name: 'props-default-difficulty' });
+
+  assert.equal(readServerProperties(inst.id).difficulty, 'normal');
+});
+
 test('首次写入不存在的 server.properties：值含换行不产生额外属性', async (t) => {
   prepareTempDataRoot(t);
   const { initDb } = await import('../db.js');
@@ -100,4 +112,12 @@ test('首次写入不存在的 server.properties：值以反斜杠结尾不吞�
   assert.ok(content.includes('motd=foo\\\\\n'), '尾随反斜杠应转义且独占一行');
   assert.ok(content.includes('online-mode=true'), '默认属性不得被吞并');
   assert.equal(readServerProperties(inst.id).motd, 'foo\\');
+});
+
+test('JWT 纯数字按毫秒交给 Fastify，而不是秒', async () => {
+  const { parseJwtExpiresIn } = await import('../config.js');
+  assert.equal(parseJwtExpiresIn('3600000'), '3600000ms');
+  assert.equal(parseJwtExpiresIn('2h'), '2h');
+  assert.throws(() => parseJwtExpiresIn('abc'), /JWT_EXPIRES_IN/);
+  assert.throws(() => parseJwtExpiresIn('0'), /JWT_EXPIRES_IN/);
 });
