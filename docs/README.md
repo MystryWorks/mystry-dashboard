@@ -11,6 +11,7 @@ Minecraft Mystery Dashboard 是一套单机一体的 Minecraft **服务端**管�
 | [便携预览版](portable-release.md) | Windows/Linux x64 下载、校验、启停、升级、数据保留与已知限制 |
 | [快速开始](getting-started.md) | 环境要求、安装、开发与生产部署 |
 | [分步教程](tutorials.md) | **推荐新手**：从零开服、导入、联机、模组服、备份 |
+| [产品介绍（带截图）](product-intro/README.md) | 产品定位、各页面实拍、每个按钮的说明；另有 PDF |
 | [使用指南](user-guide.md) | 界面导览、字段说明、常见问题 |
 | [配置说明](configuration.md) | 环境变量、数据目录与安全建议 |
 | [架构设计](architecture.md) | Monorepo 结构、模块职责与数据流 |

@@ -6,7 +6,7 @@
 
 > **不是** Minecraft 客户端模组，也无需 Fabric / Forge 作为模组加载。本仓库是独立的 Node.js 面板程序。
 
-[便携预览版](docs/portable-release.md) · [快速开始](docs/getting-started.md) · [分步教程](docs/tutorials.md) · [使用指南](docs/user-guide.md) · [API](docs/api.md) · [贡献指南](CONTRIBUTING.md)
+[便携预览版](docs/portable-release.md) · [快速开始](docs/getting-started.md) · [产品介绍](docs/product-intro/README.md) · [分步教程](docs/tutorials.md) · [使用指南](docs/user-guide.md) · [API](docs/api.md) · [贡献指南](CONTRIBUTING.md)
 
 ---
 
