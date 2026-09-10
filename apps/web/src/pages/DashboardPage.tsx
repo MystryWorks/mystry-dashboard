@@ -1,8 +1,22 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import {
+  Activity,
+  FolderDown,
+  Layers,
+  MoreVertical,
+  Play,
+  Plus,
+  Power,
+  RotateCcw,
+  Server,
+  Trash2,
+  Zap,
+} from 'lucide-react';
 import type { InstanceInfo } from '@mmd/shared';
 import { isInstanceStopPendingResult } from '@mmd/shared';
 import { api } from '../api';
+import { HostMetricCards, processMetric, useDashboardMetrics } from '../components/DashboardMetrics';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { JavaRuntimeSelect } from '../components/JavaRuntimeSelect';
 import { JvmSettingsEditor } from '../components/JvmSettingsEditor';
@@ -29,13 +43,19 @@ function isLifecycleBusy(status: InstanceInfo['status']): boolean {
   return status === 'starting' || status === 'stopping';
 }
 
-/** 进程仍可能存活的状态：此时禁止删除，避免删除运行中实例的目录。 */
 function isAlive(status: InstanceInfo['status']): boolean {
   return status === 'running' || status === 'starting' || status === 'stopping';
 }
 
+function extractXmx(jvmArgs: string): string {
+  const match = jvmArgs.match(/-Xmx(\w+)/i);
+  return match ? match[1].toUpperCase() : '默认';
+}
+
 export function DashboardPage() {
   const navigate = useNavigate();
+  const { metrics, error: metricsError, busy: metricsBusy, refresh: refreshMetrics } = useDashboardMetrics();
+  const [abnormalOnly, setAbnormalOnly] = useState(false);
   const [instances, setInstances] = useState<InstanceInfo[]>([]);
   const [loadState, setLoadState] = useState<LoadState>('loading');
   const [loadError, setLoadError] = useState('');
@@ -120,11 +140,11 @@ export function DashboardPage() {
   async function confirmDelete() {
     if (!deleteTarget) return;
     const target = deleteTarget;
+    setDeleteTarget(null);
     setBusyId(target.id);
     setActionError('');
     try {
       await api(`/api/instances/${target.id}`, { method: 'DELETE' });
-      setDeleteTarget(null);
       await load();
     } catch (err) {
       setActionError(err instanceof Error ? err.message : String(err));
@@ -134,17 +154,13 @@ export function DashboardPage() {
   }
 
   async function confirmCreateEmpty() {
-    if (!emptyJvmValid) {
-      setActionError('请先修正 JVM 参数错误');
-      return;
-    }
     setEmptyBusy(true);
     setActionError('');
     try {
       const inst = await api<InstanceInfo>('/api/instances', {
         method: 'POST',
         json: {
-          name: emptyName.trim() || '自定义 Jar 实例',
+          name: emptyName,
           coreType: 'custom',
           jvmArgs: emptyJvm,
           acceptEula: emptyEula,
@@ -160,37 +176,36 @@ export function DashboardPage() {
     }
   }
 
+  // 统计指标
+  const runningCount = useMemo(() => instances.filter((i) => i.status === 'running').length, [instances]);
+  const stoppedCount = useMemo(() => instances.filter((i) => i.status === 'stopped').length, [instances]);
+  const abnormalCount = useMemo(() => instances.filter((i) => i.status === 'crashed' || i.requiresMigration).length, [instances]);
+  const runningRatio = instances.length > 0 ? (runningCount / instances.length) * 100 : 0;
+
   return (
-    <div>
-      <header className="dashboard-header">
-        <div className="dashboard-create-actions">
-          <h1 className="page-title">实例总览</h1>
-          <p className="page-desc">管理本机 Minecraft 服务端进程。</p>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+      {/* 顶部指标卡片组 (Metric Grid) */}
+      <div className="metric-grid dashboard-metrics">
+        <div className="metric-card">
+          <div className="metric-header">
+            <span>实例状态</span>
+            <Activity size={18} style={{ color: 'var(--ok)' }} />
+          </div>
+          <div className="metric-value">
+            {loadState === 'loaded' ? `${runningCount} / ${instances.length}` : '—'} <span className="metric-unit">运行中</span>
+          </div>
+          <div className="metric-bar">
+            <div className="metric-bar-fill" style={{ width: `${runningRatio}%`, background: 'var(--ok)' }} />
+          </div>
+          <div className="metric-detail">已停止 {loadState === 'loaded' ? stoppedCount : '—'} · <button type="button" className="metric-filter" aria-pressed={abnormalOnly} onClick={() => setAbnormalOnly(value => !value)}>异常 {loadState === 'loaded' ? abnormalCount : '—'}{abnormalOnly ? ' · 显示全部' : ''}</button></div>
         </div>
-        <div>
-          <nav className="dashboard-actions" aria-label="创建实例">
-            <Link className="quick-action quick-action-primary" to="/deploy">
-              <span className="quick-action-icon" aria-hidden="true">＋</span>
-              <span className="quick-action-copy">
-                <strong>一键部署</strong>
-                <small>在线选择服务端核心</small>
-              </span>
-              <span className="quick-action-arrow" aria-hidden="true">›</span>
-            </Link>
-            <Link className="quick-action" to="/import">
-              <span className="quick-action-icon" aria-hidden="true">⇩</span>
-              <span className="quick-action-copy">
-                <strong>导入已有服务端</strong>
-                <small>接管同机目录或上传 ZIP</small>
-              </span>
-              <span className="quick-action-arrow" aria-hidden="true">›</span>
-            </Link>
-          </nav>
-          <button type="button" className="dashboard-empty-action" onClick={() => setEmptyOpen(true)}>
-            创建空实例（上传自定义 server.jar）
-          </button>
-        </div>
-      </header>
+
+        <HostMetricCards metrics={metrics} error={metricsError} />
+      </div>
+      <div className="metrics-status">
+        <span role="status">{metricsError ? `${metricsError}${metrics ? '，数据可能过期' : ''}` : metrics ? `更新于 ${new Date(metrics.sampledAt).toLocaleTimeString()}` : '正在读取监测数据…'}{metrics && !metricsError && metrics.warnings.length > 0 ? ` · ${metrics.warnings.join(' · ')}` : ''}</span>
+        <button type="button" className="metric-filter" disabled={metricsBusy} onClick={() => void refreshMetrics()}>{metricsBusy ? '刷新中…' : metricsError ? '重试监测' : '刷新'}</button>
+      </div>
 
       {actionError && <p className="error" role="alert">{actionError}</p>}
       {loadError && (
@@ -200,117 +215,210 @@ export function DashboardPage() {
         </p>
       )}
 
-      <div className="panel">
-        {loadState === 'loading' ? (
-          <p className="muted" role="status">正在加载实例列表…</p>
-        ) : loadState === 'error' ? (
-          <div role="alert">
-            <p className="muted">实例列表暂时不可用，请检查面板连接后重试。</p>
-            <button className="btn btn-ghost" type="button" onClick={retryLoad}>
-              重新加载
-            </button>
-          </div>
-        ) : instances.length === 0 ? (
-          <p className="muted">暂无实例。可从「一键部署」下载核心，或导入面板外已有的服务端。</p>
-        ) : (
-          <table className="table">
-            <thead>
-              <tr>
-                <th>名称</th>
-                <th>核心</th>
-                <th>版本</th>
-                <th>状态</th>
-                <th>操作</th>
-              </tr>
-            </thead>
-            <tbody>
-              {instances.map((inst) => (
-                <tr key={inst.id}>
-                  <td data-label="名称">
-                    <Link to={`/instances/${inst.id}`}>{inst.name}</Link>
-                  </td>
-                  <td data-label="核心">{inst.coreType}</td>
-                  <td data-label="版本">{inst.mcVersion || '-'}</td>
-                  <td data-label="状态">
-                    <span className={`badge ${inst.requiresMigration ? 'migration' : inst.status}`}>{inst.requiresMigration ? '待迁移' : statusLabel[inst.status] || inst.status}</span>
-                  </td>
-                  <td data-label="操作">
-                    <div className="btn-row">
-                      <Link className="btn btn-ghost" to={`/instances/${inst.id}`}>
-                        查看实例
-                      </Link>
-                      {canStartInstance(inst.status) && (
-                        <button
-                          className="btn"
-                          type="button"
-                          disabled={busyId === inst.id || inst.requiresMigration}
-                          onClick={() => void act(inst.id, 'start')}
-                        >
-                          启动
-                        </button>
-                      )}
-                      {canStopInstance(inst.status) && (
-                        <button
-                          className="btn btn-ghost"
-                          type="button"
-                          disabled={busyId === inst.id || inst.requiresMigration}
-                          onClick={() => void act(inst.id, 'stop')}
-                        >
-                          停止
-                        </button>
-                      )}
-                      <details className="action-menu">
-                        <summary className="btn btn-ghost">更多操作</summary>
-                        <div className="btn-row">
-                          <button
-                            className="btn btn-ghost"
-                            type="button"
-                            disabled={busyId === inst.id || inst.requiresMigration || !isAlive(inst.status)}
-                            onClick={(event) => {
-                              event.currentTarget.closest('details')?.removeAttribute('open');
-                              setForceStopTarget(inst);
-                            }}
-                          >
-                            强制停止
-                          </button>
-                          <button
-                            className="btn btn-ghost"
-                            type="button"
-                            disabled={busyId === inst.id || inst.requiresMigration || isLifecycleBusy(inst.status)}
-                            onClick={(event) => {
-                              event.currentTarget.closest('details')?.removeAttribute('open');
-                              setRestartTarget(inst);
-                            }}
-                          >
-                            重启
-                          </button>
-                          <button
-                            className="btn btn-danger"
-                            type="button"
-                            disabled={busyId === inst.id || (!inst.requiresMigration && isAlive(inst.status))}
-                            title={
-                              !inst.requiresMigration && isAlive(inst.status)
-                                ? '实例仍在运行，请先停止后再删除'
-                                : undefined
-                            }
-                            onClick={(event) => {
-                              event.currentTarget.closest('details')?.removeAttribute('open');
-                              setDeleteTarget(inst);
-                            }}
-                          >
-                            删除
-                          </button>
-                        </div>
-                      </details>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
+      {/* 实例网格与头部操作栏 */}
+      <div className="section-header">
+        <div className="section-title">
+          <span>Minecraft 实例列表</span>
+          <span className="tag-badge">{instances.length} 个实例</span>
+        </div>
+        <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+          <Link to="/deploy" className="btn btn-primary">
+            <Plus size={15} />
+            一键部署
+          </Link>
+          <Link to="/import" className="btn">
+            <FolderDown size={15} />
+            导入服务端
+          </Link>
+          <button type="button" className="btn" onClick={() => setEmptyOpen(true)}>
+            <Zap size={15} />
+            创建空实例
+          </button>
+        </div>
       </div>
 
+      {loadState === 'loading' ? (
+        <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)' }}>
+          正在加载实例列表…
+        </div>
+      ) : loadState === 'error' ? (
+        <div className="panel" role="alert" style={{ textAlign: 'center', padding: '32px' }}>
+          <p className="muted">实例列表暂时不可用，请检查面板连接后重试。</p>
+          <button className="btn btn-ghost" type="button" onClick={retryLoad} style={{ marginTop: '12px' }}>
+            重新加载
+          </button>
+        </div>
+      ) : instances.length === 0 ? (
+        <div className="panel" style={{ textAlign: 'center', padding: '48px 24px' }}>
+          <Layers size={40} style={{ color: 'var(--text-muted)', marginBottom: '12px' }} />
+          <h3 style={{ fontSize: '1.1rem', margin: '0 0 8px' }}>暂无 Minecraft 实例</h3>
+          <p className="muted" style={{ margin: '0 0 20px' }}>
+            您可以从「一键部署」下载官方核心，或从同机目录及 ZIP 包导入已有服务端。
+          </p>
+          <div style={{ display: 'flex', justifyContent: 'center', gap: '12px' }}>
+            <Link to="/deploy" className="btn btn-primary">
+              <Plus size={15} />
+              立即部署第一台服务端
+            </Link>
+            <Link to="/import" className="btn">
+              <FolderDown size={15} />
+              导入已有服务端
+            </Link>
+          </div>
+        </div>
+      ) : (
+        <div className="instance-grid">
+          {abnormalOnly && abnormalCount === 0 && <p className="muted">暂无异常实例。</p>}
+          {instances.filter(inst => !abnormalOnly || inst.status === 'crashed' || inst.requiresMigration).map((inst) => (
+            <div
+              key={inst.id}
+              className="instance-card"
+            >
+              <div className="inst-card-top">
+                <div className="inst-card-info">
+                  <div
+                    className="inst-avatar"
+                    style={{
+                      color: inst.status === 'running' ? 'var(--accent)' : 'var(--text-muted)',
+                      borderColor: inst.status === 'running' ? 'var(--accent)' : 'var(--border)',
+                    }}
+                  >
+                    <Server size={22} />
+                  </div>
+                  <div className="inst-name-group">
+                    <Link to={`/instances/${inst.id}`} className="inst-name" title={inst.name}>
+                      {inst.name}
+                    </Link>
+                    <div className="inst-core-badge">
+                      {inst.coreType.toUpperCase()} {inst.mcVersion ? `· ${inst.mcVersion}` : ''}
+                    </div>
+                  </div>
+                </div>
+                <span className={`status-badge ${inst.requiresMigration ? 'starting' : inst.status}`}>
+                  {inst.requiresMigration ? '▲ 待迁移' : `● ${statusLabel[inst.status] || inst.status}`}
+                </span>
+              </div>
+
+              <div className="inst-stat-row">
+                <div className="inst-stat-item">
+                  <span className="inst-stat-label" title="按整机逻辑核总容量计算">进程 CPU</span>
+                  <span className="inst-stat-val">{processMetric(inst, metrics, metricsError, 'cpu')}</span>
+                </div>
+                <div className="inst-stat-item">
+                  <span className="inst-stat-label" title="实际进程内存占用，与 JVM 堆内存上限不同">进程内存</span>
+                  <span className="inst-stat-val">{processMetric(inst, metrics, metricsError, 'memory')}</span>
+                </div>
+                <div className="inst-stat-item">
+                  <span className="inst-stat-label">堆内存上限 (Xmx)</span>
+                  <span className="inst-stat-val">{extractXmx(inst.jvmArgs)}</span>
+                </div>
+                <div className="inst-stat-item">
+                  <span className="inst-stat-label">Java 运行时</span>
+                  <span className="inst-stat-val">{inst.javaRuntimeId ? '专属环境' : '系统默认'}</span>
+                </div>
+              </div>
+
+              <div className="inst-card-actions">
+                {canStartInstance(inst.status) && (
+                  <button
+                    className="btn btn-ok"
+                    type="button"
+                    disabled={busyId === inst.id || inst.requiresMigration}
+                    onClick={() => void act(inst.id, 'start')}
+                  >
+                    <Play size={14} />
+                    启动
+                  </button>
+                )}
+                {canStopInstance(inst.status) && (
+                  <button
+                    className="btn btn-danger"
+                    type="button"
+                    disabled={busyId === inst.id || inst.requiresMigration}
+                    onClick={() => void act(inst.id, 'stop')}
+                  >
+                    <Power size={14} />
+                    停止
+                  </button>
+                )}
+                <Link to={`/instances/${inst.id}`} className="btn btn-primary">
+                  进入管理
+                </Link>
+
+                <details className="action-menu" style={{ position: 'relative' }}>
+                  <summary className="btn btn-icon" title="更多操作">
+                    <MoreVertical size={16} />
+                  </summary>
+                  <div
+                    className="btn-row"
+                    style={{
+                      position: 'absolute',
+                      right: 0,
+                      bottom: '100%',
+                      marginBottom: '6px',
+                      background: 'var(--bg-panel)',
+                      border: '1px solid var(--border)',
+                      borderRadius: 'var(--radius-sm)',
+                      padding: '6px',
+                      boxShadow: 'var(--shadow)',
+                      zIndex: 10,
+                      flexDirection: 'column',
+                      minWidth: '110px',
+                    }}
+                  >
+                    <button
+                      className="btn btn-ghost"
+                      type="button"
+                      style={{ width: '100%', justifyContent: 'flex-start', height: '30px', fontSize: '0.8rem' }}
+                      disabled={busyId === inst.id || inst.requiresMigration || isLifecycleBusy(inst.status)}
+                      onClick={(event) => {
+                        event.currentTarget.closest('details')?.removeAttribute('open');
+                        setRestartTarget(inst);
+                      }}
+                    >
+                      <RotateCcw size={13} />
+                      重启实例
+                    </button>
+                    <button
+                      className="btn btn-ghost"
+                      type="button"
+                      style={{ width: '100%', justifyContent: 'flex-start', height: '30px', fontSize: '0.8rem' }}
+                      disabled={busyId === inst.id || inst.requiresMigration || !isAlive(inst.status)}
+                      onClick={(event) => {
+                        event.currentTarget.closest('details')?.removeAttribute('open');
+                        setForceStopTarget(inst);
+                      }}
+                    >
+                      <Power size={13} />
+                      强制停止
+                    </button>
+                    <button
+                      className="btn btn-danger"
+                      type="button"
+                      style={{ width: '100%', justifyContent: 'flex-start', height: '30px', fontSize: '0.8rem' }}
+                      disabled={busyId === inst.id || (!inst.requiresMigration && isAlive(inst.status))}
+                      title={
+                        !inst.requiresMigration && isAlive(inst.status)
+                          ? '实例仍在运行，请先停止后再删除'
+                          : undefined
+                      }
+                      onClick={(event) => {
+                        event.currentTarget.closest('details')?.removeAttribute('open');
+                        setDeleteTarget(inst);
+                      }}
+                    >
+                      <Trash2 size={13} />
+                      删除实例
+                    </button>
+                  </div>
+                </details>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* 创建空实例弹窗 */}
       <ConfirmDialog
         open={emptyOpen}
         title="创建空实例"
@@ -361,6 +469,7 @@ export function DashboardPage() {
         onCancel={() => setEmptyOpen(false)}
       />
 
+      {/* 重启确认 */}
       <ConfirmDialog
         open={restartTarget !== null}
         title={`重启实例「${restartTarget?.name ?? ''}」？`}
@@ -370,6 +479,8 @@ export function DashboardPage() {
         onConfirm={() => void confirmRestart()}
         onCancel={() => setRestartTarget(null)}
       />
+
+      {/* 强制停止确认 */}
       <ConfirmDialog
         open={forceStopTarget !== null}
         title={`强制停止实例「${forceStopTarget?.name ?? ''}」？`}
@@ -380,6 +491,8 @@ export function DashboardPage() {
         onConfirm={() => void confirmForceStop()}
         onCancel={() => setForceStopTarget(null)}
       />
+
+      {/* 删除确认 */}
       <ConfirmDialog
         open={deleteTarget !== null}
         title={deleteTarget?.requiresMigration ? `移除实例记录「${deleteTarget?.name ?? ''}」？` : `删除实例「${deleteTarget?.name ?? ''}」？`}

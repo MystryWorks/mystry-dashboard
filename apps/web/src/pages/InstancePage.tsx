@@ -1,5 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, NavLink, Route, Routes, useBlocker, useParams } from 'react-router-dom';
+import {
+  ArrowLeft,
+  Folder,
+  Play,
+  Power,
+  RotateCcw,
+  Settings,
+  Sliders,
+  Terminal,
+} from 'lucide-react';
 import type { FileEntry, InstanceInfo } from '@mmd/shared';
 import { isInstanceStopPendingResult } from '@mmd/shared';
 import { ApiError, api, apiForm, downloadAuthenticated } from '../api';
@@ -64,11 +74,6 @@ function isAbortError(error: unknown): boolean {
 function ConsoleTab({ instance }: { instance: InstanceInfo; onChange: () => void }) {
   return (
     <div>
-      <p className="muted" style={{ marginTop: 0 }}>
-        状态：
-        <span className={`badge ${instance.status}`}>{statusLabel[instance.status]}</span>
-        （在下方输入指令后回车发送）
-      </p>
       <ConsolePanel instanceId={instance.id} canSend={instance.status === 'running'} />
     </div>
   );
@@ -856,35 +861,57 @@ export function InstancePage() {
   }
 
   return (
-    <div className="instance-page">
-      <div className="instance-page-top">
-        <p className="instance-back">
-          <Link to="/">← 返回总览</Link>
-        </p>
-        <div className="instance-header">
-          <div>
-            <h1 className="page-title">{instance.name}</h1>
-            <p className="page-desc">
-              {instance.coreType} {instance.mcVersion || ''} ·{' '}
-              <span className={`badge ${instance.status}`}>{statusLabel[instance.status]}</span>
-            </p>
+    <div className="instance-page" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+        <div className="instance-hub-header">
+          <div style={{ display: 'flex', alignItems: 'center', gap: '14px', flexWrap: 'wrap' }}>
+            <Link to="/" className="btn btn-icon" title="返回总览">
+              <ArrowLeft size={18} />
+            </Link>
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <h2 style={{ fontSize: '1.25rem', margin: 0, fontWeight: 700 }}>{instance.name}</h2>
+                <span className={`status-badge ${instance.requiresMigration ? 'starting' : instance.status}`}>
+                  {instance.requiresMigration ? '待迁移' : `● ${statusLabel[instance.status] || instance.status}`}
+                </span>
+              </div>
+              <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                核心: {instance.coreType.toUpperCase()} {instance.mcVersion ? `· 版本 ${instance.mcVersion}` : ''} · 节点 {instance.nodeId || 'local'}
+              </span>
+            </div>
           </div>
-          <div className="btn-row instance-actions">
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+            {canStartInstance(instance.status) && (
+              <button
+                className="btn btn-ok"
+                type="button"
+                disabled={busy || instance.requiresMigration}
+                onClick={() => void act('start')}
+              >
+                <Play size={14} />
+                启动
+              </button>
+            )}
+            {canStopInstance(instance.status) && (
+              <button
+                className="btn btn-danger"
+                type="button"
+                disabled={busy || instance.requiresMigration}
+                onClick={() => void act('stop')}
+              >
+                <Power size={14} />
+                停止
+              </button>
+            )}
             <button
               className="btn"
               type="button"
-              disabled={busy || instance.requiresMigration || !canStartInstance(instance.status)}
-              onClick={() => void act('start')}
+              disabled={busy || instance.requiresMigration || isLifecycleBusy(instance.status)}
+              onClick={() => setConfirmRestart(true)}
             >
-              启动
-            </button>
-            <button
-              className="btn btn-ghost"
-              type="button"
-              disabled={busy || instance.requiresMigration || !canStopInstance(instance.status)}
-              onClick={() => void act('stop')}
-            >
-              停止
+              <RotateCcw size={14} />
+              重启
             </button>
             <button
               className="btn btn-ghost"
@@ -894,41 +921,41 @@ export function InstancePage() {
             >
               强制停止
             </button>
-            <button
-              className="btn btn-ghost"
-              type="button"
-              disabled={busy || instance.requiresMigration || isLifecycleBusy(instance.status)}
-              onClick={() => setConfirmRestart(true)}
-            >
-              重启
-            </button>
           </div>
         </div>
 
-        {error && <p className="error">{error}</p>}
+        {error && <p className="error" role="alert">{error}</p>}
 
         {!instance.requiresMigration && (
-          <div className="tabs">
-            <NavLink to={`/instances/${id}`} end className={({ isActive }) => (isActive ? 'active' : undefined)}>
-              控制台
+          <div className="hub-tabs">
+            <NavLink
+              to={`/instances/${id}`}
+              end
+              className={({ isActive }) => `hub-tab${isActive ? ' active' : ''}`}
+            >
+              <Terminal size={15} />
+              <span>控制台</span>
             </NavLink>
             <NavLink
               to={`/instances/${id}/files`}
-              className={({ isActive }) => (isActive ? 'active' : undefined)}
+              className={({ isActive }) => `hub-tab${isActive ? ' active' : ''}`}
             >
-              文件
+              <Folder size={15} />
+              <span>文件管理</span>
             </NavLink>
             <NavLink
               to={`/instances/${id}/config`}
-              className={({ isActive }) => (isActive ? 'active' : undefined)}
+              className={({ isActive }) => `hub-tab${isActive ? ' active' : ''}`}
             >
-              配置
+              <Sliders size={15} />
+              <span>参数配置</span>
             </NavLink>
             <NavLink
               to={`/instances/${id}/settings`}
-              className={({ isActive }) => (isActive ? 'active' : undefined)}
+              className={({ isActive }) => `hub-tab${isActive ? ' active' : ''}`}
             >
-              设置
+              <Settings size={15} />
+              <span>实例设置 & JVM</span>
             </NavLink>
           </div>
         )}

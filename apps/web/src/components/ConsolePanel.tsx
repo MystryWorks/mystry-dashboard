@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import '@xterm/xterm/css/xterm.css';
+import { Copy, Eraser, Send } from 'lucide-react';
 import { createConsoleTicket } from '../api';
 import {
   colorizeConsoleLine,
@@ -16,6 +17,14 @@ type Props = {
   onStatus?: (status: string) => void;
 };
 
+const QUICK_COMMANDS = [
+  { label: 'list', desc: '玩家列表', cmd: 'list' },
+  { label: 'save-all', desc: '保存世界', cmd: 'save-all' },
+  { label: 'tps', desc: '刻率性能', cmd: 'tps' },
+  { label: 'whitelist list', desc: '白名单', cmd: 'whitelist list' },
+  { label: 'help', desc: '命令帮助', cmd: 'help' },
+];
+
 export function ConsolePanel({ instanceId, canSend = true, onStatus }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const termRef = useRef<Terminal | null>(null);
@@ -26,6 +35,14 @@ export function ConsolePanel({ instanceId, canSend = true, onStatus }: Props) {
 
   const [command, setCommand] = useState('');
   const [connected, setConnected] = useState(false);
+  const [copyMessage, setCopyMessage] = useState('');
+  const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const copyRequestRef = useRef(0);
+
+  useEffect(() => () => {
+    copyRequestRef.current += 1;
+    if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
+  }, [instanceId]);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -36,27 +53,26 @@ export function ConsolePanel({ instanceId, canSend = true, onStatus }: Props) {
       cursorBlink: false,
       fontFamily: 'IBM Plex Mono, monospace',
       fontSize: 13,
-      // ECMA-48 / ISO 6429 标准调色板（亮色用于 INFO/WARN/ERROR）
       theme: {
-        background: '#0a0f0d',
-        foreground: '#d7e6dc',
-        cursor: '#3dba7e',
-        black: '#0a0f0d',
-        red: '#c42b3c',
-        green: '#2ea043',
-        yellow: '#c9a227',
-        blue: '#3b6ea5',
-        magenta: '#9b4d96',
-        cyan: '#2a9d8f',
-        white: '#d7e6dc',
-        brightBlack: '#6b7c72',
-        brightRed: '#ff5d7d',
-        brightGreen: '#65d6a0',
-        brightYellow: '#e0a84a',
-        brightBlue: '#6cb6ff',
-        brightMagenta: '#d67ae0',
-        brightCyan: '#56d4dd',
-        brightWhite: '#f5fff8',
+        background: '#070508',
+        foreground: '#f0e6ed',
+        cursor: '#f062a6',
+        black: '#070508',
+        red: '#ff5d7d',
+        green: '#65d6a0',
+        yellow: '#e0a84a',
+        blue: '#64b5f6',
+        magenta: '#d67ae0',
+        cyan: '#56d4dd',
+        white: '#fff1f8',
+        brightBlack: '#6b5765',
+        brightRed: '#ff7691',
+        brightGreen: '#7ee2b0',
+        brightYellow: '#eec26f',
+        brightBlue: '#8ac4f8',
+        brightMagenta: '#e297ea',
+        brightCyan: '#7ae2ea',
+        brightWhite: '#ffffff',
       },
     });
     const fit = new FitAddon();
@@ -69,7 +85,6 @@ export function ConsolePanel({ instanceId, canSend = true, onStatus }: Props) {
     let ws: WebSocket | null = null;
     const ticketRequest = new AbortController();
     const colorState = createConsoleColorizeState();
-    // 断线重连：指数退避 1s→2s→5s→10s，封顶 30s；组件卸载即放弃。
     let retryAttempt = 0;
     let retryTimer: ReturnType<typeof setTimeout> | null = null;
     const RETRY_DELAYS_MS = [1_000, 2_000, 5_000, 10_000, 30_000];
@@ -221,29 +236,114 @@ export function ConsolePanel({ instanceId, canSend = true, onStatus }: Props) {
     }
   }
 
+  function clearScreen() {
+    termRef.current?.clear();
+  }
+
+  async function copyAll() {
+    const requestId = ++copyRequestRef.current;
+    if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
+    const term = termRef.current;
+    let message = '暂无可复制的日志。';
+    try {
+      term?.selectAll();
+      const text = term?.getSelection() ?? '';
+      term?.clearSelection();
+      if (text.trim()) {
+        if (!navigator.clipboard?.writeText) throw new Error('剪贴板不可用');
+        await navigator.clipboard.writeText(text);
+        message = '日志已复制。';
+      }
+    } catch {
+      message = '复制失败：浏览器剪贴板不可用或权限被拒绝，请手动选择日志并复制。';
+    }
+    if (requestId !== copyRequestRef.current) return;
+    setCopyMessage(message);
+    copyTimerRef.current = setTimeout(() => setCopyMessage(''), 6000);
+  }
+
   return (
-    <div className="console-wrap">
-      <div className="console-output" ref={containerRef} />
-      <form className="console-input-bar" onSubmit={onSubmit}>
-        <span className="console-prompt" aria-hidden="true">
-          &gt;
-        </span>
-        <input
-          className="console-input"
-          type="text"
-          value={command}
-          onChange={(e) => setCommand(e.target.value)}
-          onKeyDown={onKeyDown}
-          disabled={!inputEnabled}
-          placeholder={inputEnabled ? '输入指令…' : canSend ? '连接中…' : '实例未运行'}
-          autoComplete="off"
-          spellCheck={false}
-          aria-label="控制台指令"
-        />
-        <button className="btn console-send" type="submit" disabled={!inputEnabled || !command.trim()}>
-          发送
-        </button>
-      </form>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+      <div className="console-box-wrapper">
+        <div className="console-header-bar">
+          <span style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.84rem' }}>
+            <span
+              style={{
+                width: 8,
+                height: 8,
+                borderRadius: '50%',
+                background: connected ? 'var(--ok)' : 'var(--warn)',
+                boxShadow: connected ? '0 0 8px var(--ok)' : 'none',
+              }}
+            />
+            <span>{connected ? '实时输出日志 · WebSocket 已连接' : canSend ? '控制台正在连接…' : '实例未运行'}</span>
+          </span>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button
+              className="btn btn-icon"
+              type="button"
+              title="清空屏幕"
+              onClick={clearScreen}
+              style={{ width: 30, height: 30 }}
+            >
+              <Eraser size={14} />
+            </button>
+            <button
+              className="btn"
+              type="button"
+              title="复制全部输出"
+              onClick={() => void copyAll()}
+              style={{ height: 30, padding: '0 10px', fontSize: '0.78rem' }}
+            >
+              <Copy size={13} />
+              复制日志
+            </button>
+          </div>
+        </div>
+
+        <p role="status" aria-live="polite" className="console-copy-status">{copyMessage}</p>
+        <div className="console-output" ref={containerRef} />
+
+        <form className="console-input-bar" onSubmit={onSubmit}>
+          <span className="console-prompt" aria-hidden="true" style={{ color: 'var(--accent)', fontWeight: 700 }}>
+            &gt;
+          </span>
+          <input
+            className="console-input"
+            type="text"
+            value={command}
+            onChange={(e) => setCommand(e.target.value)}
+            onKeyDown={onKeyDown}
+            disabled={!inputEnabled}
+            placeholder={inputEnabled ? '输入控制台命令 (如: list, say Hello, op player) 按回车发送' : canSend ? '连接中…' : '实例已停止，启动后可发送指令'}
+            autoComplete="off"
+            spellCheck={false}
+            aria-label="控制台指令"
+          />
+          <button className="btn btn-primary" type="submit" disabled={!inputEnabled || !command.trim()} style={{ height: 36 }}>
+            <Send size={14} />
+            发送
+          </button>
+        </form>
+      </div>
+
+      {/* 快捷指令按钮栏 */}
+      <div className="quick-cmd-bar">
+        <span style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>常用命令快捷键：</span>
+        {QUICK_COMMANDS.map((item) => (
+          <button
+            key={item.cmd}
+            type="button"
+            className="btn"
+            disabled={!inputEnabled}
+            style={{ height: 30, padding: '0 12px', fontSize: '0.8rem' }}
+            onClick={() => sendCommand(item.cmd)}
+            title={`向服务器发送 /${item.cmd}`}
+          >
+            {item.label} ({item.desc})
+          </button>
+        ))}
+      </div>
     </div>
   );
 }

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Archive, FolderDown, FolderUp, RefreshCw } from 'lucide-react';
 import type { CoreType, ExistingServerSourceInfo, ImportPreviewInfo, TaskInfo } from '@mmd/shared';
 import {
   ApiError,
@@ -53,6 +54,7 @@ export function ImportPage() {
   const [error, setError] = useState('');
   const [progress, setProgress] = useState<TaskInfo | null>(null);
   const [busy, setBusy] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
   /** 组件卸载时中止进行中的请求和任务轮询，避免离开页面后继续更新状态。 */
   const pollAbortRef = useRef<AbortController | null>(null);
 
@@ -114,6 +116,16 @@ export function ImportPage() {
   const progressValue = progress
     ? Math.min(100, Math.max(0, Number.isFinite(progress.progress) ? progress.progress : 0))
     : 0;
+  function selectZip(selected: File | null) {
+    if (busy || restoringPreview || !selected) return;
+    if (!selected.name.toLowerCase().endsWith('.zip')) {
+      setError('请选择 ZIP 格式的服务端压缩包。');
+      return;
+    }
+    setError('');
+    setFile(selected);
+  }
+
   const configurationVisible = mode === 'directory' || preview !== null;
   const canSubmit = !busy
     && !restoringPreview
@@ -238,9 +250,15 @@ export function ImportPage() {
         : preview ? '确认配置并导入' : '请选择 ZIP';
 
   return (
-    <div>
-      <h1 className="page-title">导入已有服务端</h1>
-      <p className="page-desc">把面板外部署的服务器复制为托管实例，原目录不会被移动或删除。</p>
+    <div className="import-workspace">
+      <div className="section-header">
+        <div>
+          <h1 className="page-title" style={{ margin: 0 }}>导入已有 Minecraft 服务端</h1>
+          <p className="page-desc" style={{ margin: '4px 0 0' }}>
+            支持 ZIP 服务端安装包解压预检，或同机目录只读交接，原目录不会被破坏或删除。
+          </p>
+        </div>
+      </div>
 
       <div className="import-mode-switch" role="group" aria-label="导入方式">
         <button
@@ -250,7 +268,7 @@ export function ImportPage() {
           disabled={busy}
           onClick={() => setMode('directory')}
         >
-          同机目录交接
+          同机目录直接交接
         </button>
         <button
           type="button"
@@ -259,11 +277,12 @@ export function ImportPage() {
           disabled={busy}
           onClick={() => setMode('zip')}
         >
-          上传 ZIP
+          ZIP 服务端整合包导入
         </button>
       </div>
 
-      <form className="panel import-panel" onSubmit={(e) => void onSubmit(e)}>
+      <form className="form-card import-panel" onSubmit={(e) => void onSubmit(e)}>
+        <div className="import-panel-body" role="region" aria-label="导入配置" tabIndex={0}>
         {mode === 'directory' ? (
           <>
             <div className="managed-note import-handoff-note">
@@ -276,7 +295,7 @@ export function ImportPage() {
               <span>交接区只列出直接子目录，不支持输入或浏览任意系统路径。</span>
             </div>
             <div className="field">
-              <label htmlFor="existing-server-source">交接目录</label>
+              <label htmlFor="existing-server-source">选择检测到的交接目录</label>
               <div className="btn-row import-source-row">
                 <select
                   id="existing-server-source"
@@ -294,11 +313,12 @@ export function ImportPage() {
                   ))}
                 </select>
                 <button
-                  className="btn btn-ghost"
+                  className="btn"
                   type="button"
                   disabled={busy || sourcesLoading}
                   onClick={() => void loadSources()}
                 >
+                  <RefreshCw size={14} />
                   {sourcesLoading ? '读取中…' : '刷新目录'}
                 </button>
               </div>
@@ -319,8 +339,8 @@ export function ImportPage() {
         ) : (
           <>
             <div className="managed-note">
-              <strong>ZIP 分两步导入</strong>
-              <span>先上传预检 JVM 配置，再确认实例设置并进入后台导入；不会覆盖已有实例。</span>
+              <strong>ZIP 二阶段安全导入</strong>
+              <span>先上传并执行目录探测与 JVM 识别预检，再确认实例配置并入队复制，安全可靠。</span>
             </div>
             {restoringPreview ? <p className="muted" role="status">正在恢复待确认的 ZIP…</p> : null}
             {preview ? (
@@ -331,20 +351,62 @@ export function ImportPage() {
                   <span>有效至 {new Date(preview.expiresAt).toLocaleString()}</span>
                 </div>
                 <button className="btn btn-ghost" type="button" disabled={busy} onClick={() => void cancelPreview()}>
-                  取消并删除 ZIP
+                  取消并重新选择
                 </button>
               </div>
             ) : null}
+
             <div className="field">
-              <label htmlFor="existing-server-zip">安装包（.zip）</label>
+              <label htmlFor="existing-server-zip">服务端压缩包 (.zip)</label>
+              <div
+                style={{
+                  border: `2px dashed ${isDragging ? 'var(--accent)' : 'var(--border)'}`,
+                  borderRadius: 'var(--radius)',
+                  padding: '36px 20px',
+                  textAlign: 'center',
+                  cursor: busy || restoringPreview ? 'not-allowed' : 'pointer',
+                  background: isDragging ? 'var(--accent-subtle)' : file ? 'var(--bg-elevated)' : 'var(--bg)',
+                  transition: 'all 0.2s ease',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: '10px',
+                }}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  if (!busy && !restoringPreview) setIsDragging(true);
+                }}
+                onDragLeave={() => setIsDragging(false)}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  setIsDragging(false);
+                  if (busy || restoringPreview) return;
+                  const dropped = e.dataTransfer.files?.[0];
+                  selectZip(dropped ?? null);
+                }}
+              >
+                <FolderUp size={40} style={{ color: 'var(--accent)' }} />
+                <div style={{ fontWeight: 600, fontSize: '0.95rem' }}>
+                  {file ? file.name : '选择或拖拽 ZIP 压缩包至此处'}
+                </div>
+                <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                  {file
+                    ? `文件大小: ${(file.size / 1024 / 1024).toFixed(1)} MB`
+                    : '上传大小与解压限制由面板配置决定'}
+                </span>
+                <button className="btn" type="button" disabled={busy || restoringPreview}
+                  onClick={() => document.getElementById('existing-server-zip')?.click()}>
+                  选择 ZIP
+                </button>
+              </div>
               <input
                 key={preview?.id ?? 'new-preview'}
                 id="existing-server-zip"
                 type="file"
                 accept=".zip,application/zip"
                 disabled={busy || restoringPreview}
-                onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-                required={!preview}
+                style={{ display: 'none' }}
+                onChange={(e) => { selectZip(e.target.files?.[0] ?? null); e.target.value = ''; }}
               />
               {preview ? (
                 <p className="muted field-help">选择新文件并提交会先创建新预览，成功后才替换当前 ZIP。</p>
@@ -448,9 +510,12 @@ export function ImportPage() {
           </p>
         ) : null}
 
-        <button className="btn" type="submit" disabled={!canSubmit}>
-          {submitLabel}
-        </button>
+        </div>
+        <div className="import-panel-footer">
+          <button className="btn btn-primary" type="submit" disabled={!canSubmit} style={{ padding: '0 24px' }}>
+            {submitLabel}
+          </button>
+        </div>
       </form>
     </div>
   );
