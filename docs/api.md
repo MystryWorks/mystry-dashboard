@@ -8,6 +8,17 @@ Authorization: Bearer <token>
 
 错误响应通常为 JSON：`{ "error": "说明" }`。
 
+## 总览性能监测
+
+`GET /api/system/metrics` 需要 JWT，返回共享类型 `DashboardMetrics`：
+
+- `sampledAt`：采样时间；`cpuPercent`：整机 CPU 使用率，首次采样为 `null`。
+- `memory`：主机 `usedBytes` / `totalBytes`；`disk`：数据根所在磁盘的 `availableBytes` / `totalBytes`，读取失败为 `null`。
+- `instances`：以实例 ID 为键，包含 `cpuPercent`、`memoryBytes` 与 `state`（`ready` / `collecting` / `unavailable`）。仅采集面板持有的活进程，调用方不能指定 PID 或路径。
+- `warnings`：CPU 或内存连续采样至少 30 秒达到 90% 时提示；磁盘可用空间低于 5 GiB 或 10% 时提示。
+
+CPU 按整机逻辑核总容量归一至 0–100%；进程内存是驻留内存，与 JVM 堆内存上限 Xmx 不同。Windows 使用累计 CPU 时间和 WorkingSet，Linux 使用 `/proc` 与系统时钟频率；其他平台的进程指标暂不可用。空值不表示零占用。快照缓存 4 秒，并发请求合并；无历史存储，页面每 5 秒刷新、隐藏时暂停。采样间隔超过 15 秒会重新累计持续告警时间。
+
 ## 健康检查
 
 | 方法 | 路径 | 认证 | 响应 |

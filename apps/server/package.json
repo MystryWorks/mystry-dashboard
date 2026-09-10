@@ -8,7 +8,7 @@
     "build": "tsc",
     "typecheck": "tsc --noEmit",
     "test:static": "node --test --import tsx src/frontend-assets.test.ts",
-    "test:regression": "node --test --import tsx src/frontend-assets.test.ts src/services/data-lock.test.ts src/services/task-service.test.ts src/services/process-manager.test.ts src/services/file-service.test.ts src/services/import-service.test.ts src/services/import-preview-service.test.ts src/services/jvm-config.test.ts src/services/jvm-detection-service.test.ts src/services/java-detect.test.ts src/services/config-service.test.ts src/services/core-depot.test.ts src/routes/files.test.ts src/utils/data-dir-permissions.test.ts",
+    "test:regression": "node --test --import tsx src/frontend-assets.test.ts src/services/metrics-service.test.ts src/services/data-lock.test.ts src/services/task-service.test.ts src/services/process-manager.test.ts src/services/file-service.test.ts src/services/import-service.test.ts src/services/import-preview-service.test.ts src/services/jvm-config.test.ts src/services/jvm-detection-service.test.ts src/services/java-detect.test.ts src/services/config-service.test.ts src/services/core-depot.test.ts src/routes/files.test.ts src/utils/data-dir-permissions.test.ts",
     "start": "node --experimental-sqlite dist/index.js",
     "test:security": "node --import tsx src/security-self-test.ts"
   },

@@ -159,6 +159,15 @@ export class ProcessManager extends EventEmitter {
       ?? 'stopped';
   }
 
+  /** 只向本机采集器提供面板当前持有的活进程，不接受外部 PID。 */
+  getMetricTargets(): Array<{ id: string; pid: number }> {
+    return [...this.processes].flatMap(([id, managed]) => {
+      const child = managed.child;
+      return child?.pid && child.exitCode === null && child.signalCode === null
+        ? [{ id, pid: child.pid }] : [];
+    });
+  }
+
   getBuffer(instanceId: string): string[] {
     return [...(this.processes.get(instanceId)?.buffer
       ?? this.snapshots.get(instanceId)?.buffer

@@ -1,5 +1,19 @@
 import type { DetectedJvmConfig } from './jvm-config.js';
 
+/** 本机资源快照；空值表示尚无有效采样，不等同于零占用。 */
+export interface DashboardMetrics {
+  sampledAt: string;
+  cpuPercent: number | null;
+  memory: { usedBytes: number; totalBytes: number };
+  disk: { availableBytes: number; totalBytes: number } | null;
+  warnings: string[];
+  instances: Record<string, {
+    cpuPercent: number | null;
+    memoryBytes: number | null;
+    state: 'ready' | 'collecting' | 'unavailable';
+  }>;
+}
+
 /** 实例运行状态 */
 export type InstanceStatus = 'stopped' | 'starting' | 'running' | 'stopping' | 'crashed';
 
