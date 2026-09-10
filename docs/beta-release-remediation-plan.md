@@ -1,5 +1,7 @@
 # Beta 发布修复计划
 
+> 历史阶段记录：以下状态和远程环境信息对应 2026-08 的实施与复验，不代表当前仍未修复的问题或当前发布状态。现行实现见 [当前状态](ai/current-state.md)，发布操作见 [便携预览版](portable-release.md)，验收须重新执行 [验证矩阵](ai/verification.md)。
+
 > 状态：`In Progress`（批次 A–F 已随提交 `7d94c83` 合入 **dev** 并全部纳入 Git 跟踪；根 `verify` 已串联 `test:regression`；批次 G 于 **2026-08-07** 在本机 Windows 跑通 `knowledge:*`、`typecheck`、`test:security`、`test:regression`、`windows:test`、`build`、`verify`、`audit:production`）  
 > 基线：2026-08-06 审查 + 2026-08-07 门禁复验  
 > 目标：将当前项目从“可供内部试用”提升为可向真实 Minecraft 管理员发布的公开 Beta。  

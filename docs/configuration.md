@@ -1,6 +1,15 @@
 # 配置说明
 
-源码运行默认从仓库根目录加载 `.env`。便携控制器默认加载包根目录的 `config/panel.env`，并在首次启动时创建该文件及随机密钥。可先复制 `.env.example` 再手动配置源码运行环境。
+配置文件取决于启动入口，不要将两份配置混用：
+
+| 启动入口 | 默认配置文件 | 首次配置 |
+|---|---|---|
+| 手动运行 `npm run dev:server` / `npm start` | 仓库根 `.env` | 复制 `.env.example` 并填写随机密钥 |
+| Windows 源码 `PanelManager.cmd` | 仓库根 `.env` | 管理器自动创建或检查密钥 |
+| Linux / WSL 源码 `PanelManager.sh` | 仓库根 `config/panel.env` | 跨平台控制器自动生成 |
+| 便携版 `mmdctl` | 包根 `config/panel.env` | 跨平台控制器自动生成 |
+
+表中列出默认值。路径覆盖变量见下方环境变量表；已有配置请保留，不要再次用模板覆盖。Windows PowerShell 使用 `npm.cmd`。
 
 ## 首次启动必需配置
 

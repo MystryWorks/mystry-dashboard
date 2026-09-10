@@ -1,67 +1,51 @@
 # 项目文档
 
-Minecraft Mystery Dashboard 是一套单机一体的 Minecraft **服务端**管理面板，通过 Web 界面管理本机上的多个服务端实例。
+Minecraft Mystery Dashboard 是独立的 Minecraft Java 服务端 Web 管理面板，在本机管理多个服务端实例。
 
-> 本项目**不是**客户端模组；它是独立的 Node.js 面板程序。
+## 按目标阅读
 
-## 文档目录
+| 你想做什么 | 从这里开始 | 后续参考 |
+|---|---|---|
+| 安装并启动面板 | [快速开始](getting-started.md) | [便携版下载、校验与升级](portable-release.md) |
+| 开出第一个服务端 | [分步教程](tutorials.md) | [使用指南](user-guide.md) |
+| 导入、配置或管理实例 | [使用指南](user-guide.md) | [备份与迁移](tutorials.md#教程-8备份与迁移) |
+| 修改监听、密钥或资源限制 | [配置说明](configuration.md) | [安全政策](../SECURITY.md) |
+| 修改代码或提交 PR | [开发指南](development.md) | [贡献指南](../CONTRIBUTING.md)、[验证矩阵](ai/verification.md) |
+| 接入接口或理解实现 | [API 参考](api.md) | [架构设计](architecture.md) |
+| 使用 AI 协助开发 | [项目开发规则](../AGENTS.md) | [AI 项目知识库](ai/README.md) |
+| 快速浏览页面与功能 | [产品介绍（截图与 PDF）](product-intro/README.md) | [中文 Wiki 导航](wiki/README.md) |
 
-| 文档 | 说明 |
-|------|------|
-| [便携预览版](portable-release.md) | Windows/Linux x64 下载、校验、启停、升级、数据保留与已知限制 |
-| [快速开始](getting-started.md) | 环境要求、安装、开发与生产部署 |
-| [分步教程](tutorials.md) | **推荐新手**：从零开服、导入、联机、模组服、备份 |
-| [产品介绍（带截图）](product-intro/README.md) | 产品定位、各页面实拍、每个按钮的说明；另有 PDF |
-| [使用指南](user-guide.md) | 界面导览、字段说明、常见问题 |
-| [配置说明](configuration.md) | 环境变量、数据目录与安全建议 |
-| [架构设计](architecture.md) | Monorepo 结构、模块职责与数据流 |
-| [API 参考](api.md) | REST / WebSocket 接口说明 |
-| [开发指南](development.md) | 本地开发、构建与扩展建议 |
-| [Beta 发布修复计划](beta-release-remediation-plan.md) | 当前发布阻断问题的分阶段修复、迁移和验收计划 |
-| [AI 项目知识库](ai/README.md) | AI 开发事实、决策、防错流程与验证门禁 |
+首次使用建议按“快速开始 → 分步教程 → 使用指南”阅读。截图与 PDF 反映拍摄时的界面，可能与后续页面调整不同；操作说明以当前正文与实际界面为准。
 
-## 社区与开源
+## 文档分工
 
-| 文档 | 说明 |
-|------|------|
-| [贡献指南](../CONTRIBUTING.md) | 如何提 Issue / PR |
+- 根 [README](../README.md)：项目定位、能力边界和运行入口。
+- 本目录的专题文档：用户操作、配置、接口与开发流程的正文来源。
+- [Wiki](wiki/README.md)：保留中文页面入口，链接到正文，不重复维护命令、配置默认值和发布状态。
+- [AI 知识库](ai/README.md)：可追溯的实现事实、架构决策、禁区和检查方法。
+- 历史记录：保留当时的结论和证据，不作为当前缺陷或发布状态清单。
+
+## 历史与社区资料
+
+| 文档 | 用途 |
+|---|---|
+| [Beta 发布修复计划](beta-release-remediation-plan.md) | 2026-08 阶段计划与验收记录；当前状态需重新核实 |
+| [2026-08-07 代码审查](review-2026-08-07.md) | 当次审查发现、修复记录与验证证据 |
+| [变更日志](../CHANGELOG.md) | 版本历史 |
+| [贡献指南](../CONTRIBUTING.md) | Issue、PR 和文档维护约定 |
 | [安全政策](../SECURITY.md) | 漏洞私下披露 |
 | [行为准则](../CODE_OF_CONDUCT.md) | 社区参与规范 |
-| [变更日志](../CHANGELOG.md) | 版本历史 |
 | [许可证](../LICENSE) | MIT |
 
-## 项目概览
+## 维护与校验
 
-```
-minecraft-mystery-dashboard/
-├── apps/
-│   ├── server/          # Fastify 后端
-│   └── web/             # React 前端
-├── packages/
-│   └── shared/          # 前后端共享 TypeScript 类型
-├── data/                # 运行时数据（实例、缓存、数据库）
-├── docs/                # 本目录
-└── package.json         # npm workspaces 根配置
+修改功能说明前先核对相关源码、共享契约、前端入口和测试。配置、路由、脚本或 AI 入口变化时，同步 [机器事实](ai/project-facts.json)；文档改动流程见 [变更手册](ai/change-playbooks.md#文档与知识库)。
+
+在仓库根目录执行：
+
+```powershell
+npm.cmd run knowledge:check
+npm.cmd run knowledge:test
 ```
 
-## 核心能力
-
-- 多实例启停、重启、强制停止（确认后 `SIGKILL`）
-- Web 控制台（WebSocket + xterm.js）
-- 实例目录文件浏览、上传、文本编辑、删除、同目录重命名与流式下载
-- `server.properties` 可视化编辑
-- 从官方源一键部署 Vanilla / Paper / Fabric / Forge / NeoForge
-- 导入现有服务端 zip 安装包
-- 首启创建管理员 + JWT 登录
-
-## 技术栈
-
-| 层级 | 技术 |
-|------|------|
-| 后端 | Node.js ≥ 22、Fastify、WebSocket、`node:sqlite` |
-| 前端 | React、Vite、React Router、xterm.js |
-| 包管理 | npm workspaces |
-
-## 版本
-
-当前包版本：`0.2.0-preview.1`（见根目录 `package.json`）。完整变更见 [CHANGELOG.md](../CHANGELOG.md)。
+Linux/macOS 使用相同脚本名，将 `npm.cmd` 换成 `npm`。检查器验证机器事实和本地 Markdown 链接目标是否存在；不验证标题锚点、外部链接可用性、界面截图或真实用户流程。提交前还须按 [验证矩阵](ai/verification.md) 运行 `npm.cmd run verify`。

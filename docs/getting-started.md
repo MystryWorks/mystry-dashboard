@@ -1,8 +1,20 @@
 # 快速开始
 
+先选择一种运行方式，完成后再初始化管理员：
+
+| 方式 | 适合 | 环境与入口 |
+|---|---|---|
+| 便携版 | 直接使用面板 | Windows/Linux x64，自带 Node.js，使用 `mmdctl` |
+| 源码管理器 | 从源码构建并统一启停 | Node.js ≥ 22，使用 `PanelManager` |
+| 手动开发 | 修改前后端代码 | Node.js ≥ 22，运行两个开发终端 |
+
+所有方式均需另行准备服务端所需的 Java。macOS 没有本 Preview 便携包。
+
+Windows PowerShell 使用 `npm.cmd`；下文通用 npm 脚本在 Linux/macOS 使用 `npm`。
+
 ## 便携版（普通用户推荐）
 
-便携包已经包含 Node.js、生产依赖和构建产物。Windows 解压后双击 `mmdctl.cmd`；Linux / macOS 解压后运行：
+便携包已经包含 Node.js、生产依赖和构建产物。Windows 解压后双击 `mmdctl.cmd`；Linux x64 解压后运行：
 
 ```bash
 chmod +x mmdctl
@@ -34,17 +46,17 @@ chmod +x mmdctl
 中文 Windows 默认显示中文菜单，其他系统语言默认显示英文。菜单中按 `L` 可切换语言并保存到本机运行数据中。也可以直接使用：
 
 ```powershell
-PanelManager.cmd start
-PanelManager.cmd foreground
-PanelManager.cmd stop
-PanelManager.cmd restart
-PanelManager.cmd logs
-PanelManager.cmd rebuild
-PanelManager.cmd status
+.\PanelManager.cmd start
+.\PanelManager.cmd foreground
+.\PanelManager.cmd stop
+.\PanelManager.cmd restart
+.\PanelManager.cmd logs
+.\PanelManager.cmd rebuild
+.\PanelManager.cmd status
 
 # 仅覆盖本次显示语言，不修改保存的偏好
-PanelManager.cmd status --lang en-US
-PanelManager.cmd status --lang zh-CN
+.\PanelManager.cmd status --lang en-US
+.\PanelManager.cmd status --lang zh-CN
 ```
 
 后台停止和重启会先取消部署/导入任务，再逐个安全停止正在运行的 Minecraft 实例；不要直接在任务管理器中强杀 Node 进程。
@@ -65,8 +77,8 @@ chmod +x PanelManager.sh
 如需隔离 WSL 测试数据，请在启动、停止、查看状态等每次操作前使用相同的环境变量：
 
 ```bash
-export MMD_CONFIG_PATH=/home/mocha/data/mystrydashboard-test/config/panel.env
-export MMD_DATA_DIR=/home/mocha/data/mystrydashboard-test
+export MMD_CONFIG_PATH="${HOME}/mmd-test/config/panel.env"
+export MMD_DATA_DIR="${HOME}/mmd-test"
 ./PanelManager.sh start
 ```
 
@@ -81,13 +93,17 @@ npm install
 npm run build -w @mmd/shared
 ```
 
-复制环境变量模板：
+仅首次配置时复制环境变量模板；已有 `.env` 请保留并检查所需字段。
+
+Windows PowerShell：
+
+```powershell
+Copy-Item -LiteralPath .env.example -Destination .env
+```
+
+Linux/macOS：
 
 ```bash
-# Windows
-copy .env.example .env
-
-# Linux / macOS
 cp .env.example .env
 ```
 
@@ -115,7 +131,7 @@ npm run dev:server
 npm run dev:web
 ```
 
-浏览器访问 **http://127.0.0.1:5173**。首次打开会进入初始化流程；客户端需要让 setup 请求发送 `X-Setup-Token`。
+浏览器访问 **http://127.0.0.1:5173**。首次打开会进入初始化流程。在「初始化令牌」中填入配置的 `SETUP_TOKEN`，填写管理员用户名和密码并提交；前端会自动发送 `X-Setup-Token` 请求头。
 
 安装完成后，建议直接跟着 **[分步教程：第一次开服](tutorials.md#教程-1第一次开服推荐-paper)** 走完一遍。
 
@@ -162,7 +178,7 @@ npm start
 
 1. 安装符合服务端要求的 Java；默认运行时可在面板环境中用 `java -version` 检查，也可稍后在面板内选择扫描到的运行时。
 2. 配置 64 位十六进制 `JWT_SECRET` 与 `SETUP_TOKEN`。
-3. 通过带 `X-Setup-Token` header 的 setup 请求创建管理员并登录；完成后移除 `SETUP_TOKEN`。
+3. 在登录页填写「初始化令牌」、用户名和密码来创建管理员；手动配置模式完成后移除 `SETUP_TOKEN` 并重启。
 4. 通过「一键部署」或「导入已有服务端」创建第一个实例。实例会自动使用 `DATA_DIR/instances/<id>`；同机旧服先停止并复制到 `DATA_DIR/imports/<目录名>`。
 5. 在实例详情中启动服务，并在「控制台」查看日志。
 6. 改端口、难度等：实例 →「配置」→ 保存后 **重启**。

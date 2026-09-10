@@ -5,6 +5,8 @@
 
 ## 已确认实现
 
+- 总览性能监测：认证接口 `GET /api/system/metrics` 提供主机 CPU、已用/总内存、数据盘可用空间与面板持有的实例进程 CPU/驻留内存。总览保留四张指标卡与实例原有四格结构，异常数量可筛选；5 秒刷新、隐藏暂停、失败保留旧值并标记过期。采集器合并并发并缓存 4 秒，不写数据库。Windows 与 Linux 有进程采集实现，其他平台显示暂不可用；具体运行验证以本次测试结果为准。TPS/MSPT 与历史趋势尚未接入。口径、阈值见 `docs/api.md`。
+
 - npm workspaces monorepo：
   - `packages/shared`：共享 TypeScript 类型和 JSON Schema。
   - `apps/server`：Fastify API、SQLite、进程、文件、部署与导入。
@@ -20,13 +22,16 @@
 - 部署/导入/ZIP 先写入 `DATA_DIR/.mmd-staging/<taskId>/<instanceId>`（marker 含 task/instance/token），校验通过后原子移动到 `instances/<id>`；崩溃恢复只清理 marker 匹配且任务未完成的 staging，**不会**因 `result.instanceId` 删除已注册实例或最终目录（见 D-016）。
 - 实例 start/stop/restart/delete/adopt 互斥：启停、删除与接管走同一把实例操作锁；start 在首个异步步骤前占位 `starting`；普通 stop 只写 `stop\n`，超时返回仍在停止中且**不**隐式 `SIGKILL`；`force=1` 为唯一强杀路径（UI 二次确认）。面板关闭先标记 `shuttingDown` 并等待未完成的实例操作；`start` 在 spawn 前若已关闭则取消，避免留下无主 Java。
 - `server.properties` 读写、Java 状态检测、本机节点列表。
-- 响应式布局：`apps/web` 覆盖 390px 到 1920px 窗口宽度；`<=1024px` 侧边栏变为抽屉菜单，`<=768px` 实例/节点表格转为卡片列表，表单、弹窗和控制台同步适配窄屏。总览固定保留「一键部署 / 导入已有服务端」两列主入口，空实例为次级入口；实例行只直接展示当前可执行的启动/停止，重启、强制停止和删除收进「更多操作」。
+- 响应式布局：`<=1024px` 显示导航菜单按钮并将部署网格改为单列；`<=768px` 实例卡片为单列、内容边距 16px，顶栏换行并隐藏次要标识，控制台高度随视口调整。总览保留「一键部署 / 导入已有服务端」入口；实例卡片通过名称链接或「进入管理」导航，启动/停止与更多操作独立。断点实现以 CSS 为准，真实宽度与六种主题的视觉验收需另行运行，不能由构建或 DOM 测试推定。
 - `PanelManager.cmd`（Windows）与 `PanelManager.sh`（Linux / WSL 源码）均复用本机 `POST /api/launcher/shutdown` 安全关闭通道。
 - 跨平台 `mmdctl`：自动随机配置、后台 PID 指纹、健康检查、安全停止、状态和日志；便携包使用包内 Node，Linux 源码入口在依赖/构建预检后复用同一控制器。
 - 目标平台原生便携组装与最终压缩包冒烟脚本；发布包物理复制 `@mmd/shared`，并生成文件级 manifest。
 - GitHub Preview Release 流水线：标签/main/版本门禁、Windows x64 与 Linux x64 矩阵、生产依赖审计、校验和签名、SBOM 和自动 Release Notes。
 - 上传、下载、任务、元数据、控制台和 ZIP 解压均有大小、并发或超时边界。
-- 任务中心：`GET /api/tasks` 返回最近 50 条任务；前端侧边栏与移动顶栏各有一个铃铛入口（共享单例轮询，429 退避、页面隐藏暂停），离开部署/导入页后仍可查看任务到终态。
+- 任务中心：`GET /api/tasks` 返回最近 50 条任务；桌面与移动布局均通过顶栏「任务队列」进入（共享单例轮询，429 退避、页面隐藏暂停），离开部署/导入页后仍可查看任务到终态。抽屉通过 portal 挂到 body，使用原生模态 dialog；关闭时不参与键盘导航，Escape、遮罩与关闭按钮均恢复入口焦点，任务进度带 progressbar 语义。
+- ZIP 可通过「选择 ZIP」按钮或拖放选择，两者共享扩展名校验与中文错误反馈；busy 和预览恢复期间禁止更换。上传大小与解压限制由面板配置决定，前端不承诺固定 4GB。
+- 工作区高度固定为视口扣除顶栏后的剩余空间，公共卡片高度不超过工作区；长内容在卡片内滚动。导入页标题和方式切换保留在卡片外，表单正文独立滚动，底部提交栏保持可见；卡片高度由 flex 剩余空间决定，不依赖写死的顶栏高度。
+- 节点页展示加载、空态、失败重试与返回的在线/离线状态；刷新失败保留上次数据并标记可能过期。控制台复制日志提供成功、空日志及剪贴板不可用/拒绝提示，卸载时清理提示计时器。
 - 危险操作防护：重启与强制停止需弹窗确认；运行/启动/停止中的实例禁止删除；删除实例需输入实例名二次确认（待迁移实例仅移除记录，免输名）；文件/目录与远程节点删除也使用统一确认弹窗，执行期间禁止 Escape 或遮罩绕过 busy 锁。
 - 控制台 WebSocket 断线后指数退避自动重连（1s→30s 封顶，重新申请一次性 ticket）。
 - 前端任一请求收到 401（登录/setup/status 除外）会清空登录态并自动跳回登录页。
@@ -39,7 +44,7 @@
 - `PanelManager.ps1` 安全停服：`Get-PanelHealth` 校验 PID、状态文件指纹与健康 JSON 一致后才发送 `X-Launcher-Token`（伪造健康服务测试断言永不发送 token）。
 - Paper/Fabric 等 core 缓存键基于解析后的不可变版本/build，旧 `latest` 键不再误命中。
 - 发布工作流（`.github/workflows/portable-release.yml`）：Actions 使用固定 commit SHA；Windows job 显式 `npm run windows:test`；`RELEASE_GPG_FINGERPRINT` 与仓库内发布公钥/指纹文件用于签名链门禁；`package-portable.mjs` 优先 `git rev-parse HEAD`，脏工作树拒绝正式打包。**本机未验证** GitHub Environment 私钥注入、真实 GPG 签名与双平台 Actions smoke 结果。
-- 三套主题各含暗/亮：`dark` / `light`（Mystery 粉紫）、`codex` / `codex-light`（暖灰青绿）、`grok` / `grok-light`（近黑或白底高对比）。CSS 变量按 `[data-theme]` 拆分，硬编码强调色已改为 `color-mix` 跟随 `--accent`。index.html 内联脚本在渲染前定主题（未保存时仅在 Mystery 暗/亮之间跟随 `prefers-color-scheme`），选择持久化 `mmd_theme`；选择器按套分组，入口在侧边栏底部、移动顶栏与登录页，控制台终端区域保持暗色。
+- 三套主题各含暗/亮：`dark` / `light`（Mystery 粉紫）、`codex` / `codex-light`（暖灰青绿）、`grok` / `grok-light`（近黑或白底高对比）。CSS 变量按 `[data-theme]` 拆分，硬编码强调色已改为 `color-mix` 跟随 `--accent`。index.html 内联脚本在渲染前定主题（未保存时仅在 Mystery 暗/亮之间跟随 `prefers-color-scheme`），选择持久化 `mmd_theme`；选择器按套分组，入口在顶栏与登录页，控制台终端区域保持暗色。
 
 主要事实源：
 

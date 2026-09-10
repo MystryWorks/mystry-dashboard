@@ -61,13 +61,13 @@ PanelManager.cmd
 也可以从命令行直接操作：
 
 ```powershell
-PanelManager.cmd start
-PanelManager.cmd foreground
-PanelManager.cmd stop
-PanelManager.cmd restart
-PanelManager.cmd logs
-PanelManager.cmd rebuild
-PanelManager.cmd status
+.\PanelManager.cmd start
+.\PanelManager.cmd foreground
+.\PanelManager.cmd stop
+.\PanelManager.cmd restart
+.\PanelManager.cmd logs
+.\PanelManager.cmd rebuild
+.\PanelManager.cmd status
 ```
 
 ### Linux / WSL 源码管理器
@@ -84,8 +84,8 @@ chmod +x PanelManager.sh
 要让测试配置和数据完全位于 WSL 的独立目录，请在同一个终端先设置：
 
 ```bash
-export MMD_CONFIG_PATH=/home/mocha/data/mystrydashboard-test/config/panel.env
-export MMD_DATA_DIR=/home/mocha/data/mystrydashboard-test
+export MMD_CONFIG_PATH="${HOME}/mmd-test/config/panel.env"
+export MMD_DATA_DIR="${HOME}/mmd-test"
 ./PanelManager.sh start
 ```
 
@@ -104,6 +104,8 @@ export MMD_DATA_DIR=/home/mocha/data/mystrydashboard-test
 
 ### 手动安装
 
+Windows PowerShell 使用 `npm.cmd`；下面的 `npm` 与 `cp` 示例适用于 Linux/macOS。复制模板仅用于首次配置，已有配置请保留。
+
 ```bash
 # 安装依赖
 npm install
@@ -113,7 +115,7 @@ npm run build -w @mmd/shared
 
 # 复制环境变量
 cp .env.example .env          # Linux / macOS
-# copy .env.example .env      # Windows
+# Windows PowerShell: Copy-Item -LiteralPath .env.example -Destination .env
 ```
 
 首次启动前，编辑 `.env`，分别为 `JWT_SECRET` 和 `SETUP_TOKEN` 填入两个不同的 64 位十六进制随机值。若需要使用 PanelManager 的后台安全停止功能，还要为 `LAUNCHER_TOKEN` 生成第三个不同的随机值。请分别执行以下命令，不要使用固定密钥：
@@ -189,6 +191,8 @@ minecraft-mystery-dashboard/
 - 发现安全问题请按 [SECURITY.md](SECURITY.md) 私下报告，勿直接公开 Issue。
 
 ## 文档索引
+
+按使用目标选择阅读顺序，见 [文档中心](docs/README.md)。
 
 | 文档 | 内容 |
 |------|------|

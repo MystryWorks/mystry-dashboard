@@ -2,6 +2,12 @@
 
 ## 前置步骤
 
+先阅读 [项目开发规则](../AGENTS.md)，运行 `git status --short --branch` 确认当前分支和已有修改。使用 Node.js ≥ 22，在仓库根目录执行命令。
+
+首次运行须完成 [手动安装与密钥配置](getting-started.md#手动安装与首次配置)，然后分别运行 `npm.cmd run dev:server` 与 `npm.cmd run dev:web`。Windows PowerShell 使用 `npm.cmd`；下文 `npm` 示例适用于 Linux/macOS，脚本名相同。
+
+后端默认 `http://127.0.0.1:3000`，开发界面 `http://127.0.0.1:5173`，Vite 代理 `/api` 和 `/ws`。修改后端端口时同步检查 `apps/web/vite.config.ts`。
+
 ```bash
 npm install
 npm run build -w @mmd/shared
@@ -53,7 +59,8 @@ npm run build -w @mmd/shared
 2. 在 `apps/server/src/services/` 实现业务逻辑。
 3. 在 `apps/server/src/routes/` 注册路由，挂 `authenticate`（若需登录），body schema 优先从 `@mmd/shared` 引入。
 4. 在 `apps/web/src/api.ts` 或页面中调用。
-5. 更新 [API 参考](api.md)。
+5. 确认用户可见入口、加载状态和错误反馈，并在新增路由模块时更新 `apps/server/src/index.ts` 的注册。
+6. 更新 [API 参考](api.md) 与相关知识库，按 [验证矩阵](ai/verification.md) 检查契约和真实操作链路。
 
 ## 路径与安全
 
@@ -86,6 +93,8 @@ npm run build -w @mmd/shared
 - 完整门禁：`npm run verify`。Windows PowerShell 从终端直接执行时使用 `npm.cmd run verify`。
 
 ## 本地验证清单
+
+提交前运行 `npm.cmd run verify`。完整门禁不包含生产依赖审计；依赖变更与发布需另跑 `npm.cmd run audit:production`。下面的人工项目按改动范围选择，使用独立测试数据；数据库演练仅使用副本。自动检查通过不能替代真实交互验证。
 
 - [ ] `npm run knowledge:check` 与 `npm run knowledge:test` 无错误
 - [ ] `npm run typecheck` 无错误

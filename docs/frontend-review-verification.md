@@ -1,0 +1,22 @@
+# 新版前端修复验收记录
+
+验证日期：2026-09-08（本机 Windows）。
+
+范围：`dev` 工作树中的新版卡片、顶栏、任务抽屉和部署/导入布局。保留既有重构，修复窄屏导航与网格、卡片键盘事件、任务抽屉焦点、ZIP 选择与容量文案、节点状态及复制日志反馈。未修改共享 API、数据库、服务端限制或 React Router 版本。
+
+## 自动与接口验证
+
+- `npm.cmd run test:interaction`：9 项通过，已接入根 `verify`。覆盖导航背景 inert 与 Escape 焦点恢复、卡片 Enter 操作、任务抽屉关闭/焦点恢复、ZIP 选择与拖放校验、预览恢复/上传锁、节点重试和过期数据、剪贴板失败/成功/空日志及计时器清理。
+- `npm.cmd run verify`：退出 0，知识库、启动器测试、类型检查、安全自检、服务端回归、构建与静态资源检查通过。服务端回归 61 pass / 4 skip；Windows 上跳过 Unix 权限检查，Linux 启动器测试另有 1 项平台跳过。
+- 隔离临时数据根启动实际构建后的后端，用随机测试凭据初始化；真实 multipart ZIP 上传、预检、确认导入到 `completed`，确认最终实例目录有测试 Jar。ZIP 内为不执行的占位 Jar。
+- 同一隔离后端实际部署 Vanilla 1.12.2，任务从 `running` 到 `completed`；任务列表返回终态。未接受 EULA，未启动 Minecraft；验收后通过 launcher 安全关闭面板，保留临时数据用于复查，未使用仓库 `data/`。
+
+## 未完成的人工验收
+
+浏览器工具枚举为空，主动获取浏览器返回 `No browser is available`。因此 390、768、1024、1440px 下的真实页面、六种主题、实例四个页签及相邻入口、原生 dialog 焦点约束、原生文件选择框和真实剪贴板权限拒绝仍待浏览器验收。jsdom 使用 dialog 和终端替身，仅证明应用交互逻辑，不能作为视觉或真实浏览器验收证据。
+
+## 警告与交付边界
+
+本次官方 npm registry 的 `audit:production` 结果：0 critical、1 high、3 moderate，门禁退出 1。high 为 `fast-uri`，moderate 涉及 Fastify、React Router 与 React Router DOM；本批未扩大为生产依赖升级，公开便携包仍受审计门禁阻止。结果仅代表本次审计，不是长期依赖结论。
+
+测试有 React Router 6 的未来行为提示，Windows 安全检查会提示不能自动验证 ACL。未提交或推送。

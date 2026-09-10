@@ -22,15 +22,9 @@
 | Node.js | ≥ 22 |
 | Java | 用于本地验证实例启停（可选，但强烈建议） |
 
-```bash
-npm install
-npm run build -w @mmd/shared
-cp .env.example .env   # Windows: copy .env.example .env
+先按 [快速开始：手动安装与首次配置](docs/getting-started.md#手动安装与首次配置) 安装依赖并配置随机密钥，再按 [开发指南](docs/development.md) 启动两个开发终端。只复制 `.env.example` 而不填写密钥无法完成首启。
 
-# 两个终端
-npm run dev:server
-npm run dev:web
-```
+Windows PowerShell 使用 `npm.cmd`，执行仓库内管理器使用 `.\PanelManager.cmd`；Linux/macOS 使用 `npm`。
 
 更多细节见 [docs/development.md](docs/development.md) 与 [docs/getting-started.md](docs/getting-started.md)。
 
@@ -41,7 +35,7 @@ npm run dev:web
 3. 提交信息简洁说明 **为什么**，例如：
    - `fix: 防止 zip 导入时路径逃逸`
    - `docs: 补充生产部署 JWT 说明`
-4. 用户可见文案与代码注释优先使用**中文**（与现有项目一致）。
+4. 用户可见文案与新增、修改的代码注释使用**中文**（与现有项目一致）。
 
 ## 代码约定
 
@@ -55,11 +49,17 @@ npm run dev:web
 
 提交 PR 前请自行确认：
 
-- [ ] `npm run build` 通过
+- [ ] `npm.cmd run verify` 通过（Linux/macOS 使用 `npm run verify`）
 - [ ] 若改动 API，已更新 [docs/api.md](docs/api.md)
 - [ ] 若改动配置项，已更新 `.env.example` 与 [docs/configuration.md](docs/configuration.md)
 - [ ] 手动验证过相关流程（登录 / 部署 / 控制台 / 文件等）
-- [ ] PR 描述写清动机、改动摘要与测试方式
+- [ ] 配置、路由、脚本或 AI 入口变化时，已同步 `docs/ai/project-facts.json`
+- [ ] UI 改动已按真实路径验证桌面、窄屏与相邻入口
+- [ ] PR 描述区分已实现、已验证、未验证与剩余风险
+
+## 文档贡献
+
+先通过 [文档中心](docs/README.md) 找到对应正文，在原页修正；Wiki 只维护导航。功能描述需核对当前源码，历史审查和计划保留日期与适用范围，不写成当前结论。文档检查与提交要求见 [验证矩阵](docs/ai/verification.md)。
 
 ## Issue 报告建议
 
