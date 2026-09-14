@@ -112,8 +112,9 @@ minecraft-mystery-dashboard/
 | `process-manager` | 解析 PATH 或已绑定运行时、参数解析、缓冲输出、启停重启与终态快照 |
 | `file-service` | 实例根目录路径规范化、防目录逃逸 |
 | `config-service` | `server.properties` 解析与写入 |
-| `core-depot` | Vanilla / Paper / Fabric 下载与部署任务 |
-| `import-service` | zip 解压导入到托管实例目录 |
+| `core-depot` | Vanilla / Paper / Fabric 下载，以及 Forge / NeoForge Installer 与部署任务 |
+| `zip-service` | ZIP 中央目录校验、受限 JVM 参数预览和流式解压；预览与解压共用条目数据范围校验 |
+| `import-service` | 调度 ZIP 导入任务，整理 staging 单层目录、探测启动目标、落地注册及清理临时文件 |
 | `import-preview-service` | 管理按用户隔离、限时限量且不持久化的 ZIP 待确认预览 |
 | `existing-server-import-service` | 枚举固定交接区，只读校验并流式复制已有服务端 |
 | `jvm-detection-service` | 有界读取根目录 `user_jvm_args.txt` 并返回结构化诊断 |

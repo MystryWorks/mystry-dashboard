@@ -25,7 +25,7 @@
 node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"
 ```
 
-`POST /api/auth/setup` 只有在用户表为空时可用，并且必须携带 `X-Setup-Token: <SETUP_TOKEN>`。管理员创建成功后，可以从 `.env` 移除 `SETUP_TOKEN`，再重启面板；已有用户不需要它登录。若用户表为空而没有 `SETUP_TOKEN`，面板不会启动。
+`POST /api/auth/setup` 只有在用户表为空时可用，并且必须携带 `X-Setup-Token: <SETUP_TOKEN>`。页面操作见 [初始化管理员](getting-started.md#初始化管理员)。管理员创建成功后，可以从当前入口实际使用的配置文件移除 `SETUP_TOKEN`，再重启面板；已有用户不需要它登录。若用户表为空而没有 `SETUP_TOKEN`，面板不会启动。
 
 ## 环境变量
 

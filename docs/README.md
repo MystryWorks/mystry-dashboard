@@ -7,6 +7,7 @@ Minecraft Mystery Dashboard 是独立的 Minecraft Java 服务端 Web 管理面�
 | 你想做什么 | 从这里开始 | 后续参考 |
 |---|---|---|
 | 安装并启动面板 | [快速开始](getting-started.md) | [便携版下载、校验与升级](portable-release.md) |
+| 创建首个管理员或处理登录问题 | [初始化管理员](getting-started.md#初始化管理员) | [启动与认证排查](getting-started.md#故障排查) |
 | 开出第一个服务端 | [分步教程](tutorials.md) | [使用指南](user-guide.md) |
 | 导入、配置或管理实例 | [使用指南](user-guide.md) | [备份与迁移](tutorials.md#教程-8备份与迁移) |
 | 修改监听、密钥或资源限制 | [配置说明](configuration.md) | [安全政策](../SECURITY.md) |
@@ -31,6 +32,7 @@ Minecraft Mystery Dashboard 是独立的 Minecraft Java 服务端 Web 管理面�
 |---|---|
 | [Beta 发布修复计划](beta-release-remediation-plan.md) | 2026-08 阶段计划与验收记录；当前状态需重新核实 |
 | [2026-08-07 代码审查](review-2026-08-07.md) | 当次审查发现、修复记录与验证证据 |
+| [2026-09-08 前端修复验收](frontend-review-verification.md) | 当次自动与接口检查、监测验证及尚未覆盖的人工流程 |
 | [变更日志](../CHANGELOG.md) | 版本历史 |
 | [贡献指南](../CONTRIBUTING.md) | Issue、PR 和文档维护约定 |
 | [安全政策](../SECURITY.md) | 漏洞私下披露 |

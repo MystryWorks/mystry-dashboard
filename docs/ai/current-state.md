@@ -63,8 +63,7 @@
 - 实例默认使用面板进程 `PATH` 中的 `java`，也可绑定 `java_runtimes` 注册表中当前可用的运行时；绑定条目消失、路径变化或执行前验证失败时必须重新探测和选择。
 - 没有完整的自动备份/恢复、系统安装器、远程 Agent 执行协议或生产监控闭环。
 - 便携发布流水线已经实现，但 Windows x64 / Linux x64 runner 和公开 Release 的实际结果只能由对应 GitHub Actions 运行确认。Linux ARM64 与 macOS 打包能力仍在脚本中，不纳入本 Preview 公开发布。
-- 公开发布前须通过 `npm.cmd run audit:production`（拒绝 high/critical）。2026-08-07 本机结果为 0 critical、0 high、2 moderate（React Router 6）；moderate 须写入发布说明，不得用 `--force` 贸然升到 React Router 7。
-- **Beta 发布剩余事项**：批次 A–F 已随 `7d94c83` 提交并全部纳入 Git 跟踪（R0-06 对 Git 跟踪已关闭），根 `verify` 已串联 `npm run test:regression -w @mmd/server`（本机 18 pass / 2 skip，R1-02 Unix 权限在 Windows skip）。签名链已配置：发布密钥指纹 `F0272DFEE5F03A9907C4FA492E4ECE89B8DECEF8`，公钥/指纹已写入 `.github/`，`release` Environment 的 `RELEASE_GPG_PRIVATE_KEY`/`RELEASE_GPG_PASSPHRASE`/`RELEASE_GPG_FINGERPRINT` 已设置（2026-08-07）；GitHub Free 不支持 Environment 保护规则（required_reviewers / wait_timer 均返回 422），以工作流内置门禁（tag 必须为 `origin/main` 祖先、与版本一致、工作树干净、verify+audit 通过）替代。§8.2 人工清单、双平台 CI 最终 Release 压缩包 smoke 与真实 Release 签名验证仍未执行。`main` 仅含初始提交时代的旧快照（落后 `dev` 28 commits，无 workflows/scripts/docs/ai），发布工作流的 tag 门禁要求 tag 提交是 `origin/main` 祖先，因此必须先同步 `main`（fast-forward 到 `dev`，实测无冲突）才能打标签。
+- 公开发布前须重新运行 `npm.cmd run audit:production`（拒绝 high/critical），并核对双平台最终压缩包 smoke、签名验证和人工验收。依赖审计结果、远程密钥配置与分支同步状态不由本页作实时保证；历史证据见 [Beta 修复计划](../beta-release-remediation-plan.md) 与 [前端验收记录](../frontend-review-verification.md)。不得用 `--force` 贸然升到 React Router 7。
 
 ## 固定运行边界
 

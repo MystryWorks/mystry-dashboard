@@ -1,6 +1,6 @@
 # 便携预览版
 
-`v0.2.0-preview.1` 首批提供两个自带 Node.js 22、生产依赖和已构建前后端的便携包：
+仓库当前版本为 `v0.2.0-preview.1`，发布流程为其配置了两个自带 Node.js 22、生产依赖和已构建前后端的便携目标：
 
 | 系统 | 文件 |
 |------|------|
@@ -8,6 +8,8 @@
 | Linux x64 | `mmd-v0.2.0-preview.1-linux-x64.tar.gz` |
 
 Linux ARM64 与 macOS（Intel / Apple Silicon）打包脚本仍可本地使用，但不纳入本 Preview 公开发布矩阵，留待后续版本。
+
+此表说明构建目标与文件命名，不代表对应资产已经公开发布。下载前以项目实际 Release 页面为准；若没有所需资产，可按 [快速开始](getting-started.md) 使用源码管理器。
 
 这是 Preview，不是系统安装器。用户无需安装 Node.js 或运行 `npm install`，但仍需自行安装 Minecraft 所需 Java。实例默认使用系统 `PATH` 中的 `java`，也可在面板中选择扫描并验证的本机运行时。本阶段没有采用 [Node SEA](https://nodejs.org/download/release/latest-jod/docs/api/single-executable-applications.html)：该能力仍标为 Active development，且直接面向单个 CommonJS 主脚本，不适合当前 ESM、多包和静态前端资源布局。
 

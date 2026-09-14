@@ -3,7 +3,8 @@ import path from 'node:path';
 import { nanoid } from 'nanoid';
 import type { ConfirmZipImportInput, ImportPreviewInfo, TaskInfo } from '@mmd/shared';
 import { config } from '../config.js';
-import { importZipPackage, inspectZipJvmConfig } from './import-service.js';
+import { importZipPackage } from './import-service.js';
+import { inspectZipJvmConfig } from './zip-service.js';
 import {
   assertImportPreviewUploadPath,
   removeUploadTemp,

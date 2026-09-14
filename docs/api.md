@@ -268,6 +268,8 @@ file=<server.zip>
 
 兼容接口 `POST /api/import` 仍接受旧 multipart 字段并直接创建任务，但会执行相同的服务端 JVM 校验；新 Web 流程只使用预览接口。
 
+ZIP 预览与解压由 `zip-service` 统一处理条目文件头和数据范围校验，任务入队与实例落地由 `import-service` 负责。普通文件支持存储和 Deflate 压缩；不支持的压缩方式在打开文件流前拒绝，JVM 参数预览返回结构化诊断，实际导入失败并清理半成品。此内部拆分不改变请求、响应或预览生命周期。
+
 核心版本、构建和 loader 元数据受 `MAX_CORE_METADATA_BYTES` 与 `CORE_METADATA_TIMEOUT_MS` 限制；核心文件下载先写入临时文件，完整完成后才原子发布到 `DATA_DIR/cache/cores/`，不复用未完成缓存。队列已满时创建任务返回 **429**。
 
 ### `TaskInfo` 状态

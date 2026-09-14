@@ -1,8 +1,6 @@
 # 验证矩阵
 
-新版前端修复的自动、隔离 API 与待补浏览器验收见 [本批验收记录](../frontend-review-verification.md)。
-
-总览监测首版（2026-09-08）：`npm.cmd run verify` exit 0；交互测试 11 项通过，服务端回归 65 项通过 / 4 项平台跳过。新增测试覆盖监测失败/旧值/重试、异常筛选、隐藏暂停/卸载清理、CPU 归一、并发缓存、磁盘读取失败、Windows 真实进程采样，以及真实路由 JWT 认证。当前浏览器工具没有可用浏览器，六种主题、窄屏和真实 Minecraft 负载下的采集开销尚未验证；Linux 进程采集尚未在 Linux 实机执行。正在运行的旧面板需要通过 PanelManager 重启才能加载新后端。
+本文规定如何选择检查，不记录本次工作已通过哪些检查。带日期的结果见 [前端与监测验收记录](../frontend-review-verification.md) 和 [Beta 修复计划](../beta-release-remediation-plan.md)，历史结果不能替代当前验证。
 
 ## 标准命令
 
@@ -34,8 +32,6 @@ Beta 修复批次回归（已并入根 `verify`；需要单独聚焦执行时）
 ```powershell
 npm.cmd run test:regression -w @mmd/server
 ```
-
-历史证据（不代表当前检查或依赖状态）：2026-08-07 本机 Windows：`verify` exit 0（已含 `test:regression` 18 pass / 2 skip，R1-02 Unix 权限）；`audit:production` critical=0 high=0 moderate=2。
 
 Linux/macOS 和 CI 使用相同脚本名，但命令入口为 `npm run ...`。
 
