@@ -1,0 +1,1702 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Minecraft Mystery Dashboard - 全新控制台整体原型</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #0c090d;
+      --bg-sidebar: #130c14;
+      --bg-elevated: #1a1118;
+      --bg-panel: #21151e;
+      --border: #432b3b;
+      --border-focus: #f062a6;
+      --text: #fff1f8;
+      --text-muted: #b995aa;
+      --accent: #f062a6;
+      --accent-hover: #ff7ab8;
+      --accent-subtle: rgba(240, 98, 166, 0.12);
+      --danger: #ff5d7d;
+      --danger-hover: #ff7691;
+      --danger-subtle: rgba(255, 93, 125, 0.12);
+      --warn: #e0a84a;
+      --ok: #65d6a0;
+      --ok-subtle: rgba(101, 214, 160, 0.12);
+      --info: #64b5f6;
+      --card-bg: rgba(26, 17, 24, 0.85);
+      --card-row: rgba(26, 17, 24, 0.72);
+      --badge-bg: #35232f;
+      --console-bg: #070508;
+      --editor-bg: #0a070c;
+      --font: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      --mono: 'IBM Plex Mono', 'Fira Code', Consolas, monospace;
+      --radius: 12px;
+      --radius-sm: 8px;
+      --shadow: 0 12px 36px rgba(0, 0, 0, 0.5);
+      --glow: 0 0 20px rgba(240, 98, 166, 0.25);
+      --header-height: 64px; /* 统一严格限定顶栏与侧边栏顶部高度 */
+    }
+
+    [data-theme='light'] {
+      --bg: #faf4f8;
+      --bg-sidebar: #f5e9f1;
+      --bg-elevated: #eedfe9;
+      --bg-panel: #ffffff;
+      --border: #e2c8d8;
+      --border-focus: #d6337f;
+      --text: #3b2432;
+      --text-muted: #8a6a7c;
+      --accent: #d6337f;
+      --accent-hover: #b02669;
+      --accent-subtle: rgba(214, 51, 127, 0.1);
+      --danger: #cf2f55;
+      --danger-hover: #ad2348;
+      --danger-subtle: rgba(207, 47, 85, 0.1);
+      --warn: #9a6b12;
+      --ok: #237a52;
+      --ok-subtle: rgba(35, 122, 82, 0.1);
+      --info: #1976d2;
+      --card-bg: rgba(255, 255, 255, 0.9);
+      --card-row: rgba(255, 255, 255, 0.8);
+      --badge-bg: #f2e0ea;
+      --console-bg: #1c141a;
+      --editor-bg: #fdfafd;
+      --shadow: 0 10px 30px rgba(180, 140, 165, 0.18);
+      --glow: 0 0 18px rgba(214, 51, 127, 0.12);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: var(--font);
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      overflow-x: hidden;
+    }
+
+    /* 整体应用容器 (App Shell) */
+    .app-layout {
+      display: flex;
+      width: 100vw;
+      min-height: 100vh;
+    }
+
+    /* 侧边导航栏 (Sidebar) */
+    .sidebar {
+      width: 260px;
+      background: var(--bg-sidebar);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      z-index: 30;
+      transition: all 0.2s ease;
+    }
+
+    /* 【像素级对齐修复 1】：侧边栏 Brand 区域高度与右侧 Topbar 严格锁定为完全相同的 64px */
+    .sidebar-brand {
+      height: var(--header-height);
+      padding: 0 20px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      border-bottom: 1px solid var(--border);
+      box-sizing: border-box;
+      flex-shrink: 0;
+    }
+    .brand-cube {
+      width: 32px;
+      height: 32px;
+      background: linear-gradient(135deg, var(--accent), #7928ca);
+      border-radius: 8px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      color: #fff;
+      box-shadow: 0 4px 14px rgba(240, 98, 166, 0.35);
+      flex-shrink: 0;
+    }
+    .brand-cube svg {
+      display: block;
+    }
+    .brand-info {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+    .brand-title {
+      font-weight: 700;
+      font-size: 0.98rem;
+      letter-spacing: 0.2px;
+      line-height: 1.2;
+    }
+    .brand-subtitle {
+      font-size: 0.72rem;
+      color: var(--text-muted);
+      font-weight: 400;
+      line-height: 1.2;
+    }
+    .nav-section {
+      padding: 16px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      flex: 1;
+      overflow-y: auto;
+    }
+    .nav-header {
+      font-size: 0.72rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--text-muted);
+      margin: 12px 10px 6px;
+    }
+    .nav-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 14px;
+      border-radius: var(--radius-sm);
+      color: var(--text-muted);
+      font-size: 0.9rem;
+      font-weight: 500;
+      cursor: pointer;
+      text-decoration: none;
+      transition: all 0.15s ease;
+      border: 1px solid transparent;
+      user-select: none;
+    }
+    .nav-item:hover {
+      background: var(--bg-elevated);
+      color: var(--text);
+      border-color: var(--border);
+    }
+    .nav-item.active {
+      background: var(--accent-subtle);
+      color: var(--accent);
+      border-color: var(--accent);
+      font-weight: 600;
+    }
+    .nav-badge {
+      margin-left: auto;
+      font-size: 0.72rem;
+      padding: 2px 7px;
+      border-radius: 10px;
+      background: var(--badge-bg);
+      color: var(--accent);
+    }
+    .sidebar-footer {
+      height: var(--header-height);
+      padding: 0 18px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      background: var(--bg-elevated);
+      box-sizing: border-box;
+      flex-shrink: 0;
+    }
+    .user-profile {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      overflow: hidden;
+    }
+    .user-avatar {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: var(--badge-bg);
+      border: 1px solid var(--accent);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.85rem;
+      font-weight: 700;
+      color: var(--accent);
+      flex-shrink: 0;
+    }
+    .user-meta {
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .user-name {
+      font-size: 0.86rem;
+      font-weight: 600;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+      overflow: hidden;
+      line-height: 1.2;
+    }
+    .user-role {
+      font-size: 0.7rem;
+      color: var(--ok);
+      line-height: 1.2;
+    }
+
+    /* 主内容视窗 (Main Viewport) */
+    .viewport {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+      min-height: 100vh;
+      overflow-y: auto;
+    }
+
+    /* 【像素级对齐修复 2】：Topbar 高度严格锁定为 64px，底边框与侧边栏完全在同一水平线上 */
+    .topbar {
+      height: var(--header-height);
+      background: var(--bg-panel);
+      border-bottom: 1px solid var(--border);
+      padding: 0 32px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky;
+      top: 0;
+      z-index: 25;
+      backdrop-filter: blur(8px);
+      box-sizing: border-box;
+    }
+    .topbar-left {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .page-title {
+      font-size: 1.15rem;
+      font-weight: 700;
+      margin: 0;
+      line-height: 1;
+      display: inline-flex;
+      align-items: center;
+    }
+    .tag-badge {
+      font-size: 0.76rem;
+      padding: 3px 10px;
+      border-radius: 12px;
+      background: var(--badge-bg);
+      color: var(--accent);
+      border: 1px solid var(--border);
+      display: inline-flex;
+      align-items: center;
+      line-height: 1;
+      height: 24px;
+      box-sizing: border-box;
+      font-weight: 500;
+    }
+    .topbar-right {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    /* 【像素级对齐修复 3】：按钮体系规范统一度量衡，保证所有按钮高度、基线严格统一 */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      height: 36px;
+      padding: 0 16px;
+      font-size: 0.88rem;
+      font-weight: 500;
+      line-height: 1;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+      background: var(--bg-elevated);
+      color: var(--text);
+      cursor: pointer;
+      transition: all 0.15s ease;
+      text-decoration: none;
+      user-select: none;
+      white-space: nowrap;
+      box-sizing: border-box;
+    }
+    .btn svg {
+      flex-shrink: 0;
+      display: block;
+    }
+    .btn:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+      background: var(--accent-subtle);
+    }
+    .btn-primary {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+    }
+    .btn-primary:hover {
+      background: var(--accent-hover);
+      border-color: var(--accent-hover);
+      color: #fff;
+    }
+    .btn-danger {
+      color: var(--danger);
+      background: var(--danger-subtle);
+      border-color: rgba(255, 93, 125, 0.3);
+    }
+    .btn-danger:hover {
+      background: var(--danger);
+      color: #fff;
+      border-color: var(--danger);
+    }
+    .btn-ok {
+      color: var(--ok);
+      background: var(--ok-subtle);
+      border-color: rgba(101, 214, 160, 0.3);
+    }
+    .btn-ok:hover {
+      background: var(--ok);
+      color: #fff;
+      border-color: var(--ok);
+    }
+    .btn-icon {
+      width: 36px;
+      height: 36px;
+      padding: 0;
+      border-radius: var(--radius-sm);
+    }
+
+    /* 视图内容容器 (View Container) */
+    .content-container {
+      padding: 32px;
+      max-width: 1480px;
+      width: 100%;
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+      flex: 1;
+      box-sizing: border-box;
+    }
+    .view-pane {
+      display: none;
+      flex-direction: column;
+      gap: 24px;
+      animation: fadeIn 0.2s ease;
+    }
+    .view-pane.active {
+      display: flex;
+    }
+
+    /* 统计指标卡片组 (Metric Cards) */
+    .metric-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 16px;
+    }
+    .metric-card {
+      background: var(--bg-panel);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      position: relative;
+      overflow: hidden;
+    }
+    .metric-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 3px;
+      background: var(--accent);
+      opacity: 0.6;
+    }
+    .metric-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      color: var(--text-muted);
+      font-size: 0.85rem;
+      font-weight: 500;
+    }
+    .metric-value {
+      font-size: 1.85rem;
+      font-weight: 700;
+      font-family: var(--mono);
+      display: flex;
+      align-items: baseline;
+      gap: 6px;
+    }
+    .metric-unit {
+      font-size: 0.9rem;
+      color: var(--text-muted);
+      font-family: var(--font);
+    }
+    .metric-bar {
+      width: 100%;
+      height: 6px;
+      background: var(--bg-elevated);
+      border-radius: 3px;
+      overflow: hidden;
+    }
+    .metric-bar-fill {
+      height: 100%;
+      background: var(--accent);
+      border-radius: 3px;
+    }
+
+    /* 实例卡片网格 (Instance Cards) */
+    .section-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+    .section-title {
+      font-size: 1.2rem;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .instance-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+      gap: 20px;
+    }
+    .instance-card {
+      background: var(--bg-panel);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      transition: all 0.2s ease;
+      cursor: pointer;
+      position: relative;
+    }
+    .instance-card:hover {
+      border-color: var(--accent);
+      box-shadow: var(--shadow);
+      transform: translateY(-2px);
+    }
+    .inst-card-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+    .inst-card-info {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .inst-avatar {
+      width: 44px;
+      height: 44px;
+      border-radius: 10px;
+      background: var(--accent-subtle);
+      border: 1px solid var(--accent);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--accent);
+      flex-shrink: 0;
+    }
+    .inst-name-group {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .inst-name {
+      font-weight: 700;
+      font-size: 1.05rem;
+    }
+    .inst-core-badge {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+    }
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      border-radius: 12px;
+      font-size: 0.78rem;
+      font-weight: 600;
+      height: 24px;
+      box-sizing: border-box;
+      line-height: 1;
+    }
+    .status-badge.running {
+      background: var(--ok-subtle);
+      color: var(--ok);
+      border: 1px solid rgba(101, 214, 160, 0.3);
+    }
+    .status-badge.stopped {
+      background: rgba(185, 149, 170, 0.12);
+      color: var(--text-muted);
+      border: 1px solid var(--border);
+    }
+    .inst-stat-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      padding: 12px;
+      background: var(--bg-elevated);
+      border-radius: var(--radius-sm);
+      font-size: 0.82rem;
+    }
+    .inst-stat-item {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .inst-stat-label {
+      color: var(--text-muted);
+      font-size: 0.75rem;
+    }
+    .inst-stat-val {
+      font-weight: 600;
+      font-family: var(--mono);
+    }
+
+    /* 【像素级对齐修复 4】：卡片底部操作按钮全部等分，保证每一张卡片底部绝对齐平 */
+    .inst-card-actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1.2fr;
+      gap: 8px;
+      border-top: 1px solid var(--border);
+      padding-top: 14px;
+    }
+
+    /* 实例工作台二级 Tab (Instance Hub Tabs) */
+    .instance-hub-header {
+      background: var(--bg-panel);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+    .hub-tabs {
+      display: flex;
+      gap: 6px;
+      background: var(--bg-elevated);
+      padding: 4px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+    }
+    .hub-tab {
+      height: 34px;
+      padding: 0 16px;
+      border-radius: 6px;
+      font-size: 0.88rem;
+      font-weight: 500;
+      color: var(--text-muted);
+      cursor: pointer;
+      border: none;
+      background: transparent;
+      transition: all 0.15s ease;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      line-height: 1;
+      box-sizing: border-box;
+    }
+    .hub-tab:hover {
+      color: var(--text);
+    }
+    .hub-tab.active {
+      background: var(--accent);
+      color: #fff;
+      font-weight: 600;
+    }
+
+    /* 控制台专属视图 (Console View) */
+    .console-container {
+      background: var(--console-bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      display: flex;
+      flex-direction: column;
+      height: 660px;
+      overflow: hidden;
+      box-shadow: inset 0 2px 10px rgba(0, 0, 0, 0.5);
+    }
+    .console-header-bar {
+      height: 44px;
+      padding: 0 20px;
+      background: var(--bg-elevated);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 0.85rem;
+      box-sizing: border-box;
+    }
+    .console-logs {
+      flex: 1;
+      padding: 16px 20px;
+      overflow-y: auto;
+      font-family: var(--mono);
+      font-size: 0.86rem;
+      line-height: 1.6;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .log-line {
+      display: flex;
+      gap: 10px;
+      word-break: break-all;
+    }
+    .log-time { color: var(--text-muted); flex-shrink: 0; }
+    .log-level-info { color: var(--info); font-weight: 600; flex-shrink: 0; }
+    .log-level-warn { color: var(--warn); font-weight: 600; flex-shrink: 0; }
+    .log-level-err { color: var(--danger); font-weight: 600; flex-shrink: 0; }
+    .log-msg { color: #f0e6ed; }
+
+    .console-input-bar {
+      height: 56px;
+      padding: 0 20px;
+      background: var(--bg-elevated);
+      border-top: 1px solid var(--border);
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      box-sizing: border-box;
+    }
+    .console-input {
+      flex: 1;
+      height: 36px;
+      padding: 0 14px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+      background: var(--console-bg);
+      color: #fff;
+      font-family: var(--mono);
+      font-size: 0.9rem;
+      outline: none;
+      box-sizing: border-box;
+    }
+    .console-input:focus {
+      border-color: var(--accent);
+    }
+
+    /* 一键部署视图 (Deploy View) */
+    .deploy-grid {
+      display: grid;
+      grid-template-columns: 2fr 1fr;
+      gap: 24px;
+    }
+    @media (max-width: 992px) {
+      .deploy-grid { grid-template-columns: 1fr; }
+    }
+    .form-card {
+      background: var(--bg-panel);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+    .core-select-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+      gap: 12px;
+    }
+    .core-option {
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 14px;
+      text-align: center;
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      transition: all 0.15s ease;
+      background: var(--bg-elevated);
+      user-select: none;
+    }
+    .core-option:hover {
+      border-color: var(--accent);
+      background: var(--accent-subtle);
+    }
+    .core-option.selected {
+      border-color: var(--accent);
+      background: var(--accent-subtle);
+      box-shadow: 0 0 12px rgba(240, 98, 166, 0.3);
+    }
+    .core-icon {
+      width: 38px;
+      height: 38px;
+      border-radius: 8px;
+      background: var(--badge-bg);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--accent);
+    }
+    .core-name {
+      font-weight: 700;
+      font-size: 0.9rem;
+    }
+
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .form-label {
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: var(--text-muted);
+    }
+    .form-control {
+      height: 38px;
+      padding: 0 14px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+      background: var(--bg);
+      color: var(--text);
+      font-size: 0.9rem;
+      font-family: inherit;
+      outline: none;
+      box-sizing: border-box;
+      display: flex;
+      align-items: center;
+    }
+    .form-control:focus {
+      border-color: var(--border-focus);
+    }
+
+    /* 任务中心抽屉 (Task Center Drawer) */
+    .task-drawer {
+      position: fixed;
+      top: 0;
+      right: -420px;
+      width: 400px;
+      height: 100vh;
+      background: var(--bg-panel);
+      border-left: 1px solid var(--border);
+      box-shadow: var(--shadow);
+      z-index: 100;
+      display: flex;
+      flex-direction: column;
+      transition: right 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .task-drawer.open {
+      right: 0;
+    }
+    .drawer-header {
+      height: var(--header-height);
+      padding: 0 22px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      box-sizing: border-box;
+    }
+    .drawer-body {
+      flex: 1;
+      padding: 18px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+    .task-card {
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    /* Toast 通知 */
+    .toast-container {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      z-index: 120;
+    }
+    .toast {
+      padding: 12px 20px;
+      border-radius: var(--radius-sm);
+      background: var(--bg-panel);
+      border: 1px solid var(--accent);
+      color: var(--text);
+      box-shadow: var(--shadow);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 0.88rem;
+      animation: slideIn 0.25s ease;
+    }
+
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+  </style>
+</head>
+<body>
+
+  <div class="app-layout">
+    
+    <!-- 侧边导航栏 -->
+    <aside class="sidebar">
+      <div class="sidebar-brand">
+        <div class="brand-cube">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
+        </div>
+        <div class="brand-info">
+          <div class="brand-title">Mystery Dashboard</div>
+          <div class="brand-subtitle">v0.2.0-preview · Minecraft</div>
+        </div>
+      </div>
+
+      <nav class="nav-section">
+        <div class="nav-header">主控集群</div>
+        <div class="nav-item active" onclick="switchMainView('dashboard')">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+          <span>实例总览</span>
+          <span class="nav-badge">3</span>
+        </div>
+        <div class="nav-item" onclick="switchMainView('instance')">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 17 10 11 4 5"></polyline><line x1="12" y1="19" x2="20" y2="19"></line></svg>
+          <span>实例工作台</span>
+        </div>
+
+        <div class="nav-header">部署与维护</div>
+        <div class="nav-item" onclick="switchMainView('deploy')">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><polyline points="19 12 12 19 5 12"></polyline></svg>
+          <span>一键部署</span>
+        </div>
+        <div class="nav-item" onclick="switchMainView('import')">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+          <span>导入服务端</span>
+        </div>
+        <div class="nav-item" onclick="switchMainView('nodes')">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect><rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect><line x1="6" y1="6" x2="6.01" y2="6"></line><line x1="6" y1="18" x2="6.01" y2="18"></line></svg>
+          <span>节点监控</span>
+        </div>
+      </nav>
+
+      <div class="sidebar-footer">
+        <div class="user-profile">
+          <div class="user-avatar">A</div>
+          <div class="user-meta">
+            <span class="user-name">admin</span>
+            <span class="user-role">● 本机主控权限</span>
+          </div>
+        </div>
+        <button class="btn btn-icon" title="登出系统" onclick="showToast('这是原型预览：登出系统将重置当前会话')">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
+        </button>
+      </div>
+    </aside>
+
+    <!-- 主视口 -->
+    <div class="viewport">
+      
+      <!-- 顶部顶栏 (严格 64px 锁定，与侧边栏顶部边框线完全对齐) -->
+      <header class="topbar">
+        <div class="topbar-left">
+          <h2 class="page-title" id="page-heading">实例总览</h2>
+          <span class="tag-badge">原型高保真设计版</span>
+        </div>
+        <div class="topbar-right">
+          <!-- 任务中心按钮 (高度 36px 严格统一) -->
+          <button class="btn" onclick="toggleTaskDrawer()">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+            <span>任务队列</span>
+            <span style="background:var(--accent); color:#fff; font-size:0.7rem; padding:2px 6px; border-radius:8px; line-height:1;">1</span>
+          </button>
+          <!-- 主题切换按钮 (高度 36px 严格统一) -->
+          <button class="btn btn-icon" id="theme-btn" title="明暗主题切换">
+            <svg id="theme-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+          </button>
+        </div>
+      </header>
+
+      <!-- 视图容器 -->
+      <main class="content-container">
+
+        <!-- ==================== 1. 实例总览视图 ==================== -->
+        <div class="view-pane active" id="view-dashboard">
+          
+          <!-- 指标卡片 -->
+          <div class="metric-grid">
+            <div class="metric-card">
+              <div class="metric-header">
+                <span>运行中实例</span>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--ok)" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+              </div>
+              <div class="metric-value">2 <span class="metric-unit">/ 3 实例总数</span></div>
+              <div class="metric-bar"><div class="metric-bar-fill" style="width: 66%; background: var(--ok);"></div></div>
+            </div>
+
+            <div class="metric-card">
+              <div class="metric-header">
+                <span>宿主 CPU 占用</span>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="2" ry="2"></rect><rect x="9" y="9" width="6" height="6"></rect><line x1="9" y1="1" x2="9" y2="4"></line><line x1="15" y1="1" x2="15" y2="4"></line><line x1="9" y1="20" x2="9" y2="23"></line><line x1="15" y1="20" x2="15" y2="23"></line></svg>
+              </div>
+              <div class="metric-value">18.4 <span class="metric-unit">%</span></div>
+              <div class="metric-bar"><div class="metric-bar-fill" style="width: 18.4%;"></div></div>
+            </div>
+
+            <div class="metric-card">
+              <div class="metric-header">
+                <span>JVM 内存已分配</span>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--warn)" stroke-width="2"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path><line x1="3" y1="6" x2="21" y2="6"></line></svg>
+              </div>
+              <div class="metric-value">6.0 <span class="metric-unit">GB / 16.0 GB</span></div>
+              <div class="metric-bar"><div class="metric-bar-fill" style="width: 37.5%; background: var(--warn);"></div></div>
+            </div>
+
+            <div class="metric-card">
+              <div class="metric-header">
+                <span>在线玩家总数</span>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--info)" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+              </div>
+              <div class="metric-value">12 <span class="metric-unit">人正在游玩</span></div>
+              <div class="metric-bar"><div class="metric-bar-fill" style="width: 24%; background: var(--info);"></div></div>
+            </div>
+          </div>
+
+          <!-- 实例卡片列表 -->
+          <div class="section-header">
+            <div class="section-title">
+              <span>Minecraft 实例列表</span>
+            </div>
+            <div style="display: flex; gap: 10px;">
+              <button class="btn btn-primary" onclick="switchMainView('deploy')">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                快速新建部署
+              </button>
+            </div>
+          </div>
+
+          <div class="instance-grid">
+            
+            <!-- 实例 1: Survival-1.20.4 -->
+            <div class="instance-card" onclick="openInstanceDetail('Survival-1.20.4', 'running')">
+              <div class="inst-card-top">
+                <div class="inst-card-info">
+                  <div class="inst-avatar">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path></svg>
+                  </div>
+                  <div class="inst-name-group">
+                    <div class="inst-name">Survival-1.20.4</div>
+                    <div class="inst-core-badge">Paper 1.20.4 #497 · Java 17</div>
+                  </div>
+                </div>
+                <span class="status-badge running">● 运行中</span>
+              </div>
+              <div class="inst-stat-row">
+                <div class="inst-stat-item">
+                  <span class="inst-stat-label">连接端口</span>
+                  <span class="inst-stat-val">25565</span>
+                </div>
+                <div class="inst-stat-item">
+                  <span class="inst-stat-label">在线玩家</span>
+                  <span class="inst-stat-val">8 / 20</span>
+                </div>
+                <div class="inst-stat-item">
+                  <span class="inst-stat-label">内存分配</span>
+                  <span class="inst-stat-val">4.0 GB</span>
+                </div>
+                <div class="inst-stat-item">
+                  <span class="inst-stat-label">运行时间</span>
+                  <span class="inst-stat-val">3天 14时</span>
+                </div>
+              </div>
+              <div class="inst-card-actions" onclick="event.stopPropagation()">
+                <button class="btn btn-danger" onclick="showToast('已向 Survival-1.20.4 发送安全关服信号')">停止</button>
+                <button class="btn" onclick="showToast('正在重启实例...')">重启</button>
+                <button class="btn btn-primary" onclick="openInstanceDetail('Survival-1.20.4', 'running')">进入管理</button>
+              </div>
+            </div>
+
+            <!-- 实例 2: Fabric-TechMod -->
+            <div class="instance-card" onclick="openInstanceDetail('Fabric-TechMod', 'running')">
+              <div class="inst-card-top">
+                <div class="inst-card-info">
+                  <div class="inst-avatar" style="color:var(--info); border-color:var(--info); background:rgba(100,181,246,0.12);">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 2 7 12 12 22 7 12 2"></polygon><polyline points="2 17 12 22 22 17"></polyline><polyline points="2 12 12 17 22 12"></polyline></svg>
+                  </div>
+                  <div class="inst-name-group">
+                    <div class="inst-name">Fabric-TechMod</div>
+                    <div class="inst-core-badge">Fabric 1.20.1 · 42 Mods</div>
+                  </div>
+                </div>
+                <span class="status-badge running">● 运行中</span>
+              </div>
+              <div class="inst-stat-row">
+                <div class="inst-stat-item">
+                  <span class="inst-stat-label">连接端口</span>
+                  <span class="inst-stat-val">25566</span>
+                </div>
+                <div class="inst-stat-item">
+                  <span class="inst-stat-label">在线玩家</span>
+                  <span class="inst-stat-val">4 / 10</span>
+                </div>
+                <div class="inst-stat-item">
+                  <span class="inst-stat-label">内存分配</span>
+                  <span class="inst-stat-val">6.0 GB</span>
+                </div>
+                <div class="inst-stat-item">
+                  <span class="inst-stat-label">运行时间</span>
+                  <span class="inst-stat-val">18小时</span>
+                </div>
+              </div>
+              <div class="inst-card-actions" onclick="event.stopPropagation()">
+                <button class="btn btn-danger" onclick="showToast('已向 Fabric-TechMod 发送关服指令')">停止</button>
+                <button class="btn" onclick="showToast('正在重启实例...')">重启</button>
+                <button class="btn btn-primary" onclick="openInstanceDetail('Fabric-TechMod', 'running')">进入管理</button>
+              </div>
+            </div>
+
+            <!-- 实例 3: RPG-Testing (已停止) -->
+            <div class="instance-card" onclick="openInstanceDetail('RPG-Testing', 'stopped')">
+              <div class="inst-card-top">
+                <div class="inst-card-info">
+                  <div class="inst-avatar" style="color:var(--text-muted); border-color:var(--border); background:var(--bg-elevated);">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+                  </div>
+                  <div class="inst-name-group">
+                    <div class="inst-name">RPG-Testing</div>
+                    <div class="inst-core-badge">Purpur 1.20.4 · 离线维护</div>
+                  </div>
+                </div>
+                <span class="status-badge stopped">○ 已停止</span>
+              </div>
+              <div class="inst-stat-row">
+                <div class="inst-stat-item">
+                  <span class="inst-stat-label">连接端口</span>
+                  <span class="inst-stat-val">25577</span>
+                </div>
+                <div class="inst-stat-item">
+                  <span class="inst-stat-label">在线玩家</span>
+                  <span class="inst-stat-val">0 / 30</span>
+                </div>
+                <div class="inst-stat-item">
+                  <span class="inst-stat-label">内存分配</span>
+                  <span class="inst-stat-val">2.0 GB</span>
+                </div>
+                <div class="inst-stat-item">
+                  <span class="inst-stat-label">最后运行</span>
+                  <span class="inst-stat-val">昨天 22:15</span>
+                </div>
+              </div>
+              <div class="inst-card-actions" onclick="event.stopPropagation()">
+                <button class="btn btn-ok" onclick="showToast('正在启动 RPG-Testing 实例...')">启动</button>
+                <button class="btn" onclick="showToast('正在刷新配置...')">刷新</button>
+                <button class="btn btn-primary" onclick="openInstanceDetail('RPG-Testing', 'stopped')">进入管理</button>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- ==================== 2. 实例详情工作台 (Hub View) ==================== -->
+        <div class="view-pane" id="view-instance">
+          
+          <div class="instance-hub-header">
+            <div style="display:flex; align-items:center; gap:14px;">
+              <button class="btn btn-icon" onclick="switchMainView('dashboard')" title="返回总览">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+              </button>
+              <div>
+                <h3 id="current-instance-title" style="font-size: 1.25rem;">Survival-1.20.4</h3>
+                <span style="font-size:0.8rem; color:var(--text-muted);" id="current-instance-status">● 运行中 · 端口 25565 · Paper 1.20.4</span>
+              </div>
+            </div>
+
+            <!-- 二级切换 Tabs -->
+            <div class="hub-tabs">
+              <button class="hub-tab active" onclick="switchHubTab('console')">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 17 10 11 4 5"></polyline><line x1="12" y1="19" x2="20" y2="19"></line></svg>
+                控制台
+              </button>
+              <button class="hub-tab" onclick="switchHubTab('files')">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
+                文件管理
+              </button>
+              <button class="hub-tab" onclick="switchHubTab('config')">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+                参数配置
+              </button>
+              <button class="hub-tab" onclick="switchHubTab('jvm')">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8h1a4 4 0 0 1 0 8h-1"></path><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"></path><line x1="6" y1="1" x2="6" y2="4"></line><line x1="10" y1="1" x2="10" y2="4"></line><line x1="14" y1="1" x2="14" y2="4"></line></svg>
+                JVM 与运行时
+              </button>
+            </div>
+          </div>
+
+          <!-- 子 Tab 1: 控制台 -->
+          <div class="hub-pane" id="pane-console" style="display:flex; flex-direction:column; gap:14px;">
+            <div class="console-container">
+              <div class="console-header-bar">
+                <span>实时输出日志 · WebSocket 已经连接 (50 FPS)</span>
+                <div style="display:flex; gap:10px;">
+                  <button class="btn btn-icon" title="清空屏幕" onclick="clearLogs()">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"></path></svg>
+                  </button>
+                  <button class="btn" style="padding:0 12px; font-size:0.78rem; height:28px;" onclick="showToast('已复制控制台日志到剪贴板')">复制全部</button>
+                </div>
+              </div>
+              <div class="console-logs" id="console-output">
+                <div class="log-line"><span class="log-time">[15:30:02]</span> <span class="log-level-info">[INFO]</span> <span class="log-msg">Starting minecraft server version 1.20.4</span></div>
+                <div class="log-line"><span class="log-time">[15:30:04]</span> <span class="log-level-info">[INFO]</span> <span class="log-msg">Loading properties...</span></div>
+                <div class="log-line"><span class="log-time">[15:30:05]</span> <span class="log-level-info">[INFO]</span> <span class="log-msg">Default game type: SURVIVAL</span></div>
+                <div class="log-line"><span class="log-time">[15:30:08]</span> <span class="log-level-info">[INFO]</span> <span class="log-msg">Preparing level "world"</span></div>
+                <div class="log-line"><span class="log-time">[15:30:12]</span> <span class="log-level-warn">[WARN]</span> <span class="log-msg">[Paper] Keep-alive packet lag detected, compensated safely.</span></div>
+                <div class="log-line"><span class="log-time">[15:30:15]</span> <span class="log-level-info">[INFO]</span> <span class="log-msg">Done (12.418s)! For help, type "help"</span></div>
+                <div class="log-line"><span class="log-time">[15:32:40]</span> <span class="log-level-info">[INFO]</span> <span class="log-msg">Player Alex logged in with entity id 142 at ([world] 120.5, 64.0, -89.2)</span></div>
+              </div>
+              <div class="console-input-bar">
+                <span style="font-family:var(--mono); color:var(--accent); font-weight:700;">&gt;</span>
+                <input type="text" class="console-input" id="cmd-input" placeholder="输入控制台命令 (如: list, say Hello, op player) 按回车发送" onkeydown="if(event.key==='Enter') sendCommand()" />
+                <button class="btn btn-primary" onclick="sendCommand()">发送指令</button>
+              </div>
+            </div>
+
+            <!-- 快捷常用指令按钮排 -->
+            <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
+              <span style="font-size:0.82rem; color:var(--text-muted); display:flex; align-items:center;">常用命令:</span>
+              <button class="btn" style="height:30px; padding:0 12px; font-size:0.8rem;" onclick="quickCmd('list')">list (玩家列表)</button>
+              <button class="btn" style="height:30px; padding:0 12px; font-size:0.8rem;" onclick="quickCmd('save-all')">save-all (保存存档)</button>
+              <button class="btn" style="height:30px; padding:0 12px; font-size:0.8rem;" onclick="quickCmd('tps')">tps (性能刻率)</button>
+              <button class="btn" style="height:30px; padding:0 12px; font-size:0.8rem;" onclick="quickCmd('whitelist list')">whitelist list (白名单)</button>
+            </div>
+          </div>
+
+          <!-- 子 Tab 2: 文件管理器 (Files) -->
+          <div class="hub-pane" id="pane-files" style="display:none;">
+            <div style="background:var(--bg-panel); border:1px solid var(--border); border-radius:var(--radius); padding:20px; display:flex; flex-direction:column; gap:16px;">
+              <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
+                <div style="font-size:0.95rem; font-weight:600; display:flex; align-items:center; gap:8px;">
+                  <span>当前路径：</span>
+                  <span style="background:var(--bg); border:1px solid var(--border); padding:4px 10px; border-radius:6px; font-family:var(--mono); color:var(--accent);">/</span>
+                </div>
+                <div style="display:flex; gap:10px;">
+                  <button class="btn" onclick="showToast('新建文件对话框已就绪')">+ 新建文件</button>
+                  <button class="btn" onclick="showToast('新建目录')">📁 新建文件夹</button>
+                  <button class="btn btn-primary" onclick="showToast('拉起系统文件管理器上传')">⬆ 拖拽/上传</button>
+                </div>
+              </div>
+
+              <!-- 模拟文件列表 -->
+              <table style="width:100%; border-collapse:collapse; font-size:0.88rem;">
+                <thead>
+                  <tr style="text-align:left; border-bottom:1px solid var(--border); color:var(--text-muted);">
+                    <th style="padding:10px;">名称</th>
+                    <th style="padding:10px;">大小</th>
+                    <th style="padding:10px;">修改时间</th>
+                    <th style="padding:10px; text-align:right;">操作</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr style="border-bottom:1px solid var(--border);">
+                    <td style="padding:12px 10px; font-weight:500;">📁 config</td>
+                    <td style="padding:10px; color:var(--text-muted);">-</td>
+                    <td style="padding:10px; color:var(--text-muted);">2026-09-07 14:20</td>
+                    <td style="padding:10px; text-align:right;"><button class="btn" style="height:28px; padding:0 10px; font-size:0.78rem;">打开</button></td>
+                  </tr>
+                  <tr style="border-bottom:1px solid var(--border);">
+                    <td style="padding:12px 10px; font-weight:500;">📁 plugins</td>
+                    <td style="padding:10px; color:var(--text-muted);">-</td>
+                    <td style="padding:10px; color:var(--text-muted);">2026-09-06 18:30</td>
+                    <td style="padding:10px; text-align:right;"><button class="btn" style="height:28px; padding:0 10px; font-size:0.78rem;">打开</button></td>
+                  </tr>
+                  <tr style="border-bottom:1px solid var(--border);">
+                    <td style="padding:12px 10px; font-weight:500;">📜 server.properties</td>
+                    <td style="padding:10px; color:var(--text-muted); font-family:var(--mono);">1.8 KB</td>
+                    <td style="padding:10px; color:var(--text-muted);">2026-09-07 15:02</td>
+                    <td style="padding:10px; text-align:right;"><button class="btn btn-primary" style="height:28px; padding:0 10px; font-size:0.78rem;" onclick="showToast('正在打开文本编辑器')">在线编辑</button></td>
+                  </tr>
+                  <tr style="border-bottom:1px solid var(--border);">
+                    <td style="padding:12px 10px; font-weight:500;">☕ server.jar</td>
+                    <td style="padding:10px; color:var(--text-muted); font-family:var(--mono);">45.2 MB</td>
+                    <td style="padding:10px; color:var(--text-muted);">2026-09-05 10:11</td>
+                    <td style="padding:10px; text-align:right;"><button class="btn" style="height:28px; padding:0 10px; font-size:0.78rem;" onclick="showToast('正在申请安全下载 Ticket')">下载</button></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- 子 Tab 3: 参数配置 (Config) -->
+          <div class="hub-pane" id="pane-config" style="display:none;">
+            <div class="form-card">
+              <h4 style="font-size:1.1rem; border-bottom:1px solid var(--border); padding-bottom:12px;">server.properties 可视化配置</h4>
+              <div style="display:grid; grid-template-columns:1fr 1fr; gap:18px;">
+                <div class="form-group">
+                  <label class="form-label">服务器标语 (MOTD)</label>
+                  <input type="text" class="form-control" value="§dMystery Dashboard §fMinecraft Server" />
+                </div>
+                <div class="form-group">
+                  <label class="form-label">服务端口 (server-port)</label>
+                  <input type="number" class="form-control" value="25565" />
+                </div>
+                <div class="form-group">
+                  <label class="form-label">最大玩家数 (max-players)</label>
+                  <input type="number" class="form-control" value="20" />
+                </div>
+                <div class="form-group">
+                  <label class="form-label">视距 (view-distance)</label>
+                  <input type="number" class="form-control" value="10" />
+                </div>
+                <div class="form-group">
+                  <label class="form-label">游戏模式 (gamemode)</label>
+                  <select class="form-control">
+                    <option selected>survival (生存模式)</option>
+                    <option>creative (创造模式)</option>
+                    <option>adventure (冒险模式)</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">正版验证 (online-mode)</label>
+                  <select class="form-control">
+                    <option selected>开启 (true)</option>
+                    <option>关闭 (false - 离线登录)</option>
+                  </select>
+                </div>
+              </div>
+              <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:10px;">
+                <button class="btn btn-primary" onclick="showToast('配置已写入 server.properties，重启实例后生效')">保存设置</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- 子 Tab 4: JVM 与运行时 (JVM) -->
+          <div class="hub-pane" id="pane-jvm" style="display:none;">
+            <div class="form-card">
+              <h4 style="font-size:1.1rem; border-bottom:1px solid var(--border); padding-bottom:12px;">Java 运行时与虚拟机参数配置器</h4>
+              
+              <div class="form-group">
+                <label class="form-label">指定 Java 运行时环境</label>
+                <select class="form-control">
+                  <option selected>系统 PATH 默认 (OpenJDK 64-Bit Server VM 17.0.10)</option>
+                  <option>Eclipse Adoptium OpenJDK 21.0.2 (已安装于 C:\Java\jdk-21)</option>
+                  <option>Oracle JDK 17.0.9 (已安装于 /usr/lib/jvm/java-17)</option>
+                </select>
+                <span style="font-size:0.75rem; color:var(--text-muted);">面板会自动扫描系统环境变量与固定目录，避免手动提交非法绝对路径。</span>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label">初始内存 (Xms) 与最大内存 (Xmx)</label>
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px;">
+                  <div>
+                    <span style="font-size:0.8rem; color:var(--text-muted);">初始内存: 2048 MB</span>
+                    <input type="range" min="1024" max="16384" step="512" value="2048" style="width:100%; accent-color:var(--accent);" />
+                  </div>
+                  <div>
+                    <span style="font-size:0.8rem; color:var(--text-muted);">最大内存: 4096 MB</span>
+                    <input type="range" min="2048" max="16384" step="512" value="4096" style="width:100%; accent-color:var(--accent);" />
+                  </div>
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label">垃圾回收器 (GC Strategy)</label>
+                <select class="form-control">
+                  <option selected>G1GC (Minecraft 官方推荐通用优化参数)</option>
+                  <option>ZGC (低延迟极速回收，推荐 Java 21+)</option>
+                  <option>Shenandoah GC (低暂停超大内存优化)</option>
+                </select>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label">最终生成的规范化 JVM 参数预览 (只读)</label>
+                <input type="text" class="form-control" readonly value="-Xms2G -Xmx4G -XX:+UseG1GC -XX:+ParallelRefProcEnabled" style="font-family:var(--mono); color:var(--accent);" />
+              </div>
+
+              <div style="display:flex; justify-content:flex-end; gap:10px;">
+                <button class="btn btn-primary" onclick="showToast('JVM 参数校验通过并成功同步')">应用 JVM 设置</button>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- ==================== 3. 一键部署视图 ==================== -->
+        <div class="view-pane" id="view-deploy">
+          <div class="section-header">
+            <div class="section-title">一键部署全新 Minecraft 服务端</div>
+            <span style="font-size:0.85rem; color:var(--text-muted);">官方镜像流式拉取 · 自动生成配置文件与 EULA</span>
+          </div>
+
+          <div class="deploy-grid">
+            <div class="form-card">
+              <div class="form-group">
+                <label class="form-label">1. 选择服务端核心类型</label>
+                <div class="core-select-grid">
+                  <div class="core-option selected" onclick="selectCore(this, 'Paper')">
+                    <div class="core-icon">📜</div>
+                    <span class="core-name">Paper</span>
+                    <span style="font-size:0.72rem; color:var(--text-muted);">高性能插件服</span>
+                  </div>
+                  <div class="core-option" onclick="selectCore(this, 'Purpur')">
+                    <div class="core-icon">🔮</div>
+                    <span class="core-name">Purpur</span>
+                    <span style="font-size:0.72rem; color:var(--text-muted);">极客优化分支</span>
+                  </div>
+                  <div class="core-option" onclick="selectCore(this, 'Fabric')">
+                    <div class="core-icon">🧵</div>
+                    <span class="core-name">Fabric</span>
+                    <span style="font-size:0.72rem; color:var(--text-muted);">轻量现代化模组</span>
+                  </div>
+                  <div class="core-option" onclick="selectCore(this, 'Forge')">
+                    <div class="core-icon">🔨</div>
+                    <span class="core-name">Forge</span>
+                    <span style="font-size:0.72rem; color:var(--text-muted);">经典重型模组</span>
+                  </div>
+                  <div class="core-option" onclick="selectCore(this, 'Vanilla')">
+                    <div class="core-icon">🧊</div>
+                    <span class="core-name">Vanilla</span>
+                    <span style="font-size:0.72rem; color:var(--text-muted);">Mojang 原版</span>
+                  </div>
+                </div>
+              </div>
+
+              <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px;">
+                <div class="form-group">
+                  <label class="form-label">2. Minecraft 游戏版本</label>
+                  <select class="form-control">
+                    <option selected>1.20.4 (推荐稳定版)</option>
+                    <option>1.20.2</option>
+                    <option>1.20.1</option>
+                    <option>1.19.4</option>
+                    <option>1.16.5</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">3. 构建版本 (Build)</label>
+                  <select class="form-control">
+                    <option selected>Build #497 (最新正式构建)</option>
+                    <option>Build #496</option>
+                    <option>Build #490</option>
+                  </select>
+                </div>
+              </div>
+
+              <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px;">
+                <div class="form-group">
+                  <label class="form-label">实例名称</label>
+                  <input type="text" class="form-control" value="My-Paper-Server" />
+                </div>
+                <div class="form-group">
+                  <label class="form-label">服务端口</label>
+                  <input type="number" class="form-control" value="25567" />
+                </div>
+              </div>
+
+              <div style="display:flex; align-items:center; gap:8px; margin-top:8px;">
+                <input type="checkbox" id="eula-check" checked style="accent-color:var(--accent);" />
+                <label for="eula-check" style="font-size:0.85rem; cursor:pointer;">
+                  我已阅读并同意 <a href="https://account.mojang.com/documents/minecraft_eula" target="_blank" style="color:var(--accent);">Minecraft 最终用户许可协议 (EULA)</a>
+                </label>
+              </div>
+
+              <div style="display:flex; justify-content:flex-end; gap:12px; margin-top:12px;">
+                <button class="btn btn-primary" style="padding:0 24px;" onclick="simulateDeploy()">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                  立即开始自动化部署
+                </button>
+              </div>
+            </div>
+
+            <!-- 右侧部署指导卡片 -->
+            <div style="display:flex; flex-direction:column; gap:18px;">
+              <div class="form-card">
+                <h4 style="font-size:1rem; font-weight:700;">部署安全与隔离机制</h4>
+                <p style="font-size:0.83rem; color:var(--text-muted); line-height:1.6;">
+                  面板采用二阶段原子暂存架构：部署文件将首先写入 <code style="font-family:var(--mono); color:var(--accent);">.mmd-staging/</code> 临时沙箱中。只有在核心校验成功后，才会原子移动至正式工作区，保障实例安全无损。
+                </p>
+                <div style="padding:10px; background:var(--bg-elevated); border-radius:var(--radius-sm); border:1px solid var(--border); font-size:0.8rem; color:var(--ok);">
+                  ✔ 环境变量脱敏保护已就绪<br>
+                  ✔ 单独端口冲突检测器已激活
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ==================== 4. 导入已有服务端视图 ==================== -->
+        <div class="view-pane" id="view-import">
+          <div class="section-header">
+            <div class="section-title">导入已有 Minecraft 服务端</div>
+          </div>
+
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:24px;">
+            <!-- 方式 1: ZIP 压缩包预检导入 -->
+            <div class="form-card">
+              <h4 style="font-size:1.05rem;">方式 A: ZIP 服务端整合包导入</h4>
+              <p style="font-size:0.82rem; color:var(--text-muted);">
+                上传整个服务端的 .zip 压缩包。面板将执行二阶段预检（解压树探测、主程序 jar 识别、端口分析）后再入队复制。
+              </p>
+              
+              <div style="border:2px dashed var(--border); border-radius:var(--radius); padding:36px; text-align:center; cursor:pointer;" onclick="showToast('正在打开系统文件选择器...')">
+                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.8"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+                <p style="margin-top:10px; font-weight:600;">点击或拖拽 ZIP 压缩包至此处</p>
+                <span style="font-size:0.75rem; color:var(--text-muted);">支持最大 4GB 整合包安全流式解压</span>
+              </div>
+            </div>
+
+            <!-- 方式 2: 本地 imports 目录交接 -->
+            <div class="form-card">
+              <h4 style="font-size:1.05rem;">方式 B: 本地目录直接交接</h4>
+              <p style="font-size:0.82rem; color:var(--text-muted);">
+                将同机已有服务端拷贝至面板专用的只读交接目录 <code style="font-family:var(--mono); color:var(--accent);">data/imports/</code> 下，面板可直接复制建档。
+              </p>
+              
+              <div class="form-group">
+                <label class="form-label">选择检测到的交接目录</label>
+                <select class="form-control">
+                  <option selected>survival-old-backup (Paper 1.19.4 / 1.2 GB)</option>
+                  <option>modpack-atm8 (Forge 1.19.2 / 3.4 GB)</option>
+                </select>
+              </div>
+
+              <button class="btn btn-primary" style="margin-top:10px;" onclick="showToast('已启动目录原子导入任务')">确认导入此目录</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- ==================== 5. 节点监控视图 ==================== -->
+        <div class="view-pane" id="view-nodes">
+          <div class="section-header">
+            <div class="section-title">节点监控与主机运行环境</div>
+            <span style="font-size:0.85rem; color:var(--text-muted);">当前仅启用内置本机节点 (Local Agent)</span>
+          </div>
+
+          <div class="form-card">
+            <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--border); padding-bottom:14px;">
+              <div style="display:flex; align-items:center; gap:12px;">
+                <div style="width:12px; height:12px; border-radius:50%; background:var(--ok); box-shadow:0 0 10px var(--ok);"></div>
+                <span style="font-weight:700; font-size:1.1rem;">local (本机内置节点)</span>
+              </div>
+              <span class="status-badge running">健康运转中</span>
+            </div>
+
+            <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:18px; margin-top:10px;">
+              <div class="inst-stat-item">
+                <span class="inst-stat-label">宿主操作系统</span>
+                <span class="inst-stat-val">Windows 11 Pro 64-bit</span>
+              </div>
+              <div class="inst-stat-item">
+                <span class="inst-stat-label">Node.js 运行时</span>
+                <span class="inst-stat-val">v22.14.0 (ESM Engine)</span>
+              </div>
+              <div class="inst-stat-item">
+                <span class="inst-stat-label">CPU 逻辑核心</span>
+                <span class="inst-stat-val">16 线程 (x64)</span>
+              </div>
+              <div class="inst-stat-item">
+                <span class="inst-stat-label">物理内存状态</span>
+                <span class="inst-stat-val">已用 18.2 GB / 32.0 GB</span>
+              </div>
+              <div class="inst-stat-item">
+                <span class="inst-stat-label">数据根路径</span>
+                <span class="inst-stat-val" style="font-size:0.75rem; color:var(--accent);">./data (文件沙箱保护)</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </main>
+    </div>
+  </div>
+
+  <!-- 任务中心滑出抽屉 (Task Center Drawer) -->
+  <aside class="task-drawer" id="task-drawer">
+    <div class="drawer-header">
+      <div style="display:flex; align-items:center; gap:10px;">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+        <span style="font-weight:700;">后台异步任务中心</span>
+      </div>
+      <button class="btn btn-icon" onclick="toggleTaskDrawer()">✕</button>
+    </div>
+    <div class="drawer-body" id="task-list">
+      <div class="task-card">
+        <div style="display:flex; justify-content:space-between; font-size:0.85rem; font-weight:600;">
+          <span>自动备份世界存档</span>
+          <span style="color:var(--ok);">已完成</span>
+        </div>
+        <p style="font-size:0.75rem; color:var(--text-muted);">实例: Survival-1.20.4 · 耗时 4.2秒</p>
+      </div>
+
+      <div class="task-card">
+        <div style="display:flex; justify-content:space-between; font-size:0.85rem; font-weight:600;">
+          <span>Paper 1.20.4 #497 核心拉取</span>
+          <span style="color:var(--accent);">92% 进行中</span>
+        </div>
+        <div class="metric-bar" style="height:4px;"><div class="metric-bar-fill" style="width:92%;"></div></div>
+        <p style="font-size:0.75rem; color:var(--text-muted);">流式下载中 · 42.1 MB / 45.8 MB</p>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Toast 提示容器 -->
+  <div class="toast-container" id="toast-container"></div>
+
+  <script>
+    // ================= 页面路由与主视图切换 =================
+    const viewTitles = {
+      'dashboard': '实例总览',
+      'instance': '实例控制中心',
+      'deploy': '一键部署',
+      'import': '导入已有服务端',
+      'nodes': '节点监控'
+    };
+
+    function switchMainView(viewKey) {
+      document.querySelectorAll('.view-pane').forEach(el => el.classList.remove('active'));
+      const targetPane = document.getElementById('view-' + viewKey);
+      if (targetPane) targetPane.classList.add('active');
+
+      document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+      const activeNav = Array.from(document.querySelectorAll('.nav-item')).find(el => {
+        const text = el.textContent.trim();
+        return text.includes(viewTitles[viewKey]);
+      });
+      if (activeNav) activeNav.classList.add('active');
+
+      document.getElementById('page-heading').textContent = viewTitles[viewKey] || '管理控制台';
+    }
+
+    // ================= 实例详情子 Tab 切换 =================
+    function openInstanceDetail(instanceName, status) {
+      document.getElementById('current-instance-title').textContent = instanceName;
+      document.getElementById('current-instance-status').textContent = (status === 'running' ? '● 运行中' : '○ 已停止') + ' · 端口 25565 · Paper 1.20.4';
+      switchMainView('instance');
+      switchHubTab('console');
+    }
+
+    function switchHubTab(tabKey) {
+      document.querySelectorAll('.hub-tab').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.hub-pane').forEach(p => p.style.display = 'none');
+      
+      const tabBtn = Array.from(document.querySelectorAll('.hub-tab')).find(b => b.textContent.includes(
+        tabKey === 'console' ? '控制台' : tabKey === 'files' ? '文件' : tabKey === 'config' ? '配置' : 'JVM'
+      ));
+      if (tabBtn) tabBtn.classList.add('active');
+
+      const targetPane = document.getElementById('pane-' + tabKey);
+      if (targetPane) targetPane.style.display = 'flex';
+    }
+
+    // ================= 控制台实时模拟 =================
+    function sendCommand() {
+      const input = document.getElementById('cmd-input');
+      const val = input.value.trim();
+      if (!val) return;
+      
+      appendLogLine('>', val, 'command');
+      input.value = '';
+
+      setTimeout(() => {
+        if (val.toLowerCase() === 'list') {
+          appendLogLine('[INFO]', 'There are 8 of a max of 20 players online: Alex, Steve, Notch, Bob, Alice, Charlie, Jack, Lily', 'info');
+        } else if (val.toLowerCase().includes('save-all')) {
+          appendLogLine('[INFO]', 'Saved the world (chunks, entities, players).', 'info');
+        } else {
+          appendLogLine('[INFO]', `Unknown or executed command: /${val}`, 'info');
+        }
+      }, 400);
+    }
+
+    function quickCmd(cmd) {
+      document.getElementById('cmd-input').value = cmd;
+      sendCommand();
+    }
+
+    function clearLogs() {
+      document.getElementById('console-output').innerHTML = '';
+      showToast('控制台屏幕已清空');
+    }
+
+    function appendLogLine(level, msg, type) {
+      const box = document.getElementById('console-output');
+      const now = new Date().toTimeString().split(' ')[0];
+      const div = document.createElement('div');
+      div.className = 'log-line';
+      div.innerHTML = `<span class="log-time">[${now}]</span> <span class="log-level-info">[${level}]</span> <span class="log-msg">${escapeHtml(msg)}</span>`;
+      box.appendChild(div);
+      box.scrollTop = box.scrollHeight;
+    }
+
+    function escapeHtml(str) {
+      return str.replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+    }
+
+    // ================= 部署核心选择 =================
+    function selectCore(el, coreName) {
+      document.querySelectorAll('.core-option').forEach(o => o.classList.remove('selected'));
+      el.classList.add('selected');
+      showToast(`已选定核心: ${coreName}`);
+    }
+
+    function simulateDeploy() {
+      showToast('正在创建部署任务并拉取官方核心...');
+      toggleTaskDrawer(true);
+    }
+
+    // ================= 任务中心抽屉开关 =================
+    function toggleTaskDrawer(forceOpen) {
+      const drawer = document.getElementById('task-drawer');
+      if (forceOpen === true) {
+        drawer.classList.add('open');
+      } else {
+        drawer.classList.toggle('open');
+      }
+    }
+
+    // ================= Toast 系统 =================
+    function showToast(msg) {
+      const container = document.getElementById('toast-container');
+      const t = document.createElement('div');
+      t.className = 'toast';
+      t.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 14 14"></polyline></svg> <span>${msg}</span>`;
+      container.appendChild(t);
+      setTimeout(() => {
+        t.style.opacity = '0';
+        t.style.transform = 'translateY(10px)';
+        t.style.transition = 'all 0.3s ease';
+        setTimeout(() => t.remove(), 300);
+      }, 3200);
+    }
+
+    // ================= 明暗主题切换 =================
+    const themeBtn = document.getElementById('theme-btn');
+    themeBtn.addEventListener('click', () => {
+      const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+      document.documentElement.setAttribute('data-theme', isDark ? 'light' : 'dark');
+      showToast(`已切换至${isDark ? '浅色' : '深色'}主题`);
+    });
+  </script>
+</body>
+</html>
