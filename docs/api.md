@@ -181,6 +181,8 @@ Authorization: Bearer <token>
 
 部署和导入始终把内容写入新实例的 `DATA_DIR/instances/<id>`，不接收自定义目录或 Java 可执行文件路径。实例默认使用 PATH 中的 `java` 启动，可通过 `javaRuntimeId` 绑定注册表中当前可用的运行时；部署请求中的绑定同样用于 Forge/NeoForge Installer。
 
+部署内部由 `core-metadata` 解析版本与地址，`core-download` 管理下载和缓存，`core-installer` 管理 Installer，`core-depot` 编排任务。相同缓存路径的并发任务共享一次下载；单个等待者取消不影响其他等待者，全部退出才中止未完成的下载并清理 part 文件。所有核心统一执行 staging 原子落地 → 注册实例 → 更新实例元数据的收尾顺序；目录落地后不再检查取消信号，必须继续注册，正常返回的 worker 仍记为成功。落地前失败只清理 staging，最终实例目录不参与该清理。
+
 ### 同机已有服务端交接
 
 `GET /api/import/sources` 返回：
