@@ -1,0 +1,20 @@
+{
+  "name": "Minecraft Mystery Dashboard",
+  "install": "bash .cursor/install.sh",
+  "terminals": [
+    {
+      "name": "dev:server",
+      "command": "npm run dev:server",
+      "description": "Fastify 后端（热重载），监听 http://127.0.0.1:3000，提供 REST API 与 /ws 控制台 WebSocket。"
+    },
+    {
+      "name": "dev:web",
+      "command": "npm run dev:web",
+      "description": "Vite 前端开发服务器，监听 http://127.0.0.1:5173，将 /api 与 /ws 代理到后端 3000。管理面板从这里访问。"
+    }
+  ],
+  "ports": [
+    { "name": "web", "port": 5173 },
+    { "name": "api", "port": 3000 }
+  ]
+}
