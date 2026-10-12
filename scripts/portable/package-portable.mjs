@@ -241,7 +241,7 @@ Linux / macOS：
 4. config、data、logs 由首次启动创建。升级时请停止面板，并保留这些目录。
 5. 默认只监听 127.0.0.1。不要把面板端口直接暴露到不可信公网。
 
-项目主页：https://github.com/MystryMocha/mystry-dashboard
+项目主页：https://github.com/MystryWorks/mystry-dashboard
 `;
   await fsp.writeFile(destination, content, 'utf8');
 }
