@@ -1,7 +1,7 @@
 /**
- * 主题管理：Mystery / Codex / Grok，各有暗色与亮色。
+ * 主题管理：Mystry / Codex / Grok，各有暗色与亮色。
  * 初始值由 index.html 内联脚本在渲染前写入 <html data-theme>
- *（未保存时跟随系统偏好，仅在 Mystery 暗/亮之间选择），
+ *（未保存时跟随系统偏好，仅在 Mystry 暗/亮之间选择），
  * 这里负责读取、校验、切换，并广播事件让多处选择器保持同步。
  */
 
@@ -9,8 +9,8 @@ export const THEMES = ['dark', 'light', 'codex', 'codex-light', 'grok', 'grok-li
 export type Theme = (typeof THEMES)[number];
 
 export const THEME_META: Record<Theme, { label: string; shortLabel: string }> = {
-  dark: { label: 'Mystery 暗色', shortLabel: '暗色' },
-  light: { label: 'Mystery 亮色', shortLabel: '亮色' },
+  dark: { label: 'Mystry 暗色', shortLabel: '暗色' },
+  light: { label: 'Mystry 亮色', shortLabel: '亮色' },
   codex: { label: 'Codex 暗色', shortLabel: '暗色' },
   'codex-light': { label: 'Codex 亮色', shortLabel: '亮色' },
   grok: { label: 'Grok 暗色', shortLabel: '暗色' },
@@ -18,7 +18,7 @@ export const THEME_META: Record<Theme, { label: string; shortLabel: string }> = 
 };
 
 export const THEME_FAMILIES: { id: string; label: string; themes: readonly Theme[] }[] = [
-  { id: 'mystery', label: 'Mystery', themes: ['dark', 'light'] },
+  { id: 'mystry', label: 'Mystry', themes: ['dark', 'light'] },
   { id: 'codex', label: 'Codex', themes: ['codex', 'codex-light'] },
   { id: 'grok', label: 'Grok', themes: ['grok', 'grok-light'] },
 ];

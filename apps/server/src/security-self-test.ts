@@ -219,13 +219,13 @@ async function main(): Promise<void> {
     await deleteInstance(lockedInstance.id);
 
     const parsedJvmArgs = parseJvmArgs(
-      '-Xms1G -Xmx2G -Dconfig="C:\\Minecraft Server\\config.json" -Dlabel=\'Mystery Panel\'',
+      '-Xms1G -Xmx2G -Dconfig="C:\\Minecraft Server\\config.json" -Dlabel=\'Mystry Panel\'',
     );
     assert.deepEqual(parsedJvmArgs, [
       '-Xms1G',
       '-Xmx2G',
       '-Dconfig=C:\\Minecraft Server\\config.json',
-      '-Dlabel=Mystery Panel',
+      '-Dlabel=Mystry Panel',
     ]);
     assert.throws(() => parseJvmArgs('-Dconfig="not-closed'), /未闭合的引号/);
     assert.deepEqual(
@@ -234,7 +234,7 @@ async function main(): Promise<void> {
     );
     assert.equal(
       serializeJvmArgFile(parsedJvmArgs),
-      '"-Xms1G"\n"-Xmx2G"\n"-Dconfig=C:\\\\Minecraft Server\\\\config.json"\n"-Dlabel=Mystery Panel"',
+      '"-Xms1G"\n"-Xmx2G"\n"-Dconfig=C:\\\\Minecraft Server\\\\config.json"\n"-Dlabel=Mystry Panel"',
     );
 
     const crashedInstance = createInstance({

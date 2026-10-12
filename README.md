@@ -1,4 +1,4 @@
-# Minecraft Mystery Dashboard
+# Minecraft Mystry Dashboard
 
 用浏览器管理本机上的多个 **Minecraft Java 服务端**：启停、实时控制台、文件与配置、一键部署和已有服务端导入。
 

@@ -55,7 +55,7 @@ function verifyWrapper(root, env) {
         { cwd: root, env },
       )
     : run(path.join(root, 'mmdctl'), ['help'], { cwd: root, env });
-  if (!output.includes('Minecraft Mystery Dashboard 便携版管理器')) {
+  if (!output.includes('Minecraft Mystry Dashboard 便携版管理器')) {
     throw new Error('平台入口脚本未能调用包内便携控制器');
   }
 }
@@ -116,7 +116,7 @@ async function main() {
   try {
     await fsp.mkdir(extractDir);
     run('tar', ['-xf', archivePath, '-C', extractDir]);
-    portableRoot = path.join(extractDir, 'minecraft-mystery-dashboard');
+    portableRoot = path.join(extractDir, 'minecraft-mystry-dashboard');
     const manifest = JSON.parse(
       await fsp.readFile(path.join(portableRoot, 'manifest.json'), 'utf8'),
     );
@@ -168,7 +168,7 @@ async function main() {
     }
     const health = await fetch(`http://127.0.0.1:${port}/api/health`);
     const body = await health.json();
-    if (!health.ok || body?.service !== 'minecraft-mystery-dashboard') {
+    if (!health.ok || body?.service !== 'minecraft-mystry-dashboard') {
       throw new Error(`健康检查失败：HTTP ${health.status}`);
     }
     const statusOutput = runControl(portableRoot, 'status', env);

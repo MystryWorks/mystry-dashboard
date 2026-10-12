@@ -32,7 +32,7 @@ test('Linux 上的启动器可直接转发帮助命令', { skip: process.platfor
   });
 
   assert.equal(result.status, 0, result.stderr);
-  assert.match(result.stdout, /Minecraft Mystery Dashboard 源码版管理器/);
+  assert.match(result.stdout, /Minecraft Mystry Dashboard 源码版管理器/);
   assert.match(result.stdout, /用法：PanelManager\.sh <command>/);
   assert.match(result.stdout, /start\s+后台启动面板/);
 });

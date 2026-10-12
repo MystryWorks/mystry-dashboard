@@ -47,7 +47,7 @@ $script:EnvBackupPath = ''
 
 $script:Resources = @{
   'zh-CN' = @{
-    Title = 'Minecraft Mystery Dashboard 面板管理器'
+    Title = 'Minecraft Mystry Dashboard 面板管理器'
     StateRunning = '状态：正在运行  {0}'
     StateStopped = '状态：未运行'
     MenuStopped = @(
@@ -121,7 +121,7 @@ $script:Resources = @{
     PressAnyKeyExit = '按任意键关闭窗口…'
   }
   'en-US' = @{
-    Title = 'Minecraft Mystery Dashboard Panel Manager'
+    Title = 'Minecraft Mystry Dashboard Panel Manager'
     StateRunning = 'Status: Running  {0}'
     StateStopped = 'Status: Stopped'
     MenuStopped = @(
@@ -686,7 +686,7 @@ function Get-PanelHealth {
   try {
     $connection = Get-PanelConnection
     $response = Invoke-RestMethod -Uri $connection.HealthUrl -Method Get -TimeoutSec 2
-    if ($response.ok -eq $true -and $response.service -eq 'minecraft-mystery-dashboard') {
+    if ($response.ok -eq $true -and $response.service -eq 'minecraft-mystry-dashboard') {
       if (
         $ExpectedFingerprint `
         -and ([string]$response.processFingerprint -ne [string]$ExpectedFingerprint)

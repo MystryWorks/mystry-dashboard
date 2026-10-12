@@ -1,19 +1,19 @@
-# Minecraft Mystery Dashboard 产品介绍
+# Minecraft Mystry Dashboard 产品介绍
 
 **版本**：`0.2.0-preview.1`  
 **形态**：单机一体的 Minecraft **Java 服务端** Web 管理面板  
 **不是**：游戏客户端、Fabric/Forge 模组、远程多机 Agent 控制台  
 
-配套 PDF：[`Mystery-Dashboard-产品介绍.pdf`](Mystery-Dashboard-产品介绍.pdf)（重新生成：`python docs/product-intro/build-pdf.py`）  
+配套 PDF：[`Mystry-Dashboard-产品介绍.pdf`](Mystry-Dashboard-产品介绍.pdf)（重新生成：`python docs/product-intro/build-pdf.py`）  
 操作步骤见 [使用指南](../user-guide.md) 与 [分步教程](../tutorials.md)。本文用真实界面截图说明每个页面和每个按钮做什么。
 
-截图拍摄于本机开发界面（Vite `127.0.0.1:5173`，Mystery 暗色主题）。图中的实例名、任务时间和 Java 版本来自拍摄时的本机数据，不是产品内置示例服。
+截图拍摄于本机开发界面（Vite `127.0.0.1:5173`，Mystry 暗色主题）。图中的实例名、任务时间和 Java 版本来自拍摄时的本机数据，不是产品内置示例服。
 
 ---
 
 ## 1. 产品是什么
 
-Mystery Dashboard 跑在你自己的电脑上。用浏览器管理本机上的多个 Minecraft Java **服务端**进程：下载或导入核心、启动/停止 Java、看实时日志、改 `server.properties`、在实例目录里管文件。
+Mystry Dashboard 跑在你自己的电脑上。用浏览器管理本机上的多个 Minecraft Java **服务端**进程：下载或导入核心、启动/停止 Java、看实时日志、改 `server.properties`、在实例目录里管文件。
 
 ```
 浏览器  →  面板 Web（React）  →  本机 API（Fastify + SQLite）
@@ -62,7 +62,7 @@ Mystery Dashboard 跑在你自己的电脑上。用浏览器管理本机上的�
 
 ```
 ┌──────────────────┬────────────────────────────────────┐
-│ Mystery Dashboard│  页面标题 + 主操作区                  │
+│ Mystry Dashboard│  页面标题 + 主操作区                  │
 │ Minecraft 服务端  │                                    │
 │                  │  表格 / 表单 / 控制台 / 文件列表      │
 │ 实例总览          │                                    │
@@ -93,9 +93,9 @@ Mystery Dashboard 跑在你自己的电脑上。用浏览器管理本机上的�
 - **登录面板**：用户表已有管理员
 - **初始化管理员**：用户表为空，需要额外填写 64 位 `SETUP_TOKEN`
 
-![登录页（Mystery 暗色）](screenshots/03-login-dark.png)
+![登录页（Mystry 暗色）](screenshots/03-login-dark.png)
 
-![登录页（Mystery 亮色）](screenshots/01-login.png)
+![登录页（Mystry 亮色）](screenshots/01-login.png)
 
 ### 控件说明
 
@@ -119,11 +119,11 @@ Mystery Dashboard 跑在你自己的电脑上。用浏览器管理本机上的�
 | 控件 | 说明 |
 |------|------|
 | 调色板按钮 | 展开/收起；`Escape` 关闭 |
-| Mystery 暗色 / 亮色 | 产品默认粉紫套装 |
+| Mystry 暗色 / 亮色 | 产品默认粉紫套装 |
 | Codex 暗色 / 亮色 | 暖灰青绿 |
 | Grok 暗色 / 亮色 | 近黑或白底高对比 |
 
-未保存过主题时，仅在 Mystery 暗/亮之间跟随系统 `prefers-color-scheme`。控制台终端区域始终保持暗色，不受亮色主题影响。
+未保存过主题时，仅在 Mystry 暗/亮之间跟随系统 `prefers-color-scheme`。控制台终端区域始终保持暗色，不受亮色主题影响。
 
 ---
 
@@ -135,7 +135,7 @@ Mystery Dashboard 跑在你自己的电脑上。用浏览器管理本机上的�
 
 | 控件 | 说明 |
 |------|------|
-| **Mystery Dashboard** | 品牌名，不是按钮 |
+| **Mystry Dashboard** | 品牌名，不是按钮 |
 | **实例总览** | 进入 `/`，当前页高亮 |
 | **一键部署** | 进入 `/deploy` |
 | **导入已有服务端** | 进入 `/import` |
@@ -554,7 +554,7 @@ Forge / NeoForge 会下载官方 Installer 并执行 `--installServer`，耗时�
 | 侧栏 | 退出 | 清 token |
 | 窄屏 | 菜单 / 关闭 | 抽屉导航 |
 | 任务中心 | 重试刷新 / 查看实例 | 失败重试；跳到已落地实例 |
-| 主题菜单 | 6 个选项 | Mystery / Codex / Grok × 暗/亮 |
+| 主题菜单 | 6 个选项 | Mystry / Codex / Grok × 暗/亮 |
 
 ### 总览
 

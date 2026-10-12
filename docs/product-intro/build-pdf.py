@@ -1,4 +1,4 @@
-"""生成 Mystery Dashboard 产品介绍 PDF（中文 + 实拍截图）。"""
+"""生成 Mystry Dashboard 产品介绍 PDF（中文 + 实拍截图）。"""
 
 from __future__ import annotations
 
@@ -26,7 +26,7 @@ from reportlab.platypus import (
 
 HERE = Path(__file__).resolve().parent
 SHOTS = HERE / "screenshots"
-OUT = HERE / "Mystery-Dashboard-产品介绍.pdf"
+OUT = HERE / "Mystry-Dashboard-产品介绍.pdf"
 
 BG = colors.HexColor("#12080f")
 CARD = colors.HexColor("#22131f")
@@ -196,7 +196,7 @@ def draw_page(canvas, doc):
     canvas.setFillColor(MUTED)
     canvas.setFont(FONT, 8)
     if doc.page > 1:
-        canvas.drawString(MARGIN, 9 * mm, "Minecraft Mystery Dashboard  ·  产品介绍")
+        canvas.drawString(MARGIN, 9 * mm, "Minecraft Mystry Dashboard  ·  产品介绍")
         canvas.drawRightString(PAGE_W - MARGIN, 9 * mm, f"{doc.page}")
         canvas.setStrokeColor(LINE)
         canvas.setLineWidth(0.4)
@@ -210,11 +210,11 @@ def build_story():
     story += [
         Spacer(1, 42 * mm),
         P("0.2.0-preview.1  ·  单机一体服务端面板", "cover_kicker"),
-        P("Minecraft Mystery Dashboard", "cover_title"),
+        P("Minecraft Mystry Dashboard", "cover_title"),
         P("产品介绍与界面说明书", "cover_sub"),
         P("用浏览器管理本机多个 Minecraft Java 服务端：部署、导入、启停、控制台、文件与配置。", "cover_sub"),
         Spacer(1, 8 * mm),
-        shot("04-dashboard.png", "实例总览（Mystery 暗色主题）", max_h=95 * mm),
+        shot("04-dashboard.png", "实例总览（Mystry 暗色主题）", max_h=95 * mm),
         P("本文截图来自真实运行界面。图中实例名与任务时间属于拍摄环境，不是内置示例服。", "note"),
         PageBreak(),
         P("目录", "h1"),
@@ -234,7 +234,7 @@ def build_story():
 
     story += [
         P("1. 产品定位与边界", "h1"),
-        P("Mystery Dashboard 是跑在你自己电脑上的 Web 管理面板，用来管理 Minecraft <b>Java 服务端</b>进程。它不是游戏客户端，也不是 Fabric / Forge 模组，更不是已经开放的远程多机 Agent 控制台。", "body"),
+        P("Mystry Dashboard 是跑在你自己电脑上的 Web 管理面板，用来管理 Minecraft <b>Java 服务端</b>进程。它不是游戏客户端，也不是 Fabric / Forge 模组，更不是已经开放的远程多机 Agent 控制台。", "body"),
         P("默认访问地址：开发模式 <font face='Courier'>http://127.0.0.1:5173</font>，生产或便携包 <font face='Courier'>http://127.0.0.1:3000</font>。默认只监听本机，外网不能直接打开。", "body"),
         P("能做什么", "h2"),
         bullets([
@@ -261,8 +261,8 @@ def build_story():
     story += [
         P("2. 登录与主题", "h1"),
         P("未登录、会话失效，或尚未创建管理员时进入登录页。日常标题为「登录面板」；用户表为空时变为「初始化管理员」，并要求填写 64 位 SETUP_TOKEN。", "body"),
-        shot("03-login-dark.png", "登录页 · Mystery 暗色"),
-        shot("01-login.png", "登录页 · Mystery 亮色"),
+        shot("03-login-dark.png", "登录页 · Mystry 暗色"),
+        shot("01-login.png", "登录页 · Mystry 亮色"),
         table(
             ["控件", "说明"],
             [
@@ -276,11 +276,11 @@ def build_story():
         ),
         Spacer(1, 3 * mm),
         P("登录成功后 token 存在 mmd_token。任一业务接口 401 会清掉登录态并回到本页。", "body"),
-        shot("02-login-theme-picker.png", "主题选择器：Mystery / Codex / Grok，各有暗色与亮色"),
+        shot("02-login-theme-picker.png", "主题选择器：Mystry / Codex / Grok，各有暗色与亮色"),
         table(
             ["选项", "说明"],
             [
-                ["Mystery 暗色 / 亮色", "产品默认粉紫套装。未保存过主题时仅在这对之间跟随系统外观。"],
+                ["Mystry 暗色 / 亮色", "产品默认粉紫套装。未保存过主题时仅在这对之间跟随系统外观。"],
                 ["Codex 暗色 / 亮色", "暖灰青绿。"],
                 ["Grok 暗色 / 亮色", "近黑或白底高对比。"],
             ],
@@ -610,7 +610,7 @@ def build_story():
         table(
             ["按钮", "作用"],
             [
-                ["主题 / 六套选项", "切换 Mystery、Codex、Grok 的暗色或亮色。"],
+                ["主题 / 六套选项", "切换 Mystry、Codex、Grok 的暗色或亮色。"],
                 ["登录 / 创建并进入 / 重新检查", "提交账号，或重试连接。"],
                 ["四个导航链接", "总览、部署、导入、节点。"],
                 ["铃铛 / 调色板 / 退出", "任务中心、主题、清 token。"],
@@ -657,7 +657,7 @@ def build_story():
         P("延伸阅读", "h2"),
         P("安装与便携包见《快速开始》；第一次开服见《分步教程》；字段排错见《使用指南》；环境变量见《配置说明》。远程 Agent、自动备份、多用户权限尚未交付，不要当成已发布功能。", "body"),
         Spacer(1, 8 * mm),
-        P("Minecraft Mystery Dashboard  ·  0.2.0-preview.1  ·  本文对应仓库当前界面实现。", "caption"),
+        P("Minecraft Mystry Dashboard  ·  0.2.0-preview.1  ·  本文对应仓库当前界面实现。", "caption"),
     ]
     return story
 
@@ -673,8 +673,8 @@ def main() -> None:
         rightMargin=MARGIN,
         topMargin=16 * mm,
         bottomMargin=16 * mm,
-        title="Minecraft Mystery Dashboard 产品介绍",
-        author="Minecraft Mystery Dashboard",
+        title="Minecraft Mystry Dashboard 产品介绍",
+        author="Minecraft Mystry Dashboard",
         subject="各页面实拍与按钮说明",
     )
     doc.build(build_story(), onFirstPage=draw_page, onLaterPages=draw_page)

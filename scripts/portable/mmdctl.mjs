@@ -10,7 +10,7 @@ import readline from 'node:readline/promises';
 import { spawn, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
-const SERVICE_NAME = 'minecraft-mystery-dashboard';
+const SERVICE_NAME = 'minecraft-mystry-dashboard';
 const SECRET_PATTERN = /^[0-9a-f]{64}$/i;
 const INTERNAL_FINALIZE_SETUP = '__finalize-setup';
 const scriptPath = fileURLToPath(import.meta.url);
@@ -158,7 +158,7 @@ async function ensureConfiguration() {
   const original = existed
     ? await fsp.readFile(configPath, 'utf8')
     : [
-        '# Minecraft Mystery Dashboard 配置',
+        '# Minecraft Mystry Dashboard 配置',
         '# 本文件包含密钥，不要上传、分享或放入版本控制。',
         'HOST=127.0.0.1',
         'PORT=3000',
@@ -759,7 +759,7 @@ async function showLogs() {
 
 function printHelp() {
   console.log([
-    `Minecraft Mystery Dashboard ${managerLabel}管理器`,
+    `Minecraft Mystry Dashboard ${managerLabel}管理器`,
     '',
     `用法：${managerCommand} <command>`,
     '',
@@ -787,7 +787,7 @@ async function interactiveMenu() {
     && await getHealth(values, state.fingerprint),
   );
   console.log('============================================================');
-  console.log(`Minecraft Mystery Dashboard ${managerLabel}`);
+  console.log(`Minecraft Mystry Dashboard ${managerLabel}`);
   console.log('============================================================');
   console.log(running ? '状态：运行中' : '状态：未运行');
   console.log('');

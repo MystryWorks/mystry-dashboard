@@ -12,7 +12,7 @@ import { fetchNodeRuntime } from './fetch-node-runtime.mjs';
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(scriptDir, '..', '..');
-const packageRootName = 'minecraft-mystery-dashboard';
+const packageRootName = 'minecraft-mystry-dashboard';
 
 function parseArguments(argv) {
   const result = {};
@@ -221,7 +221,7 @@ function getGitSha() {
 }
 
 async function createPortableReadme(destination, version) {
-  const content = `Minecraft Mystery Dashboard ${version} 便携预览版
+  const content = `Minecraft Mystry Dashboard ${version} 便携预览版
 ============================================================
 
 Windows：
@@ -241,7 +241,7 @@ Linux / macOS：
 4. config、data、logs 由首次启动创建。升级时请停止面板，并保留这些目录。
 5. 默认只监听 127.0.0.1。不要把面板端口直接暴露到不可信公网。
 
-项目主页：https://github.com/Apeliya/mystrydashboard
+项目主页：https://github.com/MystryMocha/mystry-dashboard
 `;
   await fsp.writeFile(destination, content, 'utf8');
 }
@@ -393,7 +393,7 @@ export async function packagePortable({
     const files = await collectFiles(portableRoot);
     const manifest = {
       schemaVersion: 1,
-      product: 'minecraft-mystery-dashboard',
+      product: 'minecraft-mystry-dashboard',
       version,
       gitSha: getGitSha(),
       nodeVersion: runtime.nodeVersion,

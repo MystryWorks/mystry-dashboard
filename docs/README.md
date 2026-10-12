@@ -1,6 +1,6 @@
 # 项目文档
 
-Minecraft Mystery Dashboard 是独立的 Minecraft Java 服务端 Web 管理面板，在本机管理多个服务端实例。
+Minecraft Mystry Dashboard 是独立的 Minecraft Java 服务端 Web 管理面板，在本机管理多个服务端实例。
 
 ## 按目标阅读
 

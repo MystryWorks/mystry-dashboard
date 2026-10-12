@@ -57,7 +57,7 @@ flowchart LR
 便携包不从源码目录运行。`scripts/portable/package-portable.mjs` 在目标平台原生组装以下布局：
 
 ```text
-minecraft-mystery-dashboard/
+minecraft-mystry-dashboard/
 ├── runtime/                 # 官方 Node.js 固定版本
 ├── app/
 │   ├── server/dist/

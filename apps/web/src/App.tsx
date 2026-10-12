@@ -119,7 +119,7 @@ function Shell({ children }: { children: React.ReactNode }) {
             </svg>
           </div>
           <div className="brand-info">
-            <div className="brand-title">Mystery Dashboard</div>
+            <div className="brand-title">Mystry Dashboard</div>
             <div className="brand-subtitle">v0.2.0-preview · Minecraft</div>
           </div>
         </div>

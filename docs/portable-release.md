@@ -67,7 +67,7 @@ Linux：
 
 ```bash
 tar -xzf mmd-v0.2.0-preview.1-linux-x64.tar.gz
-cd minecraft-mystery-dashboard
+cd minecraft-mystry-dashboard
 chmod +x mmdctl
 ./mmdctl start
 ```
@@ -89,7 +89,7 @@ chmod +x mmdctl
 ## 目录与数据
 
 ```text
-minecraft-mystery-dashboard/
+minecraft-mystry-dashboard/
 ├── runtime/              # 固定版本的官方 Node.js 运行时
 ├── app/                  # 已构建应用和生产依赖
 ├── config/               # 首启配置和配置备份

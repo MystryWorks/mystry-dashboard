@@ -129,7 +129,7 @@ test('R1-03: 伪造健康响应时 Invoke-SafeShutdown 不得发送 LAUNCHER_TOK
         param([string]$ExpectedFingerprint)
         $body = @{
           ok = $true
-          service = 'minecraft-mystery-dashboard'
+          service = 'minecraft-mystry-dashboard'
           processFingerprint = 'wrong-fingerprint'
         }
         if ($ExpectedFingerprint -and ([string]$body.processFingerprint -ne [string]$ExpectedFingerprint)) {

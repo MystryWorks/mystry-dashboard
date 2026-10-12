@@ -23,7 +23,7 @@ CPU 按整机逻辑核总容量归一至 0–100%；进程内存是驻留内存�
 
 | 方法 | 路径 | 认证 | 响应 |
 |------|------|------|------|
-| GET | `/api/health` | 否 | `{ ok: true, service: "minecraft-mystery-dashboard", processFingerprint?: string }` |
+| GET | `/api/health` | 否 | `{ ok: true, service: "minecraft-mystry-dashboard", processFingerprint?: string }` |
 
 `processFingerprint` 仅在便携控制器启动服务时出现。它用于让 `mmdctl` 将状态文件、PID 与实际监听服务对应起来，不是认证密钥，也不能替代 `X-Launcher-Token`。
 
