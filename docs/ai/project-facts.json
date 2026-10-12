@@ -118,7 +118,8 @@
     "test:static": "npm run test:static -w @mmd/server",
     "audit:production": "node scripts/check-production-audit.mjs",
     "test:interaction": "npm run test:interaction -w @mmd/web",
-    "verify": "npm run knowledge:check && npm run knowledge:test && npm run portable:test && npm run windows:test && npm run linux:test && npm run build -w @mmd/shared && npm run typecheck && npm run test:interaction && npm run test:security -w @mmd/server && npm run test:regression -w @mmd/server && npm run build && npm run test:static",
+    "test:smoke": "node --test scripts/smoke/panel-smoke.test.mjs",
+    "verify": "npm run knowledge:check && npm run knowledge:test && npm run portable:test && npm run windows:test && npm run linux:test && npm run build -w @mmd/shared && npm run typecheck && npm run test:interaction && npm run test:security -w @mmd/server && npm run test:smoke && npm run test:regression -w @mmd/server && npm run build && npm run test:static",
     "linux:test": "node --test scripts/linux/panel-manager.test.mjs"
   },
   "knowledgeDocuments": [
@@ -153,6 +154,7 @@
     "scripts/portable/mmdctl.mjs",
     "scripts/portable/package-portable.mjs",
     "scripts/portable/smoke-portable.mjs",
+    "scripts/smoke/panel-smoke.test.mjs",
     ".github/workflows/portable-release.yml"
   ],
   "aiEntrypoints": {

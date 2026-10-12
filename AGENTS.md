@@ -92,6 +92,7 @@ npm.cmd run dev:web
 npm.cmd run typecheck
 npm.cmd run test:security -w @mmd/server
 npm.cmd run test:regression -w @mmd/server
+npm.cmd run test:smoke
 npm.cmd run knowledge:check
 npm.cmd run verify
 ```
