@@ -4,7 +4,6 @@ import {
   Activity,
   FolderDown,
   Layers,
-  MoreVertical,
   Play,
   Plus,
   Power,
@@ -17,6 +16,7 @@ import type { InstanceInfo } from '@mmd/shared';
 import { isInstanceStopPendingResult } from '@mmd/shared';
 import { api } from '../api';
 import { HostMetricCards, processMetric, useDashboardMetrics } from '../components/DashboardMetrics';
+import { ActionMenu } from '../components/ActionMenu';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { JavaRuntimeSelect } from '../components/JavaRuntimeSelect';
 import { JvmSettingsEditor } from '../components/JvmSettingsEditor';
@@ -345,73 +345,36 @@ export function DashboardPage() {
                   进入管理
                 </Link>
 
-                <details className="action-menu" style={{ position: 'relative' }}>
-                  <summary className="btn btn-icon" title="更多操作">
-                    <MoreVertical size={16} />
-                  </summary>
-                  <div
-                    className="btn-row"
-                    style={{
-                      position: 'absolute',
-                      right: 0,
-                      bottom: '100%',
-                      marginBottom: '6px',
-                      background: 'var(--bg-panel)',
-                      border: '1px solid var(--border)',
-                      borderRadius: 'var(--radius-sm)',
-                      padding: '6px',
-                      boxShadow: 'var(--shadow)',
-                      zIndex: 10,
-                      flexDirection: 'column',
-                      minWidth: '110px',
-                    }}
-                  >
-                    <button
-                      className="btn btn-ghost"
-                      type="button"
-                      style={{ width: '100%', justifyContent: 'flex-start', height: '30px', fontSize: '0.8rem' }}
-                      disabled={busyId === inst.id || inst.requiresMigration || isLifecycleBusy(inst.status)}
-                      onClick={(event) => {
-                        event.currentTarget.closest('details')?.removeAttribute('open');
-                        setRestartTarget(inst);
-                      }}
-                    >
-                      <RotateCcw size={13} />
-                      重启实例
-                    </button>
-                    <button
-                      className="btn btn-ghost"
-                      type="button"
-                      style={{ width: '100%', justifyContent: 'flex-start', height: '30px', fontSize: '0.8rem' }}
-                      disabled={busyId === inst.id || inst.requiresMigration || !isAlive(inst.status)}
-                      onClick={(event) => {
-                        event.currentTarget.closest('details')?.removeAttribute('open');
-                        setForceStopTarget(inst);
-                      }}
-                    >
-                      <Power size={13} />
-                      强制停止
-                    </button>
-                    <button
-                      className="btn btn-danger"
-                      type="button"
-                      style={{ width: '100%', justifyContent: 'flex-start', height: '30px', fontSize: '0.8rem' }}
-                      disabled={busyId === inst.id || (!inst.requiresMigration && isAlive(inst.status))}
-                      title={
+                <ActionMenu
+                  items={[
+                    {
+                      key: 'restart',
+                      label: '重启实例',
+                      icon: <RotateCcw size={13} />,
+                      disabled: busyId === inst.id || inst.requiresMigration || isLifecycleBusy(inst.status),
+                      onSelect: () => setRestartTarget(inst),
+                    },
+                    {
+                      key: 'force-stop',
+                      label: '强制停止',
+                      icon: <Power size={13} />,
+                      disabled: busyId === inst.id || inst.requiresMigration || !isAlive(inst.status),
+                      onSelect: () => setForceStopTarget(inst),
+                    },
+                    {
+                      key: 'delete',
+                      label: '删除实例',
+                      icon: <Trash2 size={13} />,
+                      danger: true,
+                      disabled: busyId === inst.id || (!inst.requiresMigration && isAlive(inst.status)),
+                      title:
                         !inst.requiresMigration && isAlive(inst.status)
                           ? '实例仍在运行，请先停止后再删除'
-                          : undefined
-                      }
-                      onClick={(event) => {
-                        event.currentTarget.closest('details')?.removeAttribute('open');
-                        setDeleteTarget(inst);
-                      }}
-                    >
-                      <Trash2 size={13} />
-                      删除实例
-                    </button>
-                  </div>
-                </details>
+                          : undefined,
+                      onSelect: () => setDeleteTarget(inst),
+                    },
+                  ]}
+                />
               </div>
             </div>
           ))}

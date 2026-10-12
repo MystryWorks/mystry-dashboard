@@ -155,6 +155,36 @@ test('实例操作按钮按 Enter 只执行操作，名称链接仍可导航', a
   expect(screen.getByTestId('location').textContent).toBe('/instances/test');
 });
 
+test('更多操作菜单挂到 body，方向键移动，Escape 恢复焦点，选择后打开确认弹窗', async () => {
+  const user = userEvent.setup();
+  mount(<DashboardPage />);
+  const trigger = await screen.findByRole('button', { name: '更多操作' });
+  expect(trigger.getAttribute('aria-expanded')).toBe('false');
+  await user.click(trigger);
+  const menu = screen.getByRole('menu', { name: '更多操作' });
+  expect(menu.parentElement).toBe(document.body);
+  expect(trigger.getAttribute('aria-expanded')).toBe('true');
+  const restart = screen.getByRole('menuitem', { name: '重启实例' });
+  const forceStop = screen.getByRole('menuitem', { name: '强制停止' }) as HTMLButtonElement;
+  const remove = screen.getByRole('menuitem', { name: '删除实例' });
+  expect(forceStop.disabled).toBe(true);
+  await waitFor(() => expect(document.activeElement).toBe(restart));
+  await user.keyboard('{ArrowDown}');
+  expect(document.activeElement).toBe(remove);
+  await user.keyboard('{ArrowDown}');
+  expect(document.activeElement).toBe(restart);
+  await user.keyboard('{Escape}');
+  expect(screen.queryByRole('menu')).toBeNull();
+  expect(document.activeElement).toBe(trigger);
+  await user.click(trigger);
+  await user.click(document.body);
+  expect(screen.queryByRole('menu')).toBeNull();
+  await user.click(trigger);
+  await user.click(screen.getByRole('menuitem', { name: '删除实例' }));
+  expect(screen.queryByRole('menu')).toBeNull();
+  expect(screen.getByRole('dialog', { name: /^删除实例「/ })).toBeTruthy();
+});
+
 test('任务抽屉关闭时不可访问，按钮、Escape 和遮罩关闭均恢复入口焦点', async () => {
   const user = userEvent.setup();
   mount(<TaskCenter />);
