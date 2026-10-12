@@ -15,6 +15,7 @@ npm.cmd run linux:test
 npm.cmd run typecheck
 npm.cmd run test:interaction
 npm.cmd run test:security -w @mmd/server
+npm.cmd run test:smoke
 npm.cmd run test:regression -w @mmd/server
 npm.cmd run test:static
 npm.cmd run build
@@ -35,13 +36,24 @@ npm.cmd run test:regression -w @mmd/server
 
 Linux/macOS 和 CI 使用相同脚本名，但命令入口为 `npm run ...`。
 
+## 源码进程冒烟
+
+`test:smoke` 已并入 `verify`。它在系统临时目录启动当前源码的面板进程，不启动 Minecraft，也不读写仓库 `data/`。先构建共享包：
+
+```powershell
+npm.cmd run build -w @mmd/shared
+npm.cmd run test:smoke
+```
+
+通过仅表示：`/api/health` 与 `/api/auth/status` 不是 500，未登录访问受保护接口返回 401，随后本机启动器关闭通道能停掉该进程。登录后的部署、文件、控制台和真实 Java 进程不在这条路径里。便携包最终压缩包仍用 `portable:smoke`，二者不能互相代替。
+
 ## 按变更类型
 
 | 变更 | 最低自动验证 | 额外人工验证 |
 |---|---|---|
 | 纯知识库或文档 | `knowledge:check`、`knowledge:test`；提交前 `verify` | 标题锚点、阅读路径和事实源可读 |
 | shared 类型/schema | shared build、typecheck、build | 请求与响应兼容 |
-| 服务端路由/认证 | typecheck、安全自检、build | health、setup/login、授权失败 |
+| 服务端路由/认证 | typecheck、安全自检、`test:smoke`、build | health、setup/login、授权失败 |
 | 文件/路径/ZIP | 安全自检、build | 列表、读写、上传、下载及逃逸拒绝 |
 | 进程/任务/控制台 | typecheck、安全自检、build | 启停、命令、WS 重连、排队到终态 |
 | UI/样式 | typecheck、build | 桌面/窄屏、加载/错误态、键盘焦点 |
@@ -72,6 +84,7 @@ Linux/macOS 和 CI 使用相同脚本名，但命令入口为 `npm run ...`。
 
 - typecheck 通过：只证明 TypeScript 契约可检查。
 - 安全自检通过：只证明当前自检覆盖的负向边界。
+- `test:smoke` 通过：只证明隔离数据目录中的面板进程能启动，健康与未登录只读接口不返回 500，受保护接口拒绝未登录请求。不证明登录后的部署、文件、控制台或 Minecraft 进程。
 - build 通过：只证明生产产物可生成；大 chunk 警告应单独报告。
 - 人工流程通过：只证明本次环境和路径下的可见行为。
 - `npm audit` 结果会随时间变化；只有当前执行结果才能支持当前结论。
