@@ -4,6 +4,14 @@
   "version": "0.2.0-preview.1",
   "description": "单机一体的 Minecraft 服务端 Web 管理面板",
   "license": "MIT",
+  "homepage": "https://github.com/MystryWorks/mystry-dashboard#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/MystryWorks/mystry-dashboard.git"
+  },
+  "bugs": {
+    "url": "https://github.com/MystryWorks/mystry-dashboard/issues"
+  },
   "keywords": [
     "minecraft",
     "server",

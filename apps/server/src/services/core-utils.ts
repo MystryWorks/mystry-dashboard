@@ -1,5 +1,5 @@
 /** PaperMC 要求 User-Agent 标明软件名与联系方式 */
-export const USER_AGENT = 'MinecraftMystryDashboard/0.1 (https://localhost; contact@localhost)';
+export const USER_AGENT = 'MinecraftMystryDashboard/0.2 (+https://github.com/MystryWorks/mystry-dashboard)';
 
 export function abortError(signal: AbortSignal): Error {
   if (signal.reason instanceof Error && [
