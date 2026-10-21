@@ -1,5 +1,5 @@
 {
-  "name": "Minecraft Mystery Dashboard",
+  "name": "Mystry Dashboard",
   "install": "bash .cursor/install.sh",
   "terminals": [
     {
