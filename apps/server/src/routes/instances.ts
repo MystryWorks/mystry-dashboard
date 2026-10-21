@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
-import type { CreateInstanceInput, UpdateInstanceInput } from '@mmd/shared';
-import { createInstanceBodySchema, updateInstanceBodySchema } from '@mmd/shared';
+import type { CreateInstanceInput, UpdateInstanceInput } from '@mystry/shared';
+import { createInstanceBodySchema, updateInstanceBodySchema } from '@mystry/shared';
 import { config } from '../config.js';
 import {
   adoptManagedDirectory,

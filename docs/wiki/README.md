@@ -1,6 +1,6 @@
 # 中文 Wiki 导航
 
-Minecraft Mystry Dashboard 是本机 Minecraft Java 服务端管理面板。项目定位与能力见 [项目首页](../../README.md)，完整文档入口见 [文档中心](../README.md)。
+Mystry Dashboard 是本机 Minecraft Java 服务端管理面板。项目定位与能力见 [项目首页](../../README.md)，完整文档入口见 [文档中心](../README.md)。
 
 本目录保留中文专题入口，正文统一维护在 `docs/` 对应页面。版本以 [package.json](../../package.json) 为准；分支差异、CI 结果和 Release 状态应在需要时查询，不在导航中保存易过期的数字。
 

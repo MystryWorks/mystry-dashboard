@@ -5,7 +5,7 @@ import {
   serializeJvmArgs,
   type CoreType,
   type JvmValidationContext,
-} from '@mmd/shared';
+} from '@mystry/shared';
 import { getJavaRuntime } from './java-runtime-service.js';
 
 export type ServerJvmValidationInput = {

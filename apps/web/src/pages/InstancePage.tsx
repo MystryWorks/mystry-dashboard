@@ -10,8 +10,8 @@ import {
   Sliders,
   Terminal,
 } from 'lucide-react';
-import type { FileEntry, InstanceInfo } from '@mmd/shared';
-import { isInstanceStopPendingResult } from '@mmd/shared';
+import type { FileEntry, InstanceInfo } from '@mystry/shared';
+import { isInstanceStopPendingResult } from '@mystry/shared';
 import { ApiError, api, apiForm, downloadAuthenticated } from '../api';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { ConfigTab } from '../components/ConfigTab';
@@ -839,7 +839,7 @@ export function InstancePage() {
     setBusy(true);
     try {
       const query = action === 'stop' && options?.force ? '?force=1' : '';
-      const result = await api<InstanceInfo | import('@mmd/shared').InstanceStopPendingResult>(
+      const result = await api<InstanceInfo | import('@mystry/shared').InstanceStopPendingResult>(
         `/api/instances/${id}/${action}${query}`,
         { method: 'POST' },
       );

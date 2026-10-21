@@ -24,8 +24,8 @@ test('便携脚本均可由 Node 直接解析', async () => {
 });
 
 test('便携入口只调用包内 Node 运行时', async () => {
-  const windows = await fsp.readFile(path.join(scriptDir, 'mmdctl.cmd'), 'utf8');
-  const unix = await fsp.readFile(path.join(scriptDir, 'mmdctl.sh'), 'utf8');
+  const windows = await fsp.readFile(path.join(scriptDir, 'mystryctl.cmd'), 'utf8');
+  const unix = await fsp.readFile(path.join(scriptDir, 'mystryctl.sh'), 'utf8');
   assert.match(windows, /runtime\\node\.exe/i);
   assert.doesNotMatch(windows, /\bnpm(?:\.cmd)?\b/i);
   assert.match(unix, /runtime\/bin\/node/);
@@ -33,7 +33,7 @@ test('便携入口只调用包内 Node 运行时', async () => {
 });
 
 test('校验和脚本稳定排序并排除自身', async () => {
-  const root = await fsp.mkdtemp(path.join(os.tmpdir(), 'mmd-checksums-test-'));
+  const root = await fsp.mkdtemp(path.join(os.tmpdir(), 'mystry-checksums-test-'));
   try {
     await fsp.writeFile(path.join(root, 'b.txt'), 'b', 'utf8');
     await fsp.writeFile(path.join(root, 'a.txt'), 'a', 'utf8');
@@ -50,9 +50,9 @@ test('校验和脚本稳定排序并排除自身', async () => {
 });
 
 test('发布元数据在每次覆盖 SBOM 后重新生成校验和', async () => {
-  const root = await fsp.mkdtemp(path.join(os.tmpdir(), 'mmd-release-metadata-test-'));
+  const root = await fsp.mkdtemp(path.join(os.tmpdir(), 'mystry-release-metadata-test-'));
   try {
-    await fsp.writeFile(path.join(root, 'mmd-v0.0.0-test.zip'), 'archive', 'utf8');
+    await fsp.writeFile(path.join(root, 'mystry-v0.0.0-test.zip'), 'archive', 'utf8');
     const calls = [];
     let sbomVersion = 0;
     const execute = async (label, command, args) => {
@@ -104,7 +104,7 @@ test('运行时版本固定为 Node 22', async () => {
 });
 
 test('SBOM 只包含生产依赖并使用 CycloneDX 1.6', async () => {
-  const root = await fsp.mkdtemp(path.join(os.tmpdir(), 'mmd-sbom-test-'));
+  const root = await fsp.mkdtemp(path.join(os.tmpdir(), 'mystry-sbom-test-'));
   try {
     const lock = {
       lockfileVersion: 3,

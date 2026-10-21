@@ -20,7 +20,7 @@ function isUnix(): boolean {
 }
 
 export function isDataPermissionRepairEnabled(): boolean {
-  return process.env.MMD_REPAIR_DATA_PERMISSIONS === '1';
+  return process.env.MYSTRY_REPAIR_DATA_PERMISSIONS === '1';
 }
 
 function warnWindowsAclBoundary(targetPath: string): void {
@@ -79,7 +79,7 @@ function tightenOrReject(
   throw new DataDirPermissionError(
     `数据目录权限过宽：「${targetPath}」当前 mode ${bits}，`
       + `要求目录 ${DIR_MODE.toString(8)}、敏感文件 ${FILE_MODE.toString(8)}。`
-      + '设置 MMD_REPAIR_DATA_PERMISSIONS=1 可在启动时收紧权限，或手动 chmod 后重试。',
+      + '设置 MYSTRY_REPAIR_DATA_PERMISSIONS=1 可在启动时收紧权限，或手动 chmod 后重试。',
   );
 }
 

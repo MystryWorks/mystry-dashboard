@@ -23,8 +23,8 @@ export const THEME_FAMILIES: { id: string; label: string; themes: readonly Theme
   { id: 'grok', label: 'Grok', themes: ['grok', 'grok-light'] },
 ];
 
-const THEME_KEY = 'mmd_theme';
-export const THEME_CHANGE_EVENT = 'mmd:theme-change';
+const THEME_KEY = 'mystry_theme';
+export const THEME_CHANGE_EVENT = 'mystry:theme-change';
 
 export function isTheme(value: string | null | undefined): value is Theme {
   return (THEMES as readonly string[]).includes(value ?? '');

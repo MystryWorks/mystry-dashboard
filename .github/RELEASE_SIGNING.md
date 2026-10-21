@@ -22,10 +22,10 @@ gpg --fingerprint --with-colons "$(head -n1 .github/release-signing-key.fingerpr
 
 ## 用户验证 Release 资产
 
-从 GitHub Release 下载 `mmd-release-signing-key.asc`（或仓库内同名公钥）、`SHA256SUMS` 与 `SHA256SUMS.asc`。
+从 GitHub Release 下载 `mystry-release-signing-key.asc`（或仓库内同名公钥）、`SHA256SUMS` 与 `SHA256SUMS.asc`。
 
 ```bash
-gpg --import mmd-release-signing-key.asc
+gpg --import mystry-release-signing-key.asc
 gpg --fingerprint
 # 与 release-signing-key.fingerprint 或发布说明中的指纹比对（须完全一致）
 

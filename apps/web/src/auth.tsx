@@ -7,7 +7,7 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import type { AuthUser } from '@mmd/shared';
+import type { AuthUser } from '@mystry/shared';
 import { api, ApiError, getToken, setToken, UNAUTHORIZED_EVENT } from './api';
 
 type AuthState = {

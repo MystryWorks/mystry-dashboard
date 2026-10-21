@@ -8,15 +8,15 @@ import path from 'node:path';
 import test from 'node:test';
 
 function prepareTempDataRoot(t: test.TestContext): string {
-  const dataRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'mmd-java-detect-test-'));
+  const dataRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'mystry-java-detect-test-'));
   t.after(() => {
     fs.rmSync(dataRoot, { recursive: true, force: true });
   });
-  process.env.MMD_DATA_DIR = dataRoot;
+  process.env.MYSTRY_DATA_DIR = dataRoot;
   process.env.JWT_SECRET = 'a'.repeat(64);
   process.env.SETUP_TOKEN = 'b'.repeat(64);
   process.env.LAUNCHER_TOKEN = 'c'.repeat(64);
-  process.env.MMD_HOME = dataRoot;
+  process.env.MYSTRY_HOME = dataRoot;
   return dataRoot;
 }
 
@@ -28,7 +28,7 @@ test('R1-01: getMinecraftChildEnv 不得暴露面板密钥', async (t) => {
   assert.equal(env.SETUP_TOKEN, undefined);
   assert.equal(env.LAUNCHER_TOKEN, undefined);
   assert.equal(env.DATA_DIR, undefined);
-  assert.equal(env.MMD_HOME, undefined);
+  assert.equal(env.MYSTRY_HOME, undefined);
 });
 
 test('R1-01: detectJava 应对 java -version 使用脱敏环境', async (t) => {

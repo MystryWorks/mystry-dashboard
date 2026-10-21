@@ -113,7 +113,7 @@ async function main() {
   const version = rootPackage.version;
   const platformName = releasePlatform(process.platform);
   const arch = process.arch === 'amd64' ? 'x64' : process.arch;
-  const archiveName = `mmd-v${version}-${platformName}-${arch}.${archiveExtension(process.platform)}`;
+  const archiveName = `mystry-v${version}-${platformName}-${arch}.${archiveExtension(process.platform)}`;
   const archivePath = path.join(outputDir, archiveName);
 
   console.log(`一键打包开始：v${version}（${platformName}/${arch}）`);

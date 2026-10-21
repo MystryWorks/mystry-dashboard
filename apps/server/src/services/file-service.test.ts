@@ -9,7 +9,7 @@ import { Readable } from 'node:stream';
 import test from 'node:test';
 
 function prepareTempDataRoot(t: test.TestContext): string {
-  const dataRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'mmd-file-service-test-'));
+  const dataRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'mystry-file-service-test-'));
   t.after(async () => {
     try {
       const { closeDb } = await import('../db.js');
@@ -19,7 +19,7 @@ function prepareTempDataRoot(t: test.TestContext): string {
     }
     fs.rmSync(dataRoot, { recursive: true, force: true });
   });
-  process.env.MMD_DATA_DIR = dataRoot;
+  process.env.MYSTRY_DATA_DIR = dataRoot;
   process.env.JWT_SECRET = 'a'.repeat(64);
   process.env.SETUP_TOKEN = 'b'.repeat(64);
   return dataRoot;
@@ -103,7 +103,7 @@ test('上传覆盖重命名失败时应恢复旧文件且清理临时文件', as
 
   assert.equal(fs.readFileSync(target, 'utf8'), 'old-content');
   assert.equal(
-    fs.readdirSync(root).some((entry) => entry.includes('.mmd-upload-backup-')),
+    fs.readdirSync(root).some((entry) => entry.includes('.mystry-upload-backup-')),
     false,
   );
   assert.equal(
@@ -131,7 +131,7 @@ test('上传覆盖成功时应替换内容且不遗留备份文件', async (t) =
 
   assert.equal(fs.readFileSync(target, 'utf8'), 'new-content');
   assert.equal(
-    fs.readdirSync(root).some((entry) => entry.includes('.mmd-upload-backup-')),
+    fs.readdirSync(root).some((entry) => entry.includes('.mystry-upload-backup-')),
     false,
   );
   assert.equal(
@@ -174,7 +174,7 @@ test('上传覆盖后备份清理失败仍应返回成功并保留可识别备�
 
   assert.equal(saved, 'server.jar');
   assert.equal(fs.readFileSync(target, 'utf8'), 'new-content');
-  assert.ok(backupPath.includes('.mmd-upload-backup-'));
+  assert.ok(backupPath.includes('.mystry-upload-backup-'));
   assert.equal(fs.readFileSync(backupPath, 'utf8'), 'old-content');
   assert.match(String(warnings[0]?.[0]), /上传已完成，但无法删除旧文件备份/);
 });

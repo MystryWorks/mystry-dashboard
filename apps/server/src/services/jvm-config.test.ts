@@ -12,7 +12,7 @@ import {
   serializeJvmArgFile,
   serializeJvmArgs,
   validateJvmArgs,
-} from '@mmd/shared';
+} from '@mystry/shared';
 
 test('JVM 参数解析保留引号、Windows 路径和 UNC 路径', () => {
   const parsed = parseJvmArgs(
@@ -115,8 +115,8 @@ test('服务端在实例保存和任务入队前拒绝非法参数', async (t) =
   const fs = await import('node:fs');
   const os = await import('node:os');
   const path = await import('node:path');
-  const dataRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'mmd-jvm-validation-'));
-  process.env.MMD_DATA_DIR = dataRoot;
+  const dataRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'mystry-jvm-validation-'));
+  process.env.MYSTRY_DATA_DIR = dataRoot;
   process.env.JWT_SECRET = 'a'.repeat(64);
   process.env.SETUP_TOKEN = 'b'.repeat(64);
   process.env.LAUNCHER_TOKEN = 'c'.repeat(64);

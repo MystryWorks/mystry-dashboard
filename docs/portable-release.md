@@ -1,11 +1,11 @@
 # 便携预览版
 
-仓库当前版本为 `v0.2.0-preview.1`，发布流程为其配置了两个自带 Node.js 22、生产依赖和已构建前后端的便携目标：
+仓库当前版本为 `v0.2.0-preview.2`，发布流程为其配置了两个自带 Node.js 22、生产依赖和已构建前后端的便携目标：
 
 | 系统 | 文件 |
 |------|------|
-| Windows x64 | `mmd-v0.2.0-preview.1-windows-x64.zip` |
-| Linux x64 | `mmd-v0.2.0-preview.1-linux-x64.tar.gz` |
+| Windows x64 | `mystry-v0.2.0-preview.2-windows-x64.zip` |
+| Linux x64 | `mystry-v0.2.0-preview.2-linux-x64.tar.gz` |
 
 Linux ARM64 与 macOS（Intel / Apple Silicon）打包脚本仍可本地使用，但不纳入本 Preview 公开发布矩阵，留待后续版本。
 
@@ -15,7 +15,7 @@ Linux ARM64 与 macOS（Intel / Apple Silicon）打包脚本仍可本地使用�
 
 ## 下载与校验
 
-从同一 GitHub Release 下载对应平台压缩包、`SHA256SUMS`、`SHA256SUMS.asc` 以及 `mmd-release-signing-key.asc`（与仓库 [`.github/release-signing-key.asc`](../.github/release-signing-key.asc) 相同）。发布页还会提供生产依赖的 `sbom.cdx.json`。
+从同一 GitHub Release 下载对应平台压缩包、`SHA256SUMS`、`SHA256SUMS.asc` 以及 `mystry-release-signing-key.asc`（与仓库 [`.github/release-signing-key.asc`](../.github/release-signing-key.asc) 相同）。发布页还会提供生产依赖的 `sbom.cdx.json`。
 
 ### 1. 取得并信任发布公钥
 
@@ -24,7 +24,7 @@ Linux ARM64 与 macOS（Intel / Apple Silicon）打包脚本仍可本地使用�
 用户侧：
 
 ```bash
-gpg --import mmd-release-signing-key.asc
+gpg --import mystry-release-signing-key.asc
 gpg --fingerprint
 ```
 
@@ -42,7 +42,7 @@ gpg --verify SHA256SUMS.asc SHA256SUMS
 Windows PowerShell 可先计算压缩包哈希，再与 `SHA256SUMS` 中对应行比较：
 
 ```powershell
-Get-FileHash .\mmd-v0.2.0-preview.1-windows-x64.zip -Algorithm SHA256
+Get-FileHash .\mystry-v0.2.0-preview.2-windows-x64.zip -Algorithm SHA256
 ```
 
 也可在 WSL 或 Gpg4win 中执行与 Linux 相同的 `gpg --verify`。
@@ -54,22 +54,22 @@ Get-FileHash .\mmd-v0.2.0-preview.1-windows-x64.zip -Algorithm SHA256
 Windows：
 
 ```text
-解压 → 双击 mmdctl.cmd → 选择“启动面板”
+解压 → 双击 mystryctl.cmd → 选择“启动面板”
 ```
 
 也可以在终端运行：
 
 ```powershell
-.\mmdctl.cmd start
+.\mystryctl.cmd start
 ```
 
 Linux：
 
 ```bash
-tar -xzf mmd-v0.2.0-preview.1-linux-x64.tar.gz
-cd minecraft-mystry-dashboard
-chmod +x mmdctl
-./mmdctl start
+tar -xzf mystry-v0.2.0-preview.2-linux-x64.tar.gz
+cd mystry-dashboard
+chmod +x mystryctl
+./mystryctl start
 ```
 
 统一命令：
@@ -89,14 +89,14 @@ chmod +x mmdctl
 ## 目录与数据
 
 ```text
-minecraft-mystry-dashboard/
+mystry-dashboard/
 ├── runtime/              # 固定版本的官方 Node.js 运行时
 ├── app/                  # 已构建应用和生产依赖
 ├── config/               # 首启配置和配置备份
 ├── data/                 # 数据库、实例、缓存和上传临时文件
 ├── logs/                 # 面板标准输出和错误日志
-├── mmdctl.cmd
-├── mmdctl
+├── mystryctl.cmd
+├── mystryctl
 ├── manifest.json
 ├── VERSION
 ├── README.txt
@@ -109,16 +109,16 @@ minecraft-mystry-dashboard/
 
 不要覆盖正在运行的便携目录：
 
-1. 在旧目录运行 `mmdctl stop`，再用 `mmdctl status` 确认已停止。
+1. 在旧目录运行 `mystryctl stop`，再用 `mystryctl status` 确认已停止。
 2. 将新版本解压到一个新的同级目录。
 3. 确认新目录的 `config/`、`data/`、`logs/` 为空。
 4. 将旧目录中的这三个目录移动到新目录，保留旧应用目录作为回滚副本。
-5. 从新目录运行 `mmdctl start`，检查登录、实例列表和存档。
+5. 从新目录运行 `mystryctl start`，检查登录、实例列表和存档。
 6. 确认无误后再自行归档旧应用目录；不要删除唯一的数据副本。
 
 需要回滚时，先停止新版本，将 `config/`、`data/`、`logs/` 移回旧应用目录后再启动。当前没有数据库版本迁移框架，因此升级前应另外备份这三个目录，不能只依赖旧应用目录。
 
-若已在环境中设置 `MMD_HOME`，Windows `.cmd` 与 Unix `.sh` 包装脚本会保留该值，并仅对未设置的 `MMD_CONFIG_PATH`、`MMD_DATA_DIR` 使用便携包默认值；相对路径均相对于 `MMD_HOME`。日常便携使用不需要手动设置这些变量。
+若已在环境中设置 `MYSTRY_HOME`，Windows `.cmd` 与 Unix `.sh` 包装脚本会保留该值，并仅对未设置的 `MYSTRY_CONFIG_PATH`、`MYSTRY_DATA_DIR` 使用便携包默认值；相对路径均相对于 `MYSTRY_HOME`。日常便携使用不需要手动设置这些变量。
 
 ## Preview 已知限制
 
@@ -130,7 +130,7 @@ minecraft-mystry-dashboard/
 - Java 8/17/21 不随包提供，也不会自动下载；用户可正确配置系统 `PATH` 作为默认运行时，或启动面板后扫描并选择其他已安装版本。
 - 登录仍使用浏览器本地 JWT；Cookie 会话、CSRF、TOTP 和公网部署向导尚未实现。
 - 默认只监听 `127.0.0.1`。不要把面板端口直接暴露到不可信公网。
-- 2026-08-06 的官方 registry 生产依赖审计结果为 0 critical、0 high、2 moderate。两项 moderate 来自 React Router 6 系公告；当前 SPA 不使用 SSR hydration，导航目标来自固定站内路径或服务端生成的实例 ID，但这些公告仍作为 Preview 残余风险记录，并须在每次发布时重新审计。`brace-expansion` 与 `fast-uri` 的 high 公告已通过依赖升级消除。
+- 2026-10-21 的官方 registry 生产依赖审计结果为 0 critical、0 high、2 moderate。两项 moderate 来自 React Router 6 系公告；当前 SPA 不使用 SSR hydration，导航目标来自固定站内路径或服务端生成的实例 ID，但这些公告仍作为 Preview 残余风险记录，并须在每次发布时重新审计。此前 `fastify`、`fast-jwt`、`@fastify/busboy`、`fast-uri`、`brace-expansion` 的 high 公告已通过升级传递依赖（`fastify` 5.12.7、`fast-jwt` 6.3.5、`@fastify/busboy` 3.2.3、`fast-uri` 3.1.9 / 4.2.3、`brace-expansion` 5.0.12）消除。开发依赖 `vitest` 3 系的 `tinypool` critical 公告不进入便携包，升级需跨大版本，暂未处理。
 
 ## 发布维护
 
@@ -142,7 +142,7 @@ npm run verify
 npm run audit:production
 npm run build
 node scripts/portable/package-portable.mjs --platform win32 --arch x64 --output-dir release
-node scripts/portable/smoke-portable.mjs release/mmd-v0.2.0-preview.1-windows-x64.zip
+node scripts/portable/smoke-portable.mjs release/mystry-v0.2.0-preview.2-windows-x64.zip
 ```
 
 以上流程可一键完成（在目标平台原生运行，自动使用当前平台与架构，并生成压缩包、SHA256SUMS 与 SBOM）：
@@ -161,7 +161,7 @@ Windows 用户也可直接双击 `scripts/portable/package-release.cmd`。参数
 - `--output-dir <目录>`：指定输出目录，默认 `release`
 - `--runtime-dir <目录>`：复用本机已下载的 Node 运行时，不重新下载
 
-`package-portable.mjs` 写入 `manifest.json` 的 Git SHA 优先取自当前 checkout 的 `git rev-parse HEAD`（而非 workflow 的 `GITHUB_SHA`）。正式资产要求工作树干净；本地非发布调试可设置 `MMD_PORTABLE_ALLOW_DIRTY=1` 或传入 `--allow-dirty`。
+`package-portable.mjs` 写入 `manifest.json` 的 Git SHA 优先取自当前 checkout 的 `git rev-parse HEAD`（而非 workflow 的 `GITHUB_SHA`）。正式资产要求工作树干净；本地非发布调试可设置 `MYSTRY_PORTABLE_ALLOW_DIRTY=1` 或传入 `--allow-dirty`。
 
 目标平台必须与构建机平台、架构一致。发布流程位于 `.github/workflows/portable-release.yml`：只有位于 `main` 历史、版本与根 `package.json` 一致、且 checkout 工作树干净的现有 `v*` 标签才能触发发布；prepare 阶段执行 `npm run verify` 与生产依赖审计；Windows x64 矩阵 job 显式执行 `npm run windows:test`；Win/Linux x64 两个最终压缩包都必须重新解压并通过健康检查，Release job 才会生成校验和、经指纹绑定的 GPG 签名、SBOM 和自动 Release Notes。第三方 Actions 使用固定 commit SHA，见 [`.github/actions-pins.md`](../.github/actions-pins.md)。
 

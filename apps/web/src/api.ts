@@ -9,9 +9,9 @@ import type {
   NodeInfo,
   TaskInfo,
   TaskListResult,
-} from '@mmd/shared';
+} from '@mystry/shared';
 
-const TOKEN_KEY = 'mmd_token';
+const TOKEN_KEY = 'mystry_token';
 
 
 export function getToken(): string | null {
@@ -32,7 +32,7 @@ export class ApiError extends Error {
 }
 
 /** 登录态失效事件：auth.tsx 监听后清空用户并自动跳回登录页。 */
-export const UNAUTHORIZED_EVENT = 'mmd:unauthorized';
+export const UNAUTHORIZED_EVENT = 'mystry:unauthorized';
 
 /** 这些路径的 401 是业务结果（如密码错误），不能当作会话失效处理。 */
 const AUTH_EXEMPT_PATHS = ['/api/auth/login', '/api/auth/setup', '/api/auth/status'];

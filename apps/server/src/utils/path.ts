@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import { config } from '../config.js';
 import { getDb } from '../db.js';
 
-export const OWNERSHIP_MARKER_FILE = '.mmd-instance.json';
+export const OWNERSHIP_MARKER_FILE = '.mystry-instance.json';
 
 function comparable(value: string): string {
   let normalized = path.resolve(value);

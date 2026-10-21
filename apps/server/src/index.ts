@@ -170,7 +170,7 @@ export async function buildApp(options: BuildAppOptions = {}) {
 
   app.get('/api/health', async () => ({
     ok: true,
-    service: 'minecraft-mystry-dashboard',
+    service: 'mystry-dashboard',
     ...(config.processFingerprint
       ? { processFingerprint: config.processFingerprint }
       : {}),

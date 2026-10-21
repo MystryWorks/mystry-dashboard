@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import type { CoreType } from '@mmd/shared';
+import type { CoreType } from '@mystry/shared';
 import { assertSafeInstanceRoot, resolveSafePath } from '../utils/path.js';
 
 export type ServerLaunchTarget = {

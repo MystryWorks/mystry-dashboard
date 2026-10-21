@@ -1,6 +1,6 @@
-# Minecraft Mystry Dashboard AI 开发规则
+# Mystry Dashboard AI 开发规则
 
-Minecraft Mystry Dashboard（根包名 `minecraft-mystry-dashboard`，当前 `0.2.0-preview.1`）是单机一体的 **Minecraft Java 服务端** Web 管理面板：本机多实例启停、控制台、文件、一键部署与导入。**不是**客户端模组，也不依赖 Fabric/Forge 作为面板自身的模组加载器。
+Mystry Dashboard（根包名 `mystry-dashboard`，当前 `0.2.0-preview.2`）是单机一体的 **Minecraft Java 服务端** Web 管理面板：本机多实例启停、控制台、文件、一键部署与导入。**不是**客户端模组，也不依赖 Fabric/Forge 作为面板自身的模组加载器。
 
 本文件是 Codex、OpenCode、Cursor 和 Grok 的项目级统一入口。详细知识按需读取
 [`docs/ai/README.md`](docs/ai/README.md)，不要在工具专用规则中复制项目事实。
@@ -27,25 +27,25 @@ Minecraft Mystry Dashboard（根包名 `minecraft-mystry-dashboard`，当前 `0.
 
 | 包 | 路径 | 职责 |
 |---|---|---|
-| `@mmd/shared` | `packages/shared` | 前后端共享类型与 JSON Schema |
-| `@mmd/server` | `apps/server` | Fastify 5 API、`node:sqlite`、进程/文件/任务 |
-| `@mmd/web` | `apps/web` | React 19 + Vite 管理界面 |
+| `@mystry/shared` | `packages/shared` | 前后端共享类型与 JSON Schema |
+| `@mystry/server` | `apps/server` | Fastify 5 API、`node:sqlite`、进程/文件/任务 |
+| `@mystry/web` | `apps/web` | React 19 + Vite 管理界面 |
 
 服务端路由（均在 `apps/server/src/index.ts` 注册）：`auth`、`console`、`cores`、`files`、`instances`、`launcher`、`nodes`、`system`。
 
 前端路由：`/login`、`/`（总览）、`/deploy`、`/import`、`/nodes`、`/instances/:id/*`。页面入口在 `apps/web/src/pages/`，HTTP 封装在 `apps/web/src/api.ts`。Vite 别名 `@` → `src/`。
 
-源码启动器：Windows `PanelManager.cmd`，Linux/WSL `PanelManager.sh`。便携控制器：`scripts/portable/mmdctl.mjs`。
+源码启动器：Windows `PanelManager.cmd`，Linux/WSL `PanelManager.sh`。便携控制器：`scripts/portable/mystryctl.mjs`。
 
 默认监听 `127.0.0.1:3000`；Vite 开发端口 `127.0.0.1:5173`。Node.js 必须为 22 或更高。Windows PowerShell 使用 `npm.cmd`，避免执行策略拦截 `npm.ps1`。
 
 ## 关键架构边界
 
-- 前后端公共请求、响应和字段先修改 `packages/shared`；需要运行时校验时同步 `schemas.ts`，然后先构建 `@mmd/shared`。
-- 最终数据根优先 `MMD_DATA_DIR`，否则 `DATA_DIR`，再否则仓库相对路径 `data`。实例唯一工作目录是该根下的 `instances/<id>`。文件操作必须复用 `file-service` 和 `apps/server/src/utils/path.ts` 的校验，不得接受或拼接未验证系统路径。
+- 前后端公共请求、响应和字段先修改 `packages/shared`；需要运行时校验时同步 `schemas.ts`，然后先构建 `@mystry/shared`。
+- 最终数据根优先 `MYSTRY_DATA_DIR`，否则 `DATA_DIR`，再否则仓库相对路径 `data`。实例唯一工作目录是该根下的 `instances/<id>`。文件操作必须复用 `file-service` 和 `apps/server/src/utils/path.ts` 的校验，不得接受或拼接未验证系统路径。
 - 同机已有服务端只能通过 `DATA_DIR/imports` 下的单层目录 ID 交接复制；该目录是只读复制源，不是实例工作目录。不得浏览整机、不得绑定外部绝对安装路径。
-- 部署/导入先写入 `DATA_DIR/.mmd-staging/<taskId>/<instanceId>`，成功后再原子移动到 `instances/<id>`。崩溃恢复只清理 marker 匹配的 staging，不得删除已注册实例或最终目录。
-- 同一 `DATA_DIR` 只允许一个面板进程在 `initDb` / 任务恢复前取得 `.mmd-panel-lock/`。
+- 部署/导入先写入 `DATA_DIR/.mystry-staging/<taskId>/<instanceId>`，成功后再原子移动到 `instances/<id>`。崩溃恢复只清理 marker 匹配的 staging，不得删除已注册实例或最终目录。
+- 同一 `DATA_DIR` 只允许一个面板进程在 `initDb` / 任务恢复前取得 `.mystry-panel-lock/`。
 - Minecraft 实例默认通过面板进程 `PATH` 中的 `java` 启动，也可按 `javaRuntimeId` 使用面板扫描、注册并在执行前复验的运行时；请求不得提交可执行路径。子进程环境必须走 `getMinecraftChildEnv()` 脱敏，不得把面板密钥或 `DATA_DIR` 传给 Java。
 - 四个实例入口（部署、ZIP 导入、已有服务端导入、实例设置）共用结构化 JVM 配置器；数据库只保存规范化 `jvmArgs` 字符串。旧实例非法文本保持原样，但修正前不能保存或启动。
 - ZIP 导入走二阶段预览：`/api/import/previews` 预检后再入队；旧 `/api/import` 仅兼容保留。Web 必须使用预览流程。
@@ -86,12 +86,12 @@ Minecraft Mystry Dashboard（根包名 `minecraft-mystry-dashboard`，当前 `0.
 
 ```powershell
 npm.cmd install
-npm.cmd run build -w @mmd/shared
+npm.cmd run build -w @mystry/shared
 npm.cmd run dev:server
 npm.cmd run dev:web
 npm.cmd run typecheck
-npm.cmd run test:security -w @mmd/server
-npm.cmd run test:regression -w @mmd/server
+npm.cmd run test:security -w @mystry/server
+npm.cmd run test:regression -w @mystry/server
 npm.cmd run test:smoke
 npm.cmd run knowledge:check
 npm.cmd run verify

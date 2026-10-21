@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { nanoid } from 'nanoid';
-import type { CoreType } from '@mmd/shared';
+import type { CoreType } from '@mystry/shared';
 import { config } from '../config.js';
 import {
   registerPromotedInstance,

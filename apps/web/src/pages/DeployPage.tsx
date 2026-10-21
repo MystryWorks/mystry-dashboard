@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useId } from 'react';
 import { useNavigate } from 'react-router-dom';
-import type { TaskInfo } from '@mmd/shared';
+import type { TaskInfo } from '@mystry/shared';
 import { api, pollTask } from '../api';
 import { LazyScrollSelect } from '../components/LazyScrollSelect';
 import { JavaRuntimeSelect } from '../components/JavaRuntimeSelect';
@@ -528,7 +528,7 @@ export function DeployPage() {
           <div className="form-card">
             <h3 style={{ fontSize: '1rem', fontWeight: 700, margin: 0 }}>部署安全与隔离机制</h3>
             <p style={{ fontSize: '0.84rem', color: 'var(--text-muted)', lineHeight: 1.6, margin: 0 }}>
-              面板采用二阶段原子暂存架构：下载与构建先写入 <code style={{ color: 'var(--accent)' }}>.mmd-staging/</code> 临时沙箱。
+              面板采用二阶段原子暂存架构：下载与构建先写入 <code style={{ color: 'var(--accent)' }}>.mystry-staging/</code> 临时沙箱。
               只有在服务端核心校验和安装成功后，才会原子移动至正式实例目录，保障数据安全无损。
             </p>
             <div style={{ padding: '12px', background: 'var(--bg-elevated)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', fontSize: '0.8rem', color: 'var(--ok)', lineHeight: 1.6 }}>

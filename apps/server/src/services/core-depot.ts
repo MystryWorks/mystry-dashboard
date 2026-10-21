@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import type { DeployCoreInput } from '@mmd/shared';
+import type { DeployCoreInput } from '@mystry/shared';
 import { nanoid } from 'nanoid';
 import { config } from '../config.js';
 import { registerPromotedInstance, updateInstanceMeta } from './instance-service.js';

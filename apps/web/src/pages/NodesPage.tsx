@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { CheckCircle2, Server, ShieldCheck } from 'lucide-react';
-import type { NodeInfo } from '@mmd/shared';
-import { REMOTE_NODE_CREATION_ENABLED } from '@mmd/shared';
+import type { NodeInfo } from '@mystry/shared';
+import { REMOTE_NODE_CREATION_ENABLED } from '@mystry/shared';
 import { api } from '../api';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 

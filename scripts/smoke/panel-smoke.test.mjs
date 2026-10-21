@@ -17,10 +17,10 @@ const blockedEnvNames = [
   'SETUP_TOKEN',
   'LAUNCHER_TOKEN',
   'DATA_DIR',
-  'MMD_DATA_DIR',
-  'MMD_HOME',
-  'MMD_CONFIG_PATH',
-  'MMD_PROCESS_FINGERPRINT',
+  'MYSTRY_DATA_DIR',
+  'MYSTRY_HOME',
+  'MYSTRY_CONFIG_PATH',
+  'MYSTRY_PROCESS_FINGERPRINT',
   'HOST',
   'PORT',
   'DOTENV_CONFIG_PATH',
@@ -172,10 +172,10 @@ test('隔离数据目录启动面板并拒绝未登录访问', { timeout: 90_000
   try {
     await fs.access(sharedEntry);
   } catch {
-    throw new Error('缺少 @mmd/shared 构建产物。请先运行 npm run build -w @mmd/shared');
+    throw new Error('缺少 @mystry/shared 构建产物。请先运行 npm run build -w @mystry/shared');
   }
 
-  const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'mmd-panel-smoke-'));
+  const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'mystry-panel-smoke-'));
   let child = null;
   t.after(async () => {
     // Windows 上 kill 不会投递 SIGINT，失败路径只能强行结束子进程。
@@ -219,14 +219,14 @@ test('隔离数据目录启动面板并拒绝未登录访问', { timeout: 90_000
   ], {
     cwd: tempRoot,
     env: panelEnv({
-      MMD_HOME: tempRoot,
-      MMD_DATA_DIR: dataDir,
+      MYSTRY_HOME: tempRoot,
+      MYSTRY_DATA_DIR: dataDir,
       HOST: '127.0.0.1',
       PORT: String(port),
       JWT_SECRET: jwtSecret,
       SETUP_TOKEN: setupToken,
       LAUNCHER_TOKEN: launcherToken,
-      MMD_PROCESS_FINGERPRINT: fingerprint,
+      MYSTRY_PROCESS_FINGERPRINT: fingerprint,
     }),
     windowsHide: true,
     stdio: ['ignore', 'pipe', 'pipe'],
@@ -255,7 +255,7 @@ test('隔离数据目录启动面板并拒绝未登录访问', { timeout: 90_000
       if (
         result.status === 200
         && result.body?.ok === true
-        && result.body?.service === 'minecraft-mystry-dashboard'
+        && result.body?.service === 'mystry-dashboard'
         && result.body?.processFingerprint === fingerprint
       ) {
         health = result.body;

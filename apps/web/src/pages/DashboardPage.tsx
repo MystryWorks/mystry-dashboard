@@ -12,8 +12,8 @@ import {
   Trash2,
   Zap,
 } from 'lucide-react';
-import type { InstanceInfo } from '@mmd/shared';
-import { isInstanceStopPendingResult } from '@mmd/shared';
+import type { InstanceInfo } from '@mystry/shared';
+import { isInstanceStopPendingResult } from '@mystry/shared';
 import { api } from '../api';
 import { HostMetricCards, processMetric, useDashboardMetrics } from '../components/DashboardMetrics';
 import { ActionMenu } from '../components/ActionMenu';
@@ -106,7 +106,7 @@ export function DashboardPage() {
     setActionError('');
     try {
       const query = action === 'stop' && options?.force ? '?force=1' : '';
-      const result = await api<InstanceInfo | import('@mmd/shared').InstanceStopPendingResult>(
+      const result = await api<InstanceInfo | import('@mystry/shared').InstanceStopPendingResult>(
         `/api/instances/${id}/${action}${query}`,
         { method: 'POST' },
       );

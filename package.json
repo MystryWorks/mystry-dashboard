@@ -1,7 +1,7 @@
 {
-  "name": "minecraft-mystry-dashboard",
+  "name": "mystry-dashboard",
   "private": true,
-  "version": "0.2.0-preview.1",
+  "version": "0.2.0-preview.2",
   "description": "单机一体的 Minecraft 服务端 Web 管理面板",
   "license": "MIT",
   "homepage": "https://github.com/MystryWorks/mystry-dashboard#readme",
@@ -29,16 +29,16 @@
     "packages/*"
   ],
   "scripts": {
-    "dev:server": "npm run dev -w @mmd/server",
-    "dev:web": "npm run dev -w @mmd/web",
-    "build": "npm run build -w @mmd/shared && npm run build -w @mmd/server && npm run build -w @mmd/web",
-    "typecheck": "npm run typecheck -w @mmd/shared && npm run typecheck -w @mmd/server && npm run typecheck -w @mmd/web",
+    "dev:server": "npm run dev -w @mystry/server",
+    "dev:web": "npm run dev -w @mystry/web",
+    "build": "npm run build -w @mystry/shared && npm run build -w @mystry/server && npm run build -w @mystry/web",
+    "typecheck": "npm run typecheck -w @mystry/shared && npm run typecheck -w @mystry/server && npm run typecheck -w @mystry/web",
     "knowledge:check": "node scripts/check-project-knowledge.mjs",
     "knowledge:test": "node --test scripts/check-project-knowledge.test.mjs",
-    "test:static": "npm run test:static -w @mmd/server",
-    "test:interaction": "npm run test:interaction -w @mmd/web",
+    "test:static": "npm run test:static -w @mystry/server",
+    "test:interaction": "npm run test:interaction -w @mystry/web",
     "test:smoke": "node --test scripts/smoke/panel-smoke.test.mjs",
-    "verify": "npm run knowledge:check && npm run knowledge:test && npm run portable:test && npm run windows:test && npm run linux:test && npm run build -w @mmd/shared && npm run typecheck && npm run test:interaction && npm run test:security -w @mmd/server && npm run test:smoke && npm run test:regression -w @mmd/server && npm run build && npm run test:static",
+    "verify": "npm run knowledge:check && npm run knowledge:test && npm run portable:test && npm run windows:test && npm run linux:test && npm run build -w @mystry/shared && npm run typecheck && npm run test:interaction && npm run test:security -w @mystry/server && npm run test:smoke && npm run test:regression -w @mystry/server && npm run build && npm run test:static",
     "audit:production": "node scripts/check-production-audit.mjs",
     "package:release": "node scripts/portable/package-release.mjs",
     "portable:package": "node scripts/portable/package-portable.mjs",
@@ -47,7 +47,7 @@
     "portable:test": "node --test scripts/portable/portable.test.mjs",
     "windows:test": "node --test scripts/windows/panel-manager.test.mjs",
     "sbom": "node scripts/portable/create-sbom.mjs --output sbom.cdx.json",
-    "start": "npm run start -w @mmd/server",
+    "start": "npm run start -w @mystry/server",
     "linux:test": "node --test scripts/linux/panel-manager.test.mjs"
   },
   "engines": {

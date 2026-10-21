@@ -5,7 +5,7 @@ import { pipeline } from 'node:stream/promises';
 import type {
   ExistingServerSourceInfo,
   ImportExistingServerInput,
-} from '@mmd/shared';
+} from '@mystry/shared';
 import { nanoid } from 'nanoid';
 import { config } from '../config.js';
 import {

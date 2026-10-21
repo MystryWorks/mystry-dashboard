@@ -1,7 +1,7 @@
 import { EventEmitter } from 'node:events';
 import os from 'node:os';
-import type { NodeHostInfo, NodeStatus } from '@mmd/shared';
-import { LOCAL_NODE_ID } from '@mmd/shared';
+import type { NodeHostInfo, NodeStatus } from '@mystry/shared';
+import { LOCAL_NODE_ID } from '@mystry/shared';
 
 /**
  * 节点运行期状态注册表（内存态，重启面板即重置）。

@@ -30,8 +30,8 @@ Normalize-ProcessPath
 $script:ProjectRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))
 $script:EnvPath = Join-Path $script:ProjectRoot '.env'
 $script:EnvExamplePath = Join-Path $script:ProjectRoot '.env.example'
-$script:LauncherDir = if ($env:MMD_PANEL_MANAGER_LAUNCHER_DIR) {
-  [IO.Path]::GetFullPath($env:MMD_PANEL_MANAGER_LAUNCHER_DIR)
+$script:LauncherDir = if ($env:MYSTRY_PANEL_MANAGER_LAUNCHER_DIR) {
+  [IO.Path]::GetFullPath($env:MYSTRY_PANEL_MANAGER_LAUNCHER_DIR)
 } else {
   Join-Path $script:ProjectRoot 'data\launcher'
 }
@@ -47,7 +47,7 @@ $script:EnvBackupPath = ''
 
 $script:Resources = @{
   'zh-CN' = @{
-    Title = 'Minecraft Mystry Dashboard 面板管理器'
+    Title = 'Mystry Dashboard 面板管理器'
     StateRunning = '状态：正在运行  {0}'
     StateStopped = '状态：未运行'
     MenuStopped = @(
@@ -121,7 +121,7 @@ $script:Resources = @{
     PressAnyKeyExit = '按任意键关闭窗口…'
   }
   'en-US' = @{
-    Title = 'Minecraft Mystry Dashboard Panel Manager'
+    Title = 'Mystry Dashboard Panel Manager'
     StateRunning = 'Status: Running  {0}'
     StateStopped = 'Status: Stopped'
     MenuStopped = @(
@@ -686,7 +686,7 @@ function Get-PanelHealth {
   try {
     $connection = Get-PanelConnection
     $response = Invoke-RestMethod -Uri $connection.HealthUrl -Method Get -TimeoutSec 2
-    if ($response.ok -eq $true -and $response.service -eq 'minecraft-mystry-dashboard') {
+    if ($response.ok -eq $true -and $response.service -eq 'mystry-dashboard') {
       if (
         $ExpectedFingerprint `
         -and ([string]$response.processFingerprint -ne [string]$ExpectedFingerprint)
@@ -730,7 +730,7 @@ function Test-PortOpen {
 function Open-PanelBrowser {
   $connection = Get-PanelConnection
   Write-Manager 'OpeningBrowser' $connection.Url
-  if ($env:MMD_PANEL_MANAGER_NO_BROWSER -eq '1') { return }
+  if ($env:MYSTRY_PANEL_MANAGER_NO_BROWSER -eq '1') { return }
   Start-Process $connection.Url
 }
 
@@ -769,7 +769,7 @@ function Rotate-Logs {
 function Copy-SetupToken {
   $environment = Read-EnvMap
   if (-not $environment.ContainsKey('SETUP_TOKEN') -or -not $environment.SETUP_TOKEN) { return }
-  if ($env:MMD_PANEL_MANAGER_NO_CLIPBOARD -eq '1') { return }
+  if ($env:MYSTRY_PANEL_MANAGER_NO_CLIPBOARD -eq '1') { return }
   try {
     Set-Clipboard -Value ([string]$environment.SETUP_TOKEN)
     Write-Manager 'SetupCopied'
@@ -830,12 +830,12 @@ function Start-PanelBackground {
   $fingerprint = New-ProcessFingerprint
   $nodePath = (Get-Command node.exe).Source
   $entryArgument = '"' + $script:ServerEntry.Replace('"', '\"') + '"'
-  $previousFingerprint = $env:MMD_PROCESS_FINGERPRINT
-  $env:MMD_PROCESS_FINGERPRINT = $fingerprint
+  $previousFingerprint = $env:MYSTRY_PROCESS_FINGERPRINT
+  $env:MYSTRY_PROCESS_FINGERPRINT = $fingerprint
   try {
     $process = Start-Process `
       -FilePath $nodePath `
-      -ArgumentList @('--experimental-sqlite', $entryArgument, "--mmd-fingerprint=$fingerprint") `
+      -ArgumentList @('--experimental-sqlite', $entryArgument, "--mystry-fingerprint=$fingerprint") `
       -WorkingDirectory $script:ProjectRoot `
       -WindowStyle Hidden `
       -RedirectStandardOutput $script:StdoutLog `
@@ -843,9 +843,9 @@ function Start-PanelBackground {
       -PassThru
   } finally {
     if ($null -eq $previousFingerprint) {
-      Remove-Item Env:MMD_PROCESS_FINGERPRINT -ErrorAction SilentlyContinue
+      Remove-Item Env:MYSTRY_PROCESS_FINGERPRINT -ErrorAction SilentlyContinue
     } else {
-      $env:MMD_PROCESS_FINGERPRINT = $previousFingerprint
+      $env:MYSTRY_PROCESS_FINGERPRINT = $previousFingerprint
     }
   }
   Save-ProcessState -Process $process -Fingerprint $fingerprint
@@ -936,20 +936,20 @@ function Start-PanelForeground {
   $fingerprint = New-ProcessFingerprint
   $nodePath = (Get-Command node.exe).Source
   $entryArgument = '"' + $script:ServerEntry.Replace('"', '\"') + '"'
-  $previousFingerprint = $env:MMD_PROCESS_FINGERPRINT
-  $env:MMD_PROCESS_FINGERPRINT = $fingerprint
+  $previousFingerprint = $env:MYSTRY_PROCESS_FINGERPRINT
+  $env:MYSTRY_PROCESS_FINGERPRINT = $fingerprint
   try {
     $process = Start-Process `
       -FilePath $nodePath `
-      -ArgumentList @('--experimental-sqlite', $entryArgument, "--mmd-fingerprint=$fingerprint") `
+      -ArgumentList @('--experimental-sqlite', $entryArgument, "--mystry-fingerprint=$fingerprint") `
       -WorkingDirectory $script:ProjectRoot `
       -NoNewWindow `
       -PassThru
   } finally {
     if ($null -eq $previousFingerprint) {
-      Remove-Item Env:MMD_PROCESS_FINGERPRINT -ErrorAction SilentlyContinue
+      Remove-Item Env:MYSTRY_PROCESS_FINGERPRINT -ErrorAction SilentlyContinue
     } else {
-      $env:MMD_PROCESS_FINGERPRINT = $previousFingerprint
+      $env:MYSTRY_PROCESS_FINGERPRINT = $previousFingerprint
     }
   }
   Save-ProcessState -Process $process -Fingerprint $fingerprint
@@ -1148,7 +1148,7 @@ function Show-InteractiveMenu {
   }
 }
 
-if ($env:MMD_PANEL_MANAGER_LIBRARY_ONLY -eq '1') {
+if ($env:MYSTRY_PANEL_MANAGER_LIBRARY_ONLY -eq '1') {
   return
 }
 
@@ -1173,7 +1173,7 @@ if ($parsed.Command -eq '__tail') {
   exit 0
 }
 
-$mutexName = 'Local\MMDPanelManager_' + (Get-StringHash $script:ProjectRoot).Substring(0, 16)
+$mutexName = 'Local\MystryPanelManager_' + (Get-StringHash $script:ProjectRoot).Substring(0, 16)
 $mutex = New-Object Threading.Mutex($false, $mutexName)
 $mutexAcquired = $false
 try {
@@ -1188,7 +1188,7 @@ try {
     Invoke-Command ([string]$parsed.Command)
   }
 } catch {
-  if ($env:MMD_PANEL_MANAGER_DEBUG -eq '1') {
+  if ($env:MYSTRY_PANEL_MANAGER_DEBUG -eq '1') {
     Write-Host $_.ScriptStackTrace
   }
   Write-Host ''

@@ -64,7 +64,7 @@ export async function createSbom({
       purl: bomRef,
       properties: [
         {
-          name: 'mmd:lockfile-path',
+          name: 'mystry:lockfile-path',
           value: lockEntryPath,
         },
       ],
@@ -88,7 +88,7 @@ export async function createSbom({
         components: [
           {
             type: 'application',
-            name: 'mmd-lockfile-sbom',
+            name: 'mystry-lockfile-sbom',
             version: '1',
           },
         ],

@@ -10,7 +10,7 @@
 
 ```bash
 npm install
-npm run build -w @mmd/shared
+npm run build -w @mystry/shared
 ```
 
 Linux / WSL 中需要以整合面板方式运行源码时，可使用根目录 `PanelManager.sh`。它会检查 Node.js 22、按锁文件补装依赖、构建并复用跨平台安全生命周期控制器：
@@ -20,44 +20,44 @@ chmod +x PanelManager.sh
 ./PanelManager.sh start
 ```
 
-默认配置为 `config/panel.env`、数据根为仓库 `data/`；两者均不应提交。需要隔离测试数据时，在每次启动/停止/状态命令前设置相同的 `MMD_CONFIG_PATH` 与 `MMD_DATA_DIR`。
+默认配置为 `config/panel.env`、数据根为仓库 `data/`；两者均不应提交。需要隔离测试数据时，在每次启动/停止/状态命令前设置相同的 `MYSTRY_CONFIG_PATH` 与 `MYSTRY_DATA_DIR`。
 
 修改 `packages/shared` 后需重新构建 shared，server / web 才能拿到最新类型。
 
 独立类型检查（不产出构建物）：
 
 ```bash
-npm run build -w @mmd/shared
+npm run build -w @mystry/shared
 npm run typecheck
 ```
 
 ## 工作区包
 
-### `@mmd/shared`
+### `@mystry/shared`
 
 ```bash
-npm run build -w @mmd/shared
+npm run build -w @mystry/shared
 ```
 
 输出：`packages/shared/dist/`。新增前后端共用字段时应先改此处；请求体校验 schema 放在 `src/schemas.ts`，由路由直接引用。
 
-### `@mmd/server`
+### `@mystry/server`
 
-- 开发：`npm run dev -w @mmd/server`（通常通过根目录 `npm run dev:server`）
-- 构建：`npm run build -w @mmd/server`
+- 开发：`npm run dev -w @mystry/server`（通常通过根目录 `npm run dev:server`）
+- 构建：`npm run build -w @mystry/server`
 - 入口：`apps/server/src/index.ts`
 
-### `@mmd/web`
+### `@mystry/web`
 
-- 开发：`npm run dev -w @mmd/web`
-- 构建：`npm run build -w @mmd/web`
+- 开发：`npm run dev -w @mystry/web`
+- 构建：`npm run build -w @mystry/web`
 - 别名：`@` → `src/`
 
 ## 添加 REST 接口的建议流程
 
 1. 在 `packages/shared` 中补充请求 / 响应类型（如需要），并同步 `schemas.ts` 中对应 JSON Schema。
 2. 在 `apps/server/src/services/` 实现业务逻辑。
-3. 在 `apps/server/src/routes/` 注册路由，挂 `authenticate`（若需登录），body schema 优先从 `@mmd/shared` 引入。
+3. 在 `apps/server/src/routes/` 注册路由，挂 `authenticate`（若需登录），body schema 优先从 `@mystry/shared` 引入。
 4. 在 `apps/web/src/api.ts` 或页面中调用。
 5. 确认用户可见入口、加载状态和错误反馈，并在新增路由模块时更新 `apps/server/src/index.ts` 的注册。
 6. 更新 [API 参考](api.md) 与相关知识库，按 [验证矩阵](ai/verification.md) 检查契约和真实操作链路。
@@ -97,7 +97,7 @@ npm run build -w @mmd/shared
 提交前运行 `npm.cmd run verify`。完整门禁不包含生产依赖审计；依赖变更与发布需另跑 `npm.cmd run audit:production`。下面的人工项目按改动范围选择，使用独立测试数据；数据库演练仅使用副本。自动检查通过不能替代真实交互验证。
 
 - [ ] `npm run knowledge:check` 与 `npm run knowledge:test` 无错误
-- [ ] `npm run build -w @mmd/shared` 后 `npm run test:smoke`（已包含在 `verify` 中；不启动 Minecraft，不使用仓库 `data/`）
+- [ ] `npm run build -w @mystry/shared` 后 `npm run test:smoke`（已包含在 `verify` 中；不启动 Minecraft，不使用仓库 `data/`）
 - [ ] `npm run typecheck` 无错误
 - [ ] `GET /api/health` 返回 ok
 - [ ] 登录 / setup 流程
@@ -115,10 +115,10 @@ npm run portable:test
 npm run audit:production
 npm run build
 node scripts/portable/package-portable.mjs --platform win32 --arch x64 --output-dir release
-node scripts/portable/smoke-portable.mjs release/mmd-v0.2.0-preview.1-windows-x64.zip
+node scripts/portable/smoke-portable.mjs release/mystry-v0.2.0-preview.2-windows-x64.zip
 ```
 
-`package-portable.mjs` 会从官方 Node.js 发布站下载固定版本运行时并按 `SHASUMS256.txt` 校验，使用 `npm ci --omit=dev` 创建独立生产依赖树，物理复制 `@mmd/shared`，并拒绝包内符号链接。不要从当前仓库的 `node_modules` 直接打包。
+`package-portable.mjs` 会从官方 Node.js 发布站下载固定版本运行时并按 `SHASUMS256.txt` 校验，使用 `npm ci --omit=dev` 创建独立生产依赖树，物理复制 `@mystry/shared`，并拒绝包内符号链接。不要从当前仓库的 `node_modules` 直接打包。
 
 `.github/workflows/portable-release.yml` 在 Windows x64 与 Linux x64 矩阵全部通过后生成 Release。发布前还必须通过 `npm run verify` 和 `npm run audit:production`；签名密钥缺失会阻止公开 Release。维护操作和数据升级流程见 [便携预览版](portable-release.md)。
 

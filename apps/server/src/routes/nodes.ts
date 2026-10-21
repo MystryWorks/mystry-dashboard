@@ -3,7 +3,7 @@ import {
   REMOTE_NODE_CREATION_ENABLED,
   createNodeBodySchema,
   updateNodeBodySchema,
-} from '@mmd/shared';
+} from '@mystry/shared';
 import {
   createNode,
   deleteNode,

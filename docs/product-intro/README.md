@@ -1,6 +1,6 @@
-# Minecraft Mystry Dashboard 产品介绍
+# Mystry Dashboard 产品介绍
 
-**版本**：`0.2.0-preview.1`  
+**版本**：`0.2.0-preview.2`  
 **形态**：单机一体的 Minecraft **Java 服务端** Web 管理面板  
 **不是**：游戏客户端、Fabric/Forge 模组、远程多机 Agent 控制台  
 
@@ -104,14 +104,14 @@ Mystry Dashboard 跑在你自己的电脑上。用浏览器管理本机上的多
 
 | 控件 | 类型 | 说明 |
 |------|------|------|
-| 调色板图标 | 按钮 | 打开主题选择器，选择保存在本浏览器 `localStorage`（键 `mmd_theme`） |
+| 调色板图标 | 按钮 | 打开主题选择器，选择保存在本浏览器 `localStorage`（键 `mystry_theme`） |
 | 用户名 | 文本框 | 默认填 `admin`；初始化时即所创管理员名 |
 | 初始化令牌 | 密码框 | **仅首次初始化**出现。必须与服务器 `SETUP_TOKEN` 完全一致（64 位十六进制） |
 | 密码 | 密码框 | 日常登录任意非空；初始化要求至少 12 位 |
 | **登录** / **创建并进入** | 主按钮 | 提交。处理中显示「处理中…」并锁定，防止连点 |
 | 重新检查 | 按钮 | 仅当面板服务连不上时出现，重新请求 `/api/auth/status` |
 
-登录成功后 token 存在本浏览器 `localStorage`（键 `mmd_token`）。任一业务接口返回 401 会清掉登录态并回到本页。
+登录成功后 token 存在本浏览器 `localStorage`（键 `mystry_token`）。任一业务接口返回 401 会清掉登录态并回到本页。
 
 服务不可用时，卡片标题变为「面板服务不可用」，只保留错误信息和「重新检查」。
 
@@ -558,9 +558,9 @@ Forge / NeoForge 会下载官方 Installer 并执行 `--installServer`，耗时�
 | 实例元数据 | `DATA_DIR/panel.db` |
 | 实例文件 | `DATA_DIR/instances/<id>/` |
 | 交接复制源 | `DATA_DIR/imports/<目录名>/`（只读源，不是运行目录） |
-| 部署/导入半成品 | `DATA_DIR/.mmd-staging/<taskId>/<instanceId>/` |
+| 部署/导入半成品 | `DATA_DIR/.mystry-staging/<taskId>/<instanceId>/` |
 | 核心缓存 | `DATA_DIR/cache/cores/` |
-| 面板锁 | `DATA_DIR/.mmd-panel-lock/`（同一数据根只允许一个面板进程） |
+| 面板锁 | `DATA_DIR/.mystry-panel-lock/`（同一数据根只允许一个面板进程） |
 
 崩溃恢复只清理 marker 匹配的 staging，**不会**因为任务结果里的 `instanceId` 去删已经注册的实例。
 

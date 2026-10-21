@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Archive, FolderDown, FolderUp, RefreshCw } from 'lucide-react';
-import type { CoreType, ExistingServerSourceInfo, ImportPreviewInfo, TaskInfo } from '@mmd/shared';
+import type { CoreType, ExistingServerSourceInfo, ImportPreviewInfo, TaskInfo } from '@mystry/shared';
 import {
   ApiError,
   api,
@@ -17,7 +17,7 @@ import { JvmSettingsEditor, type DetectedJvmChoice } from '../components/JvmSett
 
 type ImportMode = 'directory' | 'zip';
 
-const IMPORT_PREVIEW_SESSION_KEY = 'mmd_import_preview_id';
+const IMPORT_PREVIEW_SESSION_KEY = 'mystry_import_preview_id';
 
 const coreTypeOptions: Array<{ value: CoreType; label: string }> = [
   { value: 'custom', label: '自动识别 / 自定义' },

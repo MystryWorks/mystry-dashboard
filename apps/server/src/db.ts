@@ -97,7 +97,7 @@ export function initDb(): void {
     path.join('cache', 'cores'),
     'uploads',
     STAGING_ROOT_DIR,
-    '.mmd-panel-lock',
+    '.mystry-panel-lock',
   ]);
 
   db = new DatabaseSync(config.dbPath);

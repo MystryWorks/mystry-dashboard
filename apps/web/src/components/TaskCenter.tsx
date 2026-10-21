@@ -2,7 +2,7 @@ import { useEffect, useId, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Link } from 'react-router-dom';
 import { Clock, RefreshCw, X } from 'lucide-react';
-import type { TaskInfo } from '@mmd/shared';
+import type { TaskInfo } from '@mystry/shared';
 import { useTaskCenter } from '../task-center-store';
 
 const typeLabel: Record<TaskInfo['type'], string> = {

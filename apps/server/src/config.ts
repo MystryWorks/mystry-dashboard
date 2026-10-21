@@ -3,9 +3,9 @@ import { fileURLToPath } from 'node:url';
 import dotenv from 'dotenv';
 
 for (const arg of process.argv) {
-  const match = /^--mmd-fingerprint=(.+)$/.exec(arg);
+  const match = /^--mystry-fingerprint=(.+)$/.exec(arg);
   if (match?.[1]) {
-    process.env.MMD_PROCESS_FINGERPRINT = match[1].trim();
+    process.env.MYSTRY_PROCESS_FINGERPRINT = match[1].trim();
   }
 }
 
@@ -16,18 +16,18 @@ function resolveFromHome(value: string, homeDir: string): string {
   return path.isAbsolute(value) ? path.resolve(value) : path.resolve(homeDir, value);
 }
 
-const configuredHome = process.env.MMD_HOME?.trim();
+const configuredHome = process.env.MYSTRY_HOME?.trim();
 const homeDir = configuredHome ? path.resolve(configuredHome) : repoRoot;
-const configuredConfigPath = process.env.MMD_CONFIG_PATH?.trim();
+const configuredConfigPath = process.env.MYSTRY_CONFIG_PATH?.trim();
 const configPath = configuredConfigPath
   ? resolveFromHome(configuredConfigPath, homeDir)
   : path.join(homeDir, configuredHome ? 'config' : '', configuredHome ? 'panel.env' : '.env');
 
-// 开发模式默认读取仓库 .env；便携包由 mmdctl 指向 config/panel.env。
+// 开发模式默认读取仓库 .env；便携包由 mystryctl 指向 config/panel.env。
 dotenv.config({ path: configPath });
 
 function resolveDataDir(): string {
-  const configured = process.env.MMD_DATA_DIR?.trim() || process.env.DATA_DIR?.trim() || 'data';
+  const configured = process.env.MYSTRY_DATA_DIR?.trim() || process.env.DATA_DIR?.trim() || 'data';
   return resolveFromHome(configured, homeDir);
 }
 
@@ -115,7 +115,7 @@ export const config = {
   get dataDir() {
     return resolveDataDir();
   },
-  processFingerprint: process.env['MMD_PROCESS_FINGERPRINT']?.trim() || null,
+  processFingerprint: process.env['MYSTRY_PROCESS_FINGERPRINT']?.trim() || null,
   get dbPath() {
     return path.join(resolveDataDir(), 'panel.db');
   },

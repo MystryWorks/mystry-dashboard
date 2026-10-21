@@ -1,8 +1,8 @@
 import crypto from 'node:crypto';
 import { timingSafeEqual } from 'node:crypto';
 import { nanoid } from 'nanoid';
-import type { CreateNodeInput, NodeInfo, NodeSecretResult, UpdateNodeInput } from '@mmd/shared';
-import { LOCAL_NODE_ID, REMOTE_NODE_CREATION_ENABLED } from '@mmd/shared';
+import type { CreateNodeInput, NodeInfo, NodeSecretResult, UpdateNodeInput } from '@mystry/shared';
+import { LOCAL_NODE_ID, REMOTE_NODE_CREATION_ENABLED } from '@mystry/shared';
 import { getDb, type NodeRow } from '../db.js';
 import { nowIso } from '../utils/path.js';
 import { nodeRegistry } from './node-registry.js';

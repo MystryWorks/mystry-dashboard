@@ -18,14 +18,14 @@
 - ZIP 导入采用二阶段预览：Web 先调用 `/api/import/previews` 流式上传并验证中央目录，只读取根目录或单一顶层目录中最大 64 KiB 的 `user_jvm_args.txt`；确认后同一临时 ZIP 才交给后台任务。预览随机 ID 按用户隔离、默认 30 分钟、每用户一个/全局两个，队列满保留，取消/过期/关闭/重启清理且不写数据库；旧 `/api/import` 兼容保留。
 - 面板外已有服务端交接：只列出 `DATA_DIR/imports` 直接子目录，只读扫描并以后台任务复制到新托管实例；拒绝 symlink/junction、特殊文件、ownership marker、超配额和磁盘空间不足，源目录始终保留。
 - 实例目录内文件列表、上传、文本读写、删除、同目录重命名；目标已存在时重命名返回 `409` 且不覆盖。普通文件通过一次性 download ticket 流式下载（JWT 签发、并发槽预留、`GET` 状态查询、失败回传 SPA；禁止 `blob()` 整包缓存），Web 文件页提供下载与重命名入口。下载窗在用户手势中 `window.open` 且不把 `noopener` 放进 feature（避免现代浏览器返回 `null` 被误判为拦截），打开后再断开 `opener`。票据完成（`consumed`）或过期（`expired`）后保留 60 秒按用户隔离的内存 tombstone，状态查询返回终态而非 404，避免前端轮询把成功下载误判为过期。
-- 同 `DATA_DIR` 仅允许一个面板进程进入 `initDb` / 任务恢复：`.mmd-panel-lock/` 目录锁 + `owner.json`（存活 PID 拒绝启动；仅原 PID 不存在时可 quarantine 后接管）。
-- 部署/导入/ZIP 先写入 `DATA_DIR/.mmd-staging/<taskId>/<instanceId>`（marker 含 task/instance/token），校验通过后原子移动到 `instances/<id>`；崩溃恢复只清理 marker 匹配且任务未完成的 staging，**不会**因 `result.instanceId` 删除已注册实例或最终目录（见 D-016）。
+- 同 `DATA_DIR` 仅允许一个面板进程进入 `initDb` / 任务恢复：`.mystry-panel-lock/` 目录锁 + `owner.json`（存活 PID 拒绝启动；仅原 PID 不存在时可 quarantine 后接管）。
+- 部署/导入/ZIP 先写入 `DATA_DIR/.mystry-staging/<taskId>/<instanceId>`（marker 含 task/instance/token），校验通过后原子移动到 `instances/<id>`；崩溃恢复只清理 marker 匹配且任务未完成的 staging，**不会**因 `result.instanceId` 删除已注册实例或最终目录（见 D-016）。
 - 实例 start/stop/restart/delete/adopt 互斥：启停、删除与接管走同一把实例操作锁；start 在首个异步步骤前占位 `starting`；普通 stop 只写 `stop\n`，超时返回仍在停止中且**不**隐式 `SIGKILL`；`force=1` 为唯一强杀路径（UI 二次确认）。面板关闭先标记 `shuttingDown` 并等待未完成的实例操作；`start` 在 spawn 前若已关闭则取消，避免留下无主 Java。
 - `server.properties` 读写、Java 状态检测、本机节点列表。
 - 响应式布局：`<=1024px` 显示导航菜单按钮并将部署网格改为单列；`<=768px` 实例卡片为单列、内容边距 16px，顶栏换行并隐藏次要标识，控制台高度随视口调整。总览保留「一键部署 / 导入已有服务端」入口；实例卡片通过名称链接或「进入管理」导航，启动/停止与更多操作独立；「更多操作」面板挂到 body 并以 fixed 定位在按钮下方右对齐展开（下方空间不足时翻到上方），不受卡片 `overflow` 裁剪，支持方向键、Home/End、Escape 与 Tab 关闭并恢复焦点。断点实现以 CSS 为准，真实宽度与六种主题的视觉验收需另行运行，不能由构建或 DOM 测试推定。
 - `PanelManager.cmd`（Windows）与 `PanelManager.sh`（Linux / WSL 源码）均复用本机 `POST /api/launcher/shutdown` 安全关闭通道。
-- 跨平台 `mmdctl`：自动随机配置、后台 PID 指纹、健康检查、安全停止、状态和日志；便携包使用包内 Node，Linux 源码入口在依赖/构建预检后复用同一控制器。
-- 目标平台原生便携组装与最终压缩包冒烟脚本；发布包物理复制 `@mmd/shared`，并生成文件级 manifest。
+- 跨平台 `mystryctl`：自动随机配置、后台 PID 指纹、健康检查、安全停止、状态和日志；便携包使用包内 Node，Linux 源码入口在依赖/构建预检后复用同一控制器。
+- 目标平台原生便携组装与最终压缩包冒烟脚本；发布包物理复制 `@mystry/shared`，并生成文件级 manifest。
 - GitHub Preview Release 流水线：标签/main/版本门禁、Windows x64 与 Linux x64 矩阵、生产依赖审计、校验和签名、SBOM 和自动 Release Notes。
 - 上传、下载、任务、元数据、控制台和 ZIP 解压均有大小、并发或超时边界。
 - 任务中心：`GET /api/tasks` 返回最近 50 条任务；桌面与移动布局均通过顶栏「任务队列」进入（共享单例轮询，429 退避、页面隐藏暂停），离开部署/导入页后仍可查看任务到终态。抽屉通过 portal 挂到 body，使用原生模态 dialog；关闭时不参与键盘导航，Escape、遮罩与关闭按钮均恢复入口焦点，任务进度带 progressbar 语义。
@@ -44,7 +44,7 @@
 - `PanelManager.ps1` 安全停服：`Get-PanelHealth` 校验 PID、状态文件指纹与健康 JSON 一致后才发送 `X-Launcher-Token`（伪造健康服务测试断言永不发送 token）。
 - Paper/Fabric 等 core 缓存键基于解析后的不可变版本/build，旧 `latest` 键不再误命中。
 - 发布工作流（`.github/workflows/portable-release.yml`）：Actions 使用固定 commit SHA；Windows job 显式 `npm run windows:test`；`RELEASE_GPG_FINGERPRINT` 与仓库内发布公钥/指纹文件用于签名链门禁；`package-portable.mjs` 优先 `git rev-parse HEAD`，脏工作树拒绝正式打包。**本机未验证** GitHub Environment 私钥注入、真实 GPG 签名与双平台 Actions smoke 结果。
-- 三套主题各含暗/亮：`dark` / `light`（Mystry 粉紫）、`codex` / `codex-light`（暖灰青绿）、`grok` / `grok-light`（近黑或白底高对比）。CSS 变量按 `[data-theme]` 拆分，硬编码强调色已改为 `color-mix` 跟随 `--accent`。index.html 内联脚本在渲染前定主题（未保存时仅在 Mystry 暗/亮之间跟随 `prefers-color-scheme`），选择持久化 `mmd_theme`；选择器按套分组，入口在顶栏与登录页，控制台终端区域保持暗色。
+- 三套主题各含暗/亮：`dark` / `light`（Mystry 粉紫）、`codex` / `codex-light`（暖灰青绿）、`grok` / `grok-light`（近黑或白底高对比）。CSS 变量按 `[data-theme]` 拆分，硬编码强调色已改为 `color-mix` 跟随 `--accent`。index.html 内联脚本在渲染前定主题（未保存时仅在 Mystry 暗/亮之间跟随 `prefers-color-scheme`），选择持久化 `mystry_theme`；选择器按套分组，入口在顶栏与登录页，控制台终端区域保持暗色。
 
 主要事实源：
 
@@ -57,7 +57,7 @@
 ## 尚未形成完整用户功能
 
 - 远程节点创建由 `REMOTE_NODE_CREATION_ENABLED = false` 禁用；当前只有内置本机节点 `local`。
-- 任务元数据写入 SQLite，但队列、worker 和运行控制器位于内存；进程重启后不会续跑任务，而是把遗留的 `pending` / `running` 记录标记为失败，并**仅**清理可证明位于 `.mmd-staging` 且 marker 匹配的半成品目录。
+- 任务元数据写入 SQLite，但队列、worker 和运行控制器位于内存；进程重启后不会续跑任务，而是把遗留的 `pending` / `running` 记录标记为失败，并**仅**清理可证明位于 `.mystry-staging` 且 marker 匹配的半成品目录。
 - 管理员认证使用浏览器 `localStorage` 中的 JWT；当前没有会话列表、撤销、2FA 或角色权限体系。
 - 数据库只有启动期兼容处理，没有通用、版本化迁移框架。
 - 实例默认使用面板进程 `PATH` 中的 `java`，也可绑定 `java_runtimes` 注册表中当前可用的运行时；绑定条目消失、路径变化或执行前验证失败时必须重新探测和选择。
@@ -70,7 +70,7 @@
 - Node.js `>=22`。
 - 便携包固定内置 Node.js `22.23.1`；源码运行仍遵循 `>=22`。
 - 默认监听 `127.0.0.1:3000`；Vite 开发端口为 `127.0.0.1:5173`。
-- 最终数据根目录优先使用 `MMD_DATA_DIR`，否则使用 `DATA_DIR`；实例固定为该根目录的 `instances/<id>`，不得浏览或管理整台机器。
+- 最终数据根目录优先使用 `MYSTRY_DATA_DIR`，否则使用 `DATA_DIR`；实例固定为该根目录的 `instances/<id>`，不得浏览或管理整台机器。
 - 同机目录交接只接收 `DATA_DIR/imports` 下的单层目录 ID，不能提交绝对路径；该目录仅为复制源，不是实例工作目录。
 - 旧版外部实例路径只用于迁移状态判断；面板不会读取、启动、搬迁或删除旧外部目录。
 - `JWT_SECRET` 必填；空用户表时 `SETUP_TOKEN` 必填；`LAUNCHER_TOKEN` 仅供本机 PanelManager 关闭接口使用；已配置的三项必须互不相同。

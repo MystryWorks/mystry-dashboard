@@ -52,16 +52,16 @@ def register_fonts() -> tuple[str, str]:
             continue
         kwargs = {"subfontIndex": index} if index is not None else {}
         try:
-            pdfmetrics.registerFont(TTFont("MMD", regular, **kwargs))
+            pdfmetrics.registerFont(TTFont("MYSTRY", regular, **kwargs))
             bold_kwargs = {"subfontIndex": index} if index is not None and Path(bold).exists() else {}
             if Path(bold).exists():
                 try:
-                    pdfmetrics.registerFont(TTFont("MMD-Bold", bold, **bold_kwargs))
+                    pdfmetrics.registerFont(TTFont("MYSTRY-Bold", bold, **bold_kwargs))
                 except Exception:
-                    pdfmetrics.registerFont(TTFont("MMD-Bold", regular, **kwargs))
+                    pdfmetrics.registerFont(TTFont("MYSTRY-Bold", regular, **kwargs))
             else:
-                pdfmetrics.registerFont(TTFont("MMD-Bold", regular, **kwargs))
-            return "MMD", "MMD-Bold"
+                pdfmetrics.registerFont(TTFont("MYSTRY-Bold", regular, **kwargs))
+            return "MYSTRY", "MYSTRY-Bold"
         except Exception:
             continue
     raise SystemExit("找不到可用的中文字体（需要微软雅黑或黑体）")
@@ -196,7 +196,7 @@ def draw_page(canvas, doc):
     canvas.setFillColor(MUTED)
     canvas.setFont(FONT, 8)
     if doc.page > 1:
-        canvas.drawString(MARGIN, 9 * mm, "Minecraft Mystry Dashboard  ·  产品介绍")
+        canvas.drawString(MARGIN, 9 * mm, "Mystry Dashboard  ·  产品介绍")
         canvas.drawRightString(PAGE_W - MARGIN, 9 * mm, f"{doc.page}")
         canvas.setStrokeColor(LINE)
         canvas.setLineWidth(0.4)
@@ -209,8 +209,8 @@ def build_story():
 
     story += [
         Spacer(1, 42 * mm),
-        P("0.2.0-preview.1  ·  单机一体服务端面板", "cover_kicker"),
-        P("Minecraft Mystry Dashboard", "cover_title"),
+        P("0.2.0-preview.2  ·  单机一体服务端面板", "cover_kicker"),
+        P("Mystry Dashboard", "cover_title"),
         P("产品介绍与界面说明书", "cover_sub"),
         P("用浏览器管理本机多个 Minecraft Java 服务端：部署、导入、启停、控制台、文件与配置。", "cover_sub"),
         Spacer(1, 8 * mm),
@@ -266,7 +266,7 @@ def build_story():
         table(
             ["控件", "说明"],
             [
-                ["调色板", "打开主题选择器。选择保存在本浏览器 localStorage（mmd_theme）。"],
+                ["调色板", "打开主题选择器。选择保存在本浏览器 localStorage（mystry_theme）。"],
                 ["用户名", "默认 admin。初始化时即所创管理员名。"],
                 ["初始化令牌", "仅首次出现，必须与服务器 SETUP_TOKEN 完全一致。"],
                 ["密码", "日常登录非空即可；初始化至少 12 位。"],
@@ -275,7 +275,7 @@ def build_story():
             ],
         ),
         Spacer(1, 3 * mm),
-        P("登录成功后 token 存在 mmd_token。任一业务接口 401 会清掉登录态并回到本页。", "body"),
+        P("登录成功后 token 存在 mystry_token。任一业务接口 401 会清掉登录态并回到本页。", "body"),
         shot("02-login-theme-picker.png", "主题选择器：Mystry / Codex / Grok，各有暗色与亮色"),
         table(
             ["选项", "说明"],
@@ -600,9 +600,9 @@ def build_story():
                 ["实例元数据", "DATA_DIR/panel.db"],
                 ["实例文件", "DATA_DIR/instances/&lt;id&gt;/"],
                 ["交接复制源", "DATA_DIR/imports/&lt;目录名&gt;/（只读源，不是运行目录）"],
-                ["部署/导入半成品", "DATA_DIR/.mmd-staging/&lt;taskId&gt;/&lt;instanceId&gt;/"],
+                ["部署/导入半成品", "DATA_DIR/.mystry-staging/&lt;taskId&gt;/&lt;instanceId&gt;/"],
                 ["核心缓存", "DATA_DIR/cache/cores/"],
-                ["面板锁", "DATA_DIR/.mmd-panel-lock/（同一数据根只允许一个面板进程）"],
+                ["面板锁", "DATA_DIR/.mystry-panel-lock/（同一数据根只允许一个面板进程）"],
             ],
         ),
         Spacer(1, 3 * mm),
@@ -659,7 +659,7 @@ def build_story():
         P("延伸阅读", "h2"),
         P("安装与便携包见《快速开始》；第一次开服见《分步教程》；字段排错见《使用指南》；环境变量见《配置说明》。远程 Agent、自动备份、多用户权限尚未交付，不要当成已发布功能。", "body"),
         Spacer(1, 8 * mm),
-        P("Minecraft Mystry Dashboard  ·  0.2.0-preview.1  ·  本文对应仓库当前界面实现。", "caption"),
+        P("Mystry Dashboard  ·  0.2.0-preview.2  ·  本文对应仓库当前界面实现。", "caption"),
     ]
     return story
 
@@ -675,8 +675,8 @@ def main() -> None:
         rightMargin=MARGIN,
         topMargin=16 * mm,
         bottomMargin=16 * mm,
-        title="Minecraft Mystry Dashboard 产品介绍",
-        author="Minecraft Mystry Dashboard",
+        title="Mystry Dashboard 产品介绍",
+        author="Mystry Dashboard",
         subject="各页面实拍与按钮说明",
     )
     doc.build(build_story(), onFirstPage=draw_page, onLaterPages=draw_page)

@@ -3,8 +3,8 @@ import path from 'node:path';
 import { config } from '../config.js';
 import { defaultInstanceDir } from '../utils/path.js';
 
-export const STAGING_ROOT_DIR = '.mmd-staging';
-export const STAGING_MARKER_FILE = '.mmd-staging-marker.json';
+export const STAGING_ROOT_DIR = '.mystry-staging';
+export const STAGING_MARKER_FILE = '.mystry-staging-marker.json';
 
 export type TaskStagingMarker = {
   version: 1;

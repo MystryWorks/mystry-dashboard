@@ -4,14 +4,14 @@ import type {
   CoreType,
   DeployCoreInput,
   ImportExistingServerInput,
-} from '@mmd/shared';
+} from '@mystry/shared';
 import {
   CORE_TYPE_ENUM,
   DEPLOYABLE_CORE_TYPE_ENUM,
   deployCoreBodySchema,
   confirmZipImportBodySchema,
   importExistingServerBodySchema,
-} from '@mmd/shared';
+} from '@mystry/shared';
 import {
   deployCore,
   listCoreVersions,
