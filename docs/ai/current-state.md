@@ -63,7 +63,7 @@
 - 实例默认使用面板进程 `PATH` 中的 `java`，也可绑定 `java_runtimes` 注册表中当前可用的运行时；绑定条目消失、路径变化或执行前验证失败时必须重新探测和选择。
 - 没有完整的自动备份/恢复、系统安装器、远程 Agent 执行协议或生产监控闭环。
 - 便携发布流水线已经实现，但 Windows x64 / Linux x64 runner 和公开 Release 的实际结果只能由对应 GitHub Actions 运行确认。Linux ARM64 与 macOS 打包能力仍在脚本中，不纳入本 Preview 公开发布。
-- 公开发布前须重新运行 `npm.cmd run audit:production`（拒绝 high/critical），并核对双平台最终压缩包 smoke、签名验证和人工验收。依赖审计结果、远程密钥配置与分支同步状态不由本页作实时保证；历史证据见 [Beta 修复计划](../beta-release-remediation-plan.md) 与 [前端验收记录](../frontend-review-verification.md)。不得用 `--force` 贸然升到 React Router 7。
+- 公开发布前须重新运行 `npm.cmd run audit:production`（拒绝 high/critical），并核对双平台最终压缩包 smoke、签名验证和人工验收。依赖审计结果、远程密钥配置与分支同步状态不由本页作实时保证。不得用 `--force` 贸然升到 React Router 7。
 
 ## 固定运行边界
 

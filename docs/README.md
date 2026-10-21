@@ -30,9 +30,6 @@ Minecraft Mystry Dashboard 是独立的 Minecraft Java 服务端 Web 管理面�
 
 | 文档 | 用途 |
 |---|---|
-| [Beta 发布修复计划](beta-release-remediation-plan.md) | 2026-08 阶段计划与验收记录；当前状态需重新核实 |
-| [2026-08-07 代码审查](review-2026-08-07.md) | 当次审查发现、修复记录与验证证据 |
-| [2026-09-08 前端修复验收](frontend-review-verification.md) | 当次自动与接口检查、监测验证及尚未覆盖的人工流程 |
 | [变更日志](../CHANGELOG.md) | 版本历史 |
 | [贡献指南](../CONTRIBUTING.md) | Issue、PR 和文档维护约定 |
 | [安全政策](../SECURITY.md) | 漏洞私下披露 |
