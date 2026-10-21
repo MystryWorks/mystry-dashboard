@@ -1,11 +1,11 @@
 # 便携预览版
 
-仓库当前版本为 `v0.2.0-preview.1`，发布流程为其配置了两个自带 Node.js 22、生产依赖和已构建前后端的便携目标：
+仓库当前版本为 `v0.2.0-preview.2`，发布流程为其配置了两个自带 Node.js 22、生产依赖和已构建前后端的便携目标：
 
 | 系统 | 文件 |
 |------|------|
-| Windows x64 | `mystry-v0.2.0-preview.1-windows-x64.zip` |
-| Linux x64 | `mystry-v0.2.0-preview.1-linux-x64.tar.gz` |
+| Windows x64 | `mystry-v0.2.0-preview.2-windows-x64.zip` |
+| Linux x64 | `mystry-v0.2.0-preview.2-linux-x64.tar.gz` |
 
 Linux ARM64 与 macOS（Intel / Apple Silicon）打包脚本仍可本地使用，但不纳入本 Preview 公开发布矩阵，留待后续版本。
 
@@ -42,7 +42,7 @@ gpg --verify SHA256SUMS.asc SHA256SUMS
 Windows PowerShell 可先计算压缩包哈希，再与 `SHA256SUMS` 中对应行比较：
 
 ```powershell
-Get-FileHash .\mystry-v0.2.0-preview.1-windows-x64.zip -Algorithm SHA256
+Get-FileHash .\mystry-v0.2.0-preview.2-windows-x64.zip -Algorithm SHA256
 ```
 
 也可在 WSL 或 Gpg4win 中执行与 Linux 相同的 `gpg --verify`。
@@ -66,7 +66,7 @@ Windows：
 Linux：
 
 ```bash
-tar -xzf mystry-v0.2.0-preview.1-linux-x64.tar.gz
+tar -xzf mystry-v0.2.0-preview.2-linux-x64.tar.gz
 cd mystry-dashboard
 chmod +x mystryctl
 ./mystryctl start
@@ -142,7 +142,7 @@ npm run verify
 npm run audit:production
 npm run build
 node scripts/portable/package-portable.mjs --platform win32 --arch x64 --output-dir release
-node scripts/portable/smoke-portable.mjs release/mystry-v0.2.0-preview.1-windows-x64.zip
+node scripts/portable/smoke-portable.mjs release/mystry-v0.2.0-preview.2-windows-x64.zip
 ```
 
 以上流程可一键完成（在目标平台原生运行，自动使用当前平台与架构，并生成压缩包、SHA256SUMS 与 SBOM）：

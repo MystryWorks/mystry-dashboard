@@ -4,6 +4,8 @@
 
 ## [Unreleased]
 
+## [0.2.0-preview.2] - 2026-10-21
+
 ### Changed
 
 - 品牌更名为 **Mystry Dashboard**（不再绑定 Minecraft，为后续支持其他游戏服务端预留）。根包名改为 `mystry-dashboard`，健康检查 `service` 同步改名；缩写 MMD 全部改为 mystry：工作区包 `@mystry/*`、便携控制器 `mystryctl`、环境变量 `MYSTRY_HOME` / `MYSTRY_CONFIG_PATH` / `MYSTRY_DATA_DIR` 等、数据目录内 `.mystry-staging` / `.mystry-panel-lock`、浏览器存储键 `mystry_*`、发布文件 `mystry-v*` 与 `mystry-release-signing-key.asc`。不保留旧名称兼容：已有 `.env` 中的 `MMD_*` 需手动改名，旧数据目录里遗留的 `.mmd-*` 目录不会再被识别或清理。

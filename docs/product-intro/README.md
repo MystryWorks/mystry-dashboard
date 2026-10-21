@@ -1,6 +1,6 @@
 # Mystry Dashboard 产品介绍
 
-**版本**：`0.2.0-preview.1`  
+**版本**：`0.2.0-preview.2`  
 **形态**：单机一体的 Minecraft **Java 服务端** Web 管理面板  
 **不是**：游戏客户端、Fabric/Forge 模组、远程多机 Agent 控制台  
 

@@ -1,7 +1,7 @@
 {
   "name": "mystry-dashboard",
   "private": true,
-  "version": "0.2.0-preview.1",
+  "version": "0.2.0-preview.2",
   "description": "单机一体的 Minecraft 服务端 Web 管理面板",
   "license": "MIT",
   "homepage": "https://github.com/MystryWorks/mystry-dashboard#readme",

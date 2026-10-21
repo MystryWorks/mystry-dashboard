@@ -209,7 +209,7 @@ def build_story():
 
     story += [
         Spacer(1, 42 * mm),
-        P("0.2.0-preview.1  ·  单机一体服务端面板", "cover_kicker"),
+        P("0.2.0-preview.2  ·  单机一体服务端面板", "cover_kicker"),
         P("Mystry Dashboard", "cover_title"),
         P("产品介绍与界面说明书", "cover_sub"),
         P("用浏览器管理本机多个 Minecraft Java 服务端：部署、导入、启停、控制台、文件与配置。", "cover_sub"),
@@ -659,7 +659,7 @@ def build_story():
         P("延伸阅读", "h2"),
         P("安装与便携包见《快速开始》；第一次开服见《分步教程》；字段排错见《使用指南》；环境变量见《配置说明》。远程 Agent、自动备份、多用户权限尚未交付，不要当成已发布功能。", "body"),
         Spacer(1, 8 * mm),
-        P("Mystry Dashboard  ·  0.2.0-preview.1  ·  本文对应仓库当前界面实现。", "caption"),
+        P("Mystry Dashboard  ·  0.2.0-preview.2  ·  本文对应仓库当前界面实现。", "caption"),
     ]
     return story
 
