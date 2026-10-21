@@ -2,12 +2,34 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import dotenv from 'dotenv';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-// 从仓库根目录加载 .env
-dotenv.config({ path: path.resolve(__dirname, '../../../.env') });
+for (const arg of process.argv) {
+  const match = /^--mmd-fingerprint=(.+)$/.exec(arg);
+  if (match?.[1]) {
+    process.env.MMD_PROCESS_FINGERPRINT = match[1].trim();
+  }
+}
 
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, '../../..');
-const dataDir = path.resolve(repoRoot, process.env.DATA_DIR || 'data');
+
+function resolveFromHome(value: string, homeDir: string): string {
+  return path.isAbsolute(value) ? path.resolve(value) : path.resolve(homeDir, value);
+}
+
+const configuredHome = process.env.MMD_HOME?.trim();
+const homeDir = configuredHome ? path.resolve(configuredHome) : repoRoot;
+const configuredConfigPath = process.env.MMD_CONFIG_PATH?.trim();
+const configPath = configuredConfigPath
+  ? resolveFromHome(configuredConfigPath, homeDir)
+  : path.join(homeDir, configuredHome ? 'config' : '', configuredHome ? 'panel.env' : '.env');
+
+// 开发模式默认读取仓库 .env；便携包由 mmdctl 指向 config/panel.env。
+dotenv.config({ path: configPath });
+
+function resolveDataDir(): string {
+  const configured = process.env.MMD_DATA_DIR?.trim() || process.env.DATA_DIR?.trim() || 'data';
+  return resolveFromHome(configured, homeDir);
+}
 
 function parsePositiveInt(name: string, fallback: number): number {
   const value = Number(process.env[name] || fallback);
@@ -15,6 +37,21 @@ function parsePositiveInt(name: string, fallback: number): number {
     throw new Error(`${name} 必须是正整数`);
   }
   return value;
+}
+
+/** JWT 有效期：接受纯数字（毫秒）或 ms/s/m/h/d/w/y 时长字符串，启动时即校验。 */
+export function parseJwtExpiresIn(rawValue = process.env.JWT_EXPIRES_IN?.trim() || '2h'): string {
+  const raw = rawValue.trim() || '2h';
+  if (/^\d+$/.test(raw)) {
+    const millis = Number(raw);
+    if (!Number.isSafeInteger(millis) || millis <= 0) {
+      throw new Error('JWT_EXPIRES_IN 必须是正整数（毫秒）或形如 2h/30m/7d 的时长字符串');
+    }
+    // @fastify/jwt 把 number 当秒；这里转成带单位字符串，保持「纯数字 = 毫秒」的文档约定。
+    return `${millis}ms`;
+  }
+  if (/^\d+(ms|s|m|h|d|w|y)$/i.test(raw)) return raw;
+  throw new Error('JWT_EXPIRES_IN 必须是正整数（毫秒）或形如 2h/30m/7d 的时长字符串');
 }
 
 function parseOrigins(): string[] {
@@ -41,23 +78,59 @@ function parseSecret(name: string, required: boolean): string | null {
   return value;
 }
 
+export function assertDistinctSecrets(entries: ReadonlyArray<readonly [string, string | null]>): void {
+  const configured = entries.filter((entry): entry is readonly [string, string] => entry[1] !== null);
+  for (let index = 0; index < configured.length; index += 1) {
+    for (let otherIndex = index + 1; otherIndex < configured.length; otherIndex += 1) {
+      const current = configured[index]!;
+      const other = configured[otherIndex]!;
+      if (current[1].toLowerCase() === other[1].toLowerCase()) {
+        throw new Error(`${current[0]} 与 ${other[0]} 必须使用不同的随机值`);
+      }
+    }
+  }
+}
+
 const host = process.env.HOST || '127.0.0.1';
 const jwtSecret = parseSecret('JWT_SECRET', true)!;
 const setupToken = parseSecret('SETUP_TOKEN', false);
+const launcherToken = parseSecret('LAUNCHER_TOKEN', false);
+assertDistinctSecrets([
+  ['JWT_SECRET', jwtSecret],
+  ['SETUP_TOKEN', setupToken],
+  ['LAUNCHER_TOKEN', launcherToken],
+]);
 
 export const config = {
   host,
   port: parsePositiveInt('PORT', 3000),
   jwtSecret,
   setupToken,
-  jwtExpiresIn: process.env.JWT_EXPIRES_IN?.trim() || '2h',
+  launcherToken,
+  jwtExpiresIn: parseJwtExpiresIn(),
   corsOrigins: parseOrigins(),
   repoRoot,
-  dataDir,
-  dbPath: path.join(dataDir, 'panel.db'),
-  instancesDir: path.join(dataDir, 'instances'),
-  cacheDir: path.join(dataDir, 'cache', 'cores'),
-  uploadDir: path.join(dataDir, 'uploads'),
+  homeDir,
+  configPath,
+  get dataDir() {
+    return resolveDataDir();
+  },
+  processFingerprint: process.env['MMD_PROCESS_FINGERPRINT']?.trim() || null,
+  get dbPath() {
+    return path.join(resolveDataDir(), 'panel.db');
+  },
+  get instancesDir() {
+    return path.join(resolveDataDir(), 'instances');
+  },
+  get existingServerImportDir() {
+    return path.join(resolveDataDir(), 'imports');
+  },
+  get cacheDir() {
+    return path.join(resolveDataDir(), 'cache', 'cores');
+  },
+  get uploadDir() {
+    return path.join(resolveDataDir(), 'uploads');
+  },
   maxJsonBodyBytes: parsePositiveInt('MAX_JSON_BODY_BYTES', 1048576),
   maxTextFileBytes: parsePositiveInt('MAX_TEXT_FILE_BYTES', 1048576),
   maxCommandBytes: parsePositiveInt('MAX_COMMAND_BYTES', 4096),
@@ -67,6 +140,9 @@ export const config = {
   maxUploadBytes: parsePositiveInt('MAX_UPLOAD_BYTES', 512 * 1024 * 1024),
   uploadIdleTimeoutMs: parsePositiveInt('UPLOAD_IDLE_TIMEOUT_MS', 30_000),
   maxConcurrentUploads: parsePositiveInt('MAX_CONCURRENT_UPLOADS', 1),
+  /** ZIP 导入预览有效期与全局容量。 */
+  importPreviewTtlSeconds: parsePositiveInt('IMPORT_PREVIEW_TTL_SECONDS', 30 * 60),
+  maxImportPreviews: parsePositiveInt('MAX_IMPORT_PREVIEWS', 2),
   maxConcurrentFileDownloads: parsePositiveInt('MAX_CONCURRENT_FILE_DOWNLOADS', 4),
   fileDownloadIdleTimeoutMs: parsePositiveInt('FILE_DOWNLOAD_IDLE_TIMEOUT_MS', 60_000),
   maxConcurrentTasks: parsePositiveInt('MAX_CONCURRENT_TASKS', 1),
@@ -97,10 +173,26 @@ export const config = {
     'MAX_ZIP_CENTRAL_DIRECTORY_BYTES',
     32 * 1024 * 1024,
   ),
+  /** 同机已有服务端交接区的扫描与复制配额。 */
+  maxExistingImportEntries: parsePositiveInt('MAX_EXISTING_IMPORT_ENTRIES', 200_000),
+  maxExistingImportBytes: parsePositiveInt(
+    'MAX_EXISTING_IMPORT_BYTES',
+    100 * 1024 * 1024 * 1024,
+  ),
+  /** 已有服务端列表接口中的 ModLoader 预检预算 */
+  modLoaderPrecheckMaxDepth: parsePositiveInt('MOD_LOADER_PRECHECK_MAX_DEPTH', 4),
+  modLoaderPrecheckMaxEntries: parsePositiveInt('MOD_LOADER_PRECHECK_MAX_ENTRIES', 200),
+  modLoaderPrecheckTimeoutMs: parsePositiveInt('MOD_LOADER_PRECHECK_TIMEOUT_MS', 250),
+  /** 导入/部署任务中的 ModLoader 深度扫描预算 */
+  modLoaderScanMaxDepth: parsePositiveInt('MOD_LOADER_SCAN_MAX_DEPTH', 64),
+  modLoaderScanMaxEntries: parsePositiveInt('MOD_LOADER_SCAN_MAX_ENTRIES', 50_000),
+  modLoaderScanTimeoutMs: parsePositiveInt('MOD_LOADER_SCAN_TIMEOUT_MS', 30_000),
   consoleTicketTtlSeconds: parsePositiveInt('CONSOLE_TICKET_TTL_SECONDS', 60),
+  /** 文件下载一次性 ticket 有效期（秒） */
+  fileDownloadTicketTtlSeconds: parsePositiveInt('FILE_DOWNLOAD_TICKET_TTL_SECONDS', 60),
   rateLimitMax: parsePositiveInt('RATE_LIMIT_MAX', 120),
   rateLimitWindowMs: parsePositiveInt('RATE_LIMIT_WINDOW_MS', 60_000),
-  authRateLimitMax: parsePositiveInt('AUTH_RATE_LIMIT_MAX', 5),
-  authRateLimitWindowMs: parsePositiveInt('AUTH_RATE_LIMIT_WINDOW_MS', 15 * 60_000),
+  authRateLimitMax: parsePositiveInt('AUTH_RATE_LIMIT_MAX', 10),
+  authRateLimitWindowMs: parsePositiveInt('AUTH_RATE_LIMIT_WINDOW_MS', 5 * 60_000),
   webDist: path.resolve(__dirname, '../../web/dist'),
 };

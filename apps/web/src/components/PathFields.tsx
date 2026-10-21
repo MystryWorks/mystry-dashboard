@@ -20,7 +20,7 @@ export function JavaEnvironmentStatus() {
         <span className="environment-dot" />
         {available === null ? '正在检查 PATH 中的 Java…' : available ? `PATH 中的 Java 可用${version ? ` · ${version}` : ''}` : 'PATH 中未找到可用的 Java'}
       </div>
-      <p className="muted field-help">实例统一使用系统 PATH 中的 java，面板不保存或编辑 Java 路径。</p>
+      <p className="muted field-help">实例默认使用 PATH 中的 java；也可以在下方选择面板探测到的其他 Java 运行时。</p>
       {error && <p className="error">无法读取 Java 环境：{error}</p>}
     </div>
   );

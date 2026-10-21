@@ -3,7 +3,7 @@ import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { loginBodySchema, setupBodySchema } from '@mmd/shared';
 import { needsSetup, setupAdmin, verifyLogin, getUserById } from '../services/auth-service.js';
 import { config } from '../config.js';
-import { createRateLimitHook } from '../services/security-service.js';
+import { createLoginFailureLimiter, createRateLimitHook } from '../services/security-service.js';
 
 export type JwtUser = { id: string; username: string };
 
@@ -24,6 +24,11 @@ function isValidSetupToken(value: string | string[] | undefined): boolean {
 export async function authRoutes(app: FastifyInstance): Promise<void> {
   const strictAuthLimit = createRateLimitHook({
     name: 'auth',
+    max: config.authRateLimitMax,
+    windowMs: config.authRateLimitWindowMs,
+  });
+  const loginFailureLimit = createLoginFailureLimiter({
+    name: 'login-failure',
     max: config.authRateLimitMax,
     windowMs: config.authRateLimitWindowMs,
   });
@@ -60,16 +65,18 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
     {
       attachValidation: true,
       schema: { body: loginBodySchema },
-      preHandler: [strictAuthLimit],
     },
     async (req, reply) => {
       if (req.validationError) {
         return reply.code(400).send({ error: '用户名或密码格式不正确' });
       }
+      if (loginFailureLimit.isBlocked(req, reply, req.body.username)) return reply;
       const user = verifyLogin(req.body.username, req.body.password);
       if (!user) {
+        loginFailureLimit.recordFailure(req, reply, req.body.username);
         return reply.code(401).send({ error: '用户名或密码错误' });
       }
+      loginFailureLimit.reset(req, req.body.username);
       const token = await reply.jwtSign(user, { expiresIn: config.jwtExpiresIn });
       return { token, user };
     },

@@ -1,5 +1,4 @@
 import fs from 'node:fs';
-import path from 'node:path';
 import { nanoid } from 'nanoid';
 import type {
   CreateInstanceInput,
@@ -21,6 +20,19 @@ import {
 } from '../utils/path.js';
 import { processManager } from './process-manager.js';
 import { nodeExists } from './node-service.js';
+import { getJavaRuntime } from './java-runtime-service.js';
+import { normalizeAndAssertJvmArgs } from './jvm-validation-service.js';
+
+const DEFAULT_JVM_ARGS = '-Xms1G -Xmx2G';
+
+/** 校验运行时引用：只能引用注册表中已验证的运行时，null 表示 PATH 中的 java。 */
+function assertValidJavaRuntime(javaRuntimeId: string | null | undefined): void {
+  if (javaRuntimeId === null || javaRuntimeId === undefined) return;
+  const runtime = getJavaRuntime(javaRuntimeId);
+  if (!runtime || !runtime.available) {
+    throw new Error('所选 Java 运行时不存在或不可用，请重新探测后再选择');
+  }
+}
 
 function rowToInfo(row: InstanceRow): InstanceInfo {
   const requiresMigration = row.install_path !== null;
@@ -32,10 +44,11 @@ function rowToInfo(row: InstanceRow): InstanceInfo {
     jarFile: row.jar_file,
     javaPath: 'java',
     jvmArgs: row.jvm_args,
-    installPath: row.install_path === null ? defaultInstanceDir(row.id) : null,
+    installPath: row.install_path ?? defaultInstanceDir(row.id),
     requiresMigration,
     status: processManager.getStatus(row.id) as InstanceStatus,
     nodeId: row.node_id,
+    javaRuntimeId: row.java_runtime_id ?? null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     acceptEula: Boolean(row.accept_eula),
@@ -100,10 +113,16 @@ export function createInstance(input: CreateInstanceInput): InstanceInfo {
   let markerWritten = false;
   let directoryCreatedByCall = false;
 
+  assertValidJavaRuntime(input.javaRuntimeId);
+  const jvmArgs = normalizeAndAssertJvmArgs(input.jvmArgs ?? DEFAULT_JVM_ARGS, {
+    coreType: input.coreType ?? 'custom',
+    javaRuntimeId: input.javaRuntimeId,
+  });
+
   try {
     const existedBefore = fs.existsSync(dir);
     assertSafeDirectoryPath(dir);
-    fs.mkdirSync(dir, { recursive: true });
+    fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
     directoryCreatedByCall = !existedBefore;
     assertSafeInstanceRoot(dir);
     if (fs.readdirSync(dir).length > 0) {
@@ -124,8 +143,8 @@ export function createInstance(input: CreateInstanceInput): InstanceInfo {
     const result = getDb()
       .prepare(
         `INSERT INTO instances
-        (id, name, core_type, mc_version, jar_file, java_path, jvm_args, accept_eula, install_path, ownership_marker, node_id, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        (id, name, core_type, mc_version, jar_file, java_path, jvm_args, accept_eula, install_path, ownership_marker, node_id, java_runtime_id, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         id,
@@ -134,11 +153,12 @@ export function createInstance(input: CreateInstanceInput): InstanceInfo {
         input.mcVersion ?? null,
         input.jarFile ?? 'server.jar',
         'java',
-        input.jvmArgs ?? '-Xms1G -Xmx2G',
+        jvmArgs,
         input.acceptEula ? 1 : 0,
         null,
         ownershipMarker,
         nodeId,
+        input.javaRuntimeId ?? null,
         now,
         now,
       );
@@ -153,9 +173,82 @@ export function createInstance(input: CreateInstanceInput): InstanceInfo {
   return getInstance(id)!;
 }
 
+/** 将已 promote 到 instances/<id> 的目录注册进数据库（部署/导入任务完成时调用）。 */
+export function registerPromotedInstance(id: string, input: CreateInstanceInput): InstanceInfo {
+  const now = nowIso();
+  const nodeId = input.nodeId?.trim() || LOCAL_NODE_ID;
+  if (!nodeExists(nodeId)) {
+    throw new Error('所选节点不存在');
+  }
+  if (nodeId !== LOCAL_NODE_ID) {
+    throw new Error('远程节点暂不支持创建实例，敬请期待后续版本');
+  }
+  assertValidJavaRuntime(input.javaRuntimeId);
+  const jvmArgs = normalizeAndAssertJvmArgs(input.jvmArgs ?? DEFAULT_JVM_ARGS, {
+    coreType: input.coreType ?? 'custom',
+    javaRuntimeId: input.javaRuntimeId,
+  });
+
+  const dir = defaultInstanceDir(id);
+  if (!fs.existsSync(dir)) {
+    throw new Error('实例目录不存在，无法注册实例');
+  }
+  assertSafeInstanceRoot(dir);
+  const entries = fs.readdirSync(dir);
+  if (entries.length === 0) {
+    throw new Error('实例目录为空，无法注册实例');
+  }
+
+  const ownershipMarker = nanoid(32);
+  writeOwnershipMarker(id, dir, ownershipMarker);
+  fs.accessSync(dir, fs.constants.W_OK);
+
+  try {
+    const result = getDb()
+      .prepare(
+        `INSERT INTO instances
+        (id, name, core_type, mc_version, jar_file, java_path, jvm_args, accept_eula, install_path, ownership_marker, node_id, java_runtime_id, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        id,
+        input.name,
+        input.coreType ?? 'custom',
+        input.mcVersion ?? null,
+        input.jarFile ?? 'server.jar',
+        'java',
+        jvmArgs,
+        input.acceptEula ? 1 : 0,
+        null,
+        ownershipMarker,
+        nodeId,
+        input.javaRuntimeId ?? null,
+        now,
+        now,
+      );
+    if (Number(result.changes) !== 1) {
+      throw new Error('创建实例失败：数据库未写入实例记录');
+    }
+  } catch (err) {
+    removeOwnershipMarker(id, dir, ownershipMarker);
+    throw err;
+  }
+
+  return getInstance(id)!;
+}
+
 export function updateInstance(id: string, input: UpdateInstanceInput): InstanceInfo {
   const existing = getInstanceRow(id);
   if (!existing) throw new Error('实例不存在');
+  assertValidJavaRuntime(input.javaRuntimeId);
+  const normalizedJvmArgs = normalizeAndAssertJvmArgs(input.jvmArgs ?? existing.jvm_args, {
+    coreType: existing.core_type as InstanceInfo['coreType'],
+    javaRuntimeId: input.javaRuntimeId === undefined
+      ? existing.java_runtime_id
+      : input.javaRuntimeId,
+  });
+  // 未提交 JVM 参数时只做校验，不静默改写旧实例中的原始文本。
+  const jvmArgs = input.jvmArgs === undefined ? existing.jvm_args : normalizedJvmArgs;
 
   const now = nowIso();
   getDb()
@@ -166,6 +259,7 @@ export function updateInstance(id: string, input: UpdateInstanceInput): Instance
         java_path = ?,
         jvm_args = ?,
         accept_eula = ?,
+        java_runtime_id = ?,
         updated_at = ?
       WHERE id = ?`,
     )
@@ -173,8 +267,9 @@ export function updateInstance(id: string, input: UpdateInstanceInput): Instance
       input.name ?? existing.name,
       input.jarFile ?? existing.jar_file,
       'java',
-      input.jvmArgs ?? existing.jvm_args,
+      jvmArgs,
       input.acceptEula !== undefined ? (input.acceptEula ? 1 : 0) : existing.accept_eula,
+      input.javaRuntimeId === undefined ? existing.java_runtime_id : input.javaRuntimeId,
       now,
       id,
     );
@@ -182,27 +277,39 @@ export function updateInstance(id: string, input: UpdateInstanceInput): Instance
   return getInstance(id)!;
 }
 
-export function deleteInstance(id: string): void {
-  if (processManager.isRunning(id)) {
-    throw new Error('请先停止实例再删除');
-  }
-  const row = getInstanceRow(id);
-  if (!row) return;
-  if (row.install_path !== null) {
-    getDb().prepare('DELETE FROM instances WHERE id = ?').run(id);
-    return;
-  }
-  const dir = defaultInstanceDir(row.id);
-  const canRemoveDirectory = hasValidOwnershipMarker(row);
-  getDb().prepare('DELETE FROM instances WHERE id = ?').run(id);
-  if (canRemoveDirectory && fs.existsSync(dir)) {
-    assertSafeInstanceRoot(dir);
-    fs.rmSync(dir, { recursive: true, force: true });
-  }
+export async function deleteInstance(id: string): Promise<void> {
+  return processManager.runExclusive(id, async () => {
+    if (processManager.isRunning(id)) {
+      throw new Error('请先停止实例再删除');
+    }
+    const row = getInstanceRow(id);
+    if (!row) return;
+    if (row.install_path !== null) {
+      getDb().prepare('DELETE FROM instances WHERE id = ?').run(id);
+      processManager.forget(id);
+      return;
+    }
+    const dir = defaultInstanceDir(row.id);
+    const canRemoveDirectory = hasValidOwnershipMarker(row);
+    // 保持先删目录后删 DB 行的顺序：安全自检 R1 断言「目录删除失败时数据库记录必须保留」。
+    if (canRemoveDirectory && fs.existsSync(dir)) {
+      assertSafeInstanceRoot(dir);
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+    const result = getDb().prepare('DELETE FROM instances WHERE id = ?').run(id);
+    if (Number(result.changes) !== 1) {
+      throw new Error('删除实例失败：数据库记录未删除');
+    }
+    processManager.forget(id);
+  });
 }
 
 /** 接管同一实例 ID 对应的默认目录，不读取或操作旧的外部目录。 */
-export function adoptManagedDirectory(id: string): InstanceInfo {
+export async function adoptManagedDirectory(id: string): Promise<InstanceInfo> {
+  return processManager.runExclusive(id, async () => adoptManagedDirectoryWithinLock(id));
+}
+
+function adoptManagedDirectoryWithinLock(id: string): InstanceInfo {
   if (processManager.isRunning(id)) {
     throw new Error('请先停止实例再接管目录');
   }
@@ -289,16 +396,4 @@ export function updateInstanceMeta(
       nowIso(),
       id,
     );
-}
-
-/** 探测目录中可用的服务端 jar */
-export function detectJarFile(dir: string): string | null {
-  const preferred = ['server.jar', 'paper.jar', 'fabric-server-launch.jar', 'minecraft_server.jar'];
-  for (const name of preferred) {
-    if (fs.existsSync(path.join(dir, name))) return name;
-  }
-  const jars = fs
-    .readdirSync(dir)
-    .filter((f) => f.endsWith('.jar') && !f.includes('installer'));
-  return jars[0] ?? null;
 }

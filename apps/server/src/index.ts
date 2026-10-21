@@ -1,4 +1,3 @@
-import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import Fastify from 'fastify';
@@ -6,9 +5,9 @@ import cors from '@fastify/cors';
 import jwt from '@fastify/jwt';
 import multipart from '@fastify/multipart';
 import websocket from '@fastify/websocket';
-import fastifyStatic from '@fastify/static';
 import { config } from './config.js';
-import { initDb } from './db.js';
+import { getDb, initDb } from './db.js';
+import { registerFrontendAssets } from './frontend-assets.js';
 import { authRoutes, registerAuthHooks } from './routes/auth.js';
 import { instanceRoutes } from './routes/instances.js';
 import { fileRoutes } from './routes/files.js';
@@ -16,18 +15,79 @@ import { coreRoutes } from './routes/cores.js';
 import { consoleRoutes } from './routes/console.js';
 import { systemRoutes } from './routes/system.js';
 import { nodeRoutes } from './routes/nodes.js';
+import {
+  launcherRoutes,
+  type LauncherRouteOptions,
+  type ShutdownSummary,
+} from './routes/launcher.js';
+import { processManager } from './services/process-manager.js';
 import { createRateLimitHook } from './services/security-service.js';
+import {
+  getTaskActivity,
+  recoverInterruptedTasks,
+  shutdownTasks,
+} from './services/task-service.js';
+import {
+  acquirePanelDataLock,
+  type PanelDataLock,
+} from './services/data-lock-service.js';
+import {
+  initializeImportPreviews,
+  shutdownImportPreviews,
+} from './services/import-preview-service.js';
 
-export async function buildApp() {
-  initDb();
+export type BuildAppOptions = LauncherRouteOptions & {
+  isShuttingDown?: () => boolean;
+  /** 测试专用：跳过数据目录锁（生产路径不得使用） */
+  skipDataLock?: boolean;
+};
+
+let activePanelDataLock: PanelDataLock | null = null;
+
+export function releasePanelDataLock(): void {
+  activePanelDataLock?.release();
+  activePanelDataLock = null;
+}
+
+export async function buildApp(options: BuildAppOptions = {}) {
+  if (!options.skipDataLock) {
+    activePanelDataLock = acquirePanelDataLock(config.dataDir);
+  }
+  try {
+    initDb();
+    const taskRecovery = recoverInterruptedTasks();
+    const previewRecovery = initializeImportPreviews();
 
   const app = Fastify({
-    logger: true,
+    logger: {
+      serializers: {
+        req(request) {
+          // ticket/token 类查询参数不应进入日志（下载票据、控制台票据、设置令牌等）。
+          const url = request.url.replace(/([?&](?:ticket|token)=)[^&]*/gi, '$1[redacted]');
+          return {
+            method: request.method,
+            url,
+            hostname: request.hostname,
+            remoteAddress: request.ip,
+            remotePort: request.socket?.remotePort,
+          };
+        },
+      },
+    },
     bodyLimit: config.maxJsonBodyBytes,
     requestTimeout: config.httpRequestTimeoutMs,
     connectionTimeout: config.httpConnectionTimeoutMs,
     keepAliveTimeout: config.httpKeepAliveTimeoutMs,
     ajv: { customOptions: { removeAdditional: false } },
+  });
+  if (taskRecovery.interrupted > 0) {
+    app.log.warn(taskRecovery, '已将上次面板进程遗留的任务标记为失败');
+  }
+  if (previewRecovery.purged > 0) {
+    app.log.info(previewRecovery, '已清理上次面板进程遗留的 ZIP 导入预览');
+  }
+  app.addHook('onClose', async () => {
+    shutdownImportPreviews();
   });
 
   await app.register(cors, { origin: config.corsOrigins, credentials: true });
@@ -59,6 +119,15 @@ export async function buildApp() {
       windowMs: config.rateLimitWindowMs,
     }),
   );
+  app.addHook('onRequest', async (req, reply) => {
+    if (
+      options.isShuttingDown?.()
+      && req.url !== '/api/health'
+      && req.url !== '/api/launcher/shutdown'
+    ) {
+      return reply.code(503).send({ error: '面板正在关闭' });
+    }
+  });
   app.addHook('onSend', async (_req, reply, payload) => {
     // 不设置激进 CSP，避免破坏生产环境托管的前端资源；其余响应仍使用基础安全头。
     reply.header('X-Content-Type-Options', 'nosniff');
@@ -67,6 +136,22 @@ export async function buildApp() {
     reply.header('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
     reply.header('X-Permitted-Cross-Domain-Policies', 'none');
     return payload;
+  });
+
+  // 统一错误响应为全站 {error} 格式；500 不泄露内部消息（可能含绝对路径）。
+  app.setErrorHandler((error, req, reply) => {
+    req.log.error(error);
+    if (reply.sent) return;
+    const err = error as { statusCode?: unknown; message?: unknown };
+    const statusCode =
+      typeof err.statusCode === 'number' && Number.isInteger(err.statusCode) ? err.statusCode : 500;
+    const normalized = statusCode >= 400 && statusCode < 600 ? statusCode : 500;
+    if (normalized === 500) {
+      return reply.code(500).send({ error: '服务器内部错误' });
+    }
+    return reply
+      .code(normalized)
+      .send({ error: typeof err.message === 'string' ? err.message : '请求失败' });
   });
 
   registerAuthHooks(app);
@@ -78,30 +163,110 @@ export async function buildApp() {
   await app.register(consoleRoutes);
   await app.register(systemRoutes);
   await app.register(nodeRoutes);
+  await app.register(launcherRoutes, {
+    prepareShutdown: options.prepareShutdown,
+    startShutdown: options.startShutdown,
+  });
 
-  app.get('/api/health', async () => ({ ok: true }));
+  app.get('/api/health', async () => ({
+    ok: true,
+    service: 'minecraft-mystry-dashboard',
+    ...(config.processFingerprint
+      ? { processFingerprint: config.processFingerprint }
+      : {}),
+  }));
 
-  // 生产环境托管前端构建产物
-  if (fs.existsSync(config.webDist)) {
-    await app.register(fastifyStatic, {
-      root: config.webDist,
-      wildcard: false,
-    });
-    app.setNotFoundHandler((req, reply) => {
-      if (req.url.startsWith('/api') || req.url.startsWith('/ws')) {
-        return reply.code(404).send({ error: 'Not Found' });
-      }
-      return reply.sendFile('index.html');
-    });
-  }
+  // 生产环境托管前端构建产物。
+  await registerFrontendAssets(app, config.webDist);
 
   return app;
+  } catch (error) {
+    shutdownImportPreviews();
+    releasePanelDataLock();
+    throw error;
+  }
 }
 
 async function main() {
-  const app = await buildApp();
-  await app.listen({ host: config.host, port: config.port });
-  app.log.info(`面板已启动 http://${config.host}:${config.port}`);
+  let app: Awaited<ReturnType<typeof buildApp>> | null = null;
+  let shuttingDown = false;
+  let shutdownPromise: Promise<void> | null = null;
+  let removeSignalHandlers = () => {};
+
+  const prepareShutdown = (): ShutdownSummary => {
+    const alreadyShuttingDown = shuttingDown;
+    const taskActivity = getTaskActivity();
+    const summary = {
+      runningInstances: processManager.getRunningCount(),
+      runningTasks: taskActivity.running,
+      queuedTasks: taskActivity.queued,
+      alreadyShuttingDown,
+    };
+    shuttingDown = true;
+    processManager.beginShutdown();
+    return summary;
+  };
+
+  const shutdown = (reason: string): Promise<void> => {
+    if (shutdownPromise) return shutdownPromise;
+    if (!shuttingDown) prepareShutdown();
+
+    shutdownPromise = (async () => {
+      removeSignalHandlers();
+      app?.log.info({ reason }, '正在安全关闭面板');
+      await shutdownTasks();
+      const instanceResult = await processManager.stopAll();
+      if (instanceResult.errors.length > 0) {
+        app?.log.error(
+          { errors: instanceResult.errors },
+          '部分 Minecraft 实例关闭时发生错误',
+        );
+      }
+      if (instanceResult.stillStopping.length > 0) {
+        app?.log.warn(
+          { instanceIds: instanceResult.stillStopping },
+          '部分 Minecraft 实例在宽限期内未能完全退出，未发送 SIGKILL',
+        );
+      }
+      if (app) await app.close();
+      releasePanelDataLock();
+      getDb().close();
+    })().catch((error) => {
+      process.exitCode = 1;
+      console.error('安全关闭面板失败', error);
+    });
+    return shutdownPromise;
+  };
+
+  app = await buildApp({
+    isShuttingDown: () => shuttingDown,
+    prepareShutdown,
+    startShutdown: () => {
+      void shutdown('launcher');
+    },
+  });
+  const handleSigint = () => {
+    prepareShutdown();
+    void shutdown('SIGINT');
+  };
+  const handleSigterm = () => {
+    prepareShutdown();
+    void shutdown('SIGTERM');
+  };
+  removeSignalHandlers = () => {
+    process.off('SIGINT', handleSigint);
+    process.off('SIGTERM', handleSigterm);
+  };
+  process.once('SIGINT', handleSigint);
+  process.once('SIGTERM', handleSigterm);
+  try {
+    await app.listen({ host: config.host, port: config.port });
+    app.log.info(`面板已启动 http://${config.host}:${config.port}`);
+  } catch (error) {
+    await app.close();
+    releasePanelDataLock();
+    throw error;
+  }
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

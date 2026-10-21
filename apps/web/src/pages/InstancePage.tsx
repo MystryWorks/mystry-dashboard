@@ -1,8 +1,23 @@
-import { useCallback, useEffect, useState } from 'react';
-import { Link, NavLink, Route, Routes, useParams } from 'react-router-dom';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Link, NavLink, Route, Routes, useBlocker, useParams } from 'react-router-dom';
+import {
+  ArrowLeft,
+  Folder,
+  Play,
+  Power,
+  RotateCcw,
+  Settings,
+  Sliders,
+  Terminal,
+} from 'lucide-react';
 import type { FileEntry, InstanceInfo } from '@mmd/shared';
-import { api } from '../api';
+import { isInstanceStopPendingResult } from '@mmd/shared';
+import { ApiError, api, apiForm, downloadAuthenticated } from '../api';
+import { ConfirmDialog } from '../components/ConfirmDialog';
+import { ConfigTab } from '../components/ConfigTab';
 import { ConsolePanel } from '../components/ConsolePanel';
+import { JavaRuntimeSelect } from '../components/JavaRuntimeSelect';
+import { JvmSettingsEditor } from '../components/JvmSettingsEditor';
 
 const statusLabel: Record<string, string> = {
   stopped: '已停止',
@@ -12,15 +27,54 @@ const statusLabel: Record<string, string> = {
   crashed: '已崩溃',
 };
 
+/** 进程仍可能存活的状态：允许强制停止。 */
+function canForceStop(status: InstanceInfo['status']): boolean {
+  return status === 'running' || status === 'starting' || status === 'stopping';
+}
+
+function canStartInstance(status: InstanceInfo['status']): boolean {
+  return status === 'stopped' || status === 'crashed';
+}
+
+function canStopInstance(status: InstanceInfo['status']): boolean {
+  return status === 'running';
+}
+
+function isLifecycleBusy(status: InstanceInfo['status']): boolean {
+  return status === 'starting' || status === 'stopping';
+}
+
+/** 与服务端默认 MAX_TEXT_FILE_BYTES 对齐，用于判断是否显示「编辑」。 */
+const MAX_EDITABLE_FILE_BYTES = 1_048_576;
+
+function canEditFile(file: FileEntry): boolean {
+  return !file.isDirectory && file.size <= MAX_EDITABLE_FILE_BYTES;
+}
+
+function parentOf(relativePath: string): string {
+  const parts = relativePath.split('/').filter(Boolean);
+  parts.pop();
+  return parts.join('/');
+}
+
+function isValidRenameName(name: string): string | null {
+  const trimmed = name.trim();
+  if (!trimmed) return '名称不能为空';
+  if (trimmed.includes('/') || trimmed.includes('\\')) return '名称不能包含路径分隔符';
+  return null;
+}
+
+function isAbortError(error: unknown): boolean {
+  return error !== null
+    && typeof error === 'object'
+    && 'name' in error
+    && error.name === 'AbortError';
+}
+
 function ConsoleTab({ instance }: { instance: InstanceInfo; onChange: () => void }) {
   return (
     <div>
-      <p className="muted" style={{ marginTop: 0 }}>
-        状态：
-        <span className={`badge ${instance.status}`}>{statusLabel[instance.status]}</span>
-        （在终端输入指令后回车发送）
-      </p>
-      <ConsolePanel instanceId={instance.id} />
+      <ConsolePanel instanceId={instance.id} canSend={instance.status === 'running'} />
     </div>
   );
 }
@@ -44,68 +98,251 @@ function MigrationPanel({ instance, onAdopt }: { instance: InstanceInfo; onAdopt
 function FilesTab({ instanceId }: { instanceId: string }) {
   const [path, setPath] = useState('');
   const [files, setFiles] = useState<FileEntry[]>([]);
+  const [loaded, setLoaded] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [editPath, setEditPath] = useState<string | null>(null);
   const [content, setContent] = useState('');
   const [error, setError] = useState('');
+  const [editError, setEditError] = useState('');
+  const [saved, setSaved] = useState(false);
   const [newDir, setNewDir] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [loadingEdit, setLoadingEdit] = useState(false);
+  const [busyPath, setBusyPath] = useState<string | null>(null);
+  const [renameTarget, setRenameTarget] = useState<FileEntry | null>(null);
+  const [renameName, setRenameName] = useState('');
+  const [renameError, setRenameError] = useState('');
+  const [renaming, setRenaming] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<FileEntry | null>(null);
+  const [deleteError, setDeleteError] = useState('');
+  const [deleting, setDeleting] = useState(false);
+  const editDialogRef = useRef<HTMLDialogElement>(null);
+  const renameDialogRef = useRef<HTMLDialogElement>(null);
+  /** 编辑代次：关闭编辑器或打开新文件时递增，用于丢弃慢响应到达的旧文件内容。 */
+  const editGenerationRef = useRef(0);
+  /** 文件列表请求代次：切换目录后丢弃迟到的旧列表，避免覆盖当前视图。 */
+  const loadGenerationRef = useRef(0);
+  const downloadControllersRef = useRef(new Set<AbortController>());
+  const downloadGenerationRef = useRef(0);
 
   const load = useCallback(async () => {
+    const generation = loadGenerationRef.current + 1;
+    loadGenerationRef.current = generation;
+    setLoading(true);
     try {
       const list = await api<FileEntry[]>(
         `/api/instances/${instanceId}/files?path=${encodeURIComponent(path)}`,
       );
+      if (generation !== loadGenerationRef.current) return;
       setFiles(list);
+      setLoaded(true);
       setError('');
     } catch (err) {
+      if (generation !== loadGenerationRef.current) return;
+      // 刷新失败时保留上一份成功列表，避免把暂时的网络问题误显示为目录为空。
       setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      if (generation === loadGenerationRef.current) setLoading(false);
     }
   }, [instanceId, path]);
+
+  useEffect(() => {
+    loadGenerationRef.current += 1;
+    setPath('');
+    setFiles([]);
+    setLoaded(false);
+    setLoading(true);
+    setError('');
+  }, [instanceId]);
+
+  useEffect(() => {
+    downloadGenerationRef.current += 1;
+    setBusyPath(null);
+    return () => {
+      downloadGenerationRef.current += 1;
+      for (const controller of downloadControllersRef.current) controller.abort();
+      downloadControllersRef.current.clear();
+    };
+  }, [instanceId]);
 
   useEffect(() => {
     void load();
   }, [load]);
 
-  async function openFile(file: FileEntry) {
-    if (file.isDirectory) {
-      setPath(file.path);
-      setEditPath(null);
-      return;
-    }
+  useEffect(() => {
+    const dialog = editDialogRef.current;
+    if (!dialog) return;
+    if (editPath && !dialog.open) dialog.showModal();
+    else if (!editPath && dialog.open) dialog.close();
+  }, [editPath]);
+
+  useEffect(() => {
+    const dialog = renameDialogRef.current;
+    if (!dialog) return;
+    if (renameTarget && !dialog.open) dialog.showModal();
+    else if (!renameTarget && dialog.open) dialog.close();
+  }, [renameTarget]);
+
+  function closeEditor() {
+    editGenerationRef.current += 1;
+    setEditPath(null);
+    setContent('');
+    setEditError('');
+    setLoadingEdit(false);
+  }
+
+  function closeRename() {
+    setRenameTarget(null);
+    setRenameName('');
+    setRenameError('');
+    setRenaming(false);
+  }
+
+  function closeDelete() {
+    setDeleteTarget(null);
+    setDeleteError('');
+  }
+
+  function changePath(nextPath: string) {
+    loadGenerationRef.current += 1;
+    setFiles([]);
+    setLoaded(false);
+    setLoading(true);
+    setError('');
+    setPath(nextPath);
+  }
+
+  function openDirectory(file: FileEntry) {
+    if (!file.isDirectory) return;
+    changePath(file.path);
+  }
+
+  async function startEdit(file: FileEntry) {
+    if (!canEditFile(file)) return;
+    const generation = editGenerationRef.current + 1;
+    editGenerationRef.current = generation;
+    setLoadingEdit(true);
+    setEditError('');
+    setEditPath(file.path);
+    setContent('');
     try {
       const res = await api<{ content: string }>(
         `/api/instances/${instanceId}/files/content?path=${encodeURIComponent(file.path)}`,
       );
-      setEditPath(file.path);
+      // 期间可能已关闭编辑器或打开其他文件，过期响应必须丢弃，否则会把 A 内容存进 B 文件。
+      if (generation !== editGenerationRef.current) return;
       setContent(res.content);
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      if (generation !== editGenerationRef.current) return;
+      setEditError(err instanceof Error ? err.message : String(err));
+    } finally {
+      if (generation === editGenerationRef.current) setLoadingEdit(false);
     }
   }
 
   async function saveFile() {
     if (!editPath) return;
+    setSaving(true);
     try {
       await api(`/api/instances/${instanceId}/files/content`, {
         method: 'PUT',
         json: { path: editPath, content },
       });
+      setEditError('');
       setError('');
-      alert('已保存');
+      closeEditor();
+      setSaved(true);
+      setTimeout(() => setSaved(false), 1500);
+      await load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setEditError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setSaving(false);
     }
   }
 
-  async function remove(file: FileEntry) {
-    if (!confirm(`删除 ${file.name}？`)) return;
+  function requestRemove(file: FileEntry) {
+    setDeleteTarget(file);
+    setDeleteError('');
+  }
+
+  async function confirmRemove() {
+    if (!deleteTarget || deleting) return;
+    setDeleting(true);
+    setDeleteError('');
     try {
-      await api(`/api/instances/${instanceId}/files?path=${encodeURIComponent(file.path)}`, {
+      await api(`/api/instances/${instanceId}/files?path=${encodeURIComponent(deleteTarget.path)}`, {
         method: 'DELETE',
       });
-      if (editPath === file.path) setEditPath(null);
+      if (editPath === deleteTarget.path) closeEditor();
+      await load();
+      closeDelete();
+    } catch (err) {
+      setDeleteError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setDeleting(false);
+    }
+  }
+
+  async function download(file: FileEntry) {
+    if (file.isDirectory) return;
+    const generation = downloadGenerationRef.current;
+    const controller = new AbortController();
+    downloadControllersRef.current.add(controller);
+    setBusyPath(file.path);
+    setError('');
+    try {
+      await downloadAuthenticated(instanceId, file.path, controller.signal);
+    } catch (err) {
+      if (controller.signal.aborted || isAbortError(err)) return;
+      if (err instanceof ApiError && err.status === 429) {
+        setError('下载繁忙，请稍后重试');
+      } else {
+        setError(err instanceof Error ? err.message : String(err));
+      }
+    } finally {
+      downloadControllersRef.current.delete(controller);
+      if (generation === downloadGenerationRef.current) {
+        setBusyPath((current) => (current === file.path ? null : current));
+      }
+    }
+  }
+
+  function startRename(file: FileEntry) {
+    setRenameTarget(file);
+    setRenameName(file.name);
+    setRenameError('');
+  }
+
+  async function confirmRename() {
+    if (!renameTarget) return;
+    const validation = isValidRenameName(renameName);
+    if (validation) {
+      setRenameError(validation);
+      return;
+    }
+    const newName = renameName.trim();
+    if (newName === renameTarget.name) {
+      setRenameError('新名称与旧名称相同');
+      return;
+    }
+    const parentPath = parentOf(renameTarget.path);
+    const to = parentPath ? `${parentPath}/${newName}` : newName;
+    setRenaming(true);
+    setRenameError('');
+    try {
+      await api(`/api/instances/${instanceId}/files/rename`, {
+        method: 'POST',
+        json: { from: renameTarget.path, to },
+      });
+      if (editPath === renameTarget.path) closeEditor();
+      closeRename();
+      setError('');
       await load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setRenameError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setRenaming(false);
     }
   }
 
@@ -115,17 +352,10 @@ function FilesTab({ instanceId }: { instanceId: string }) {
     const form = new FormData();
     form.append('file', file);
     try {
-      const token = localStorage.getItem('mmd_token');
-      const res = await fetch(
+      await apiForm(
         `/api/instances/${instanceId}/files/upload?path=${encodeURIComponent(path)}`,
-        {
-          method: 'POST',
-          headers: token ? { Authorization: `Bearer ${token}` } : {},
-          body: form,
-        },
+        form,
       );
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || '上传失败');
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -153,13 +383,13 @@ function FilesTab({ instanceId }: { instanceId: string }) {
     if (!path) return;
     const parts = path.split('/').filter(Boolean);
     parts.pop();
-    setPath(parts.join('/'));
+    changePath(parts.join('/'));
   }
 
   return (
-    <div className="grid grid-2">
-      <div className="panel">
-        <div className="btn-row" style={{ marginBottom: '0.75rem' }}>
+    <div className="files-workspace panel">
+      <div className="files-toolbar">
+        <div className="btn-row">
           <button className="btn btn-ghost" type="button" onClick={goUp} disabled={!path}>
             上级
           </button>
@@ -168,100 +398,246 @@ function FilesTab({ instanceId }: { instanceId: string }) {
             <input type="file" hidden onChange={(e) => void upload(e)} />
           </label>
         </div>
-        <p className="muted">当前路径：/{path || ''}</p>
-        {error && <p className="error">{error}</p>}
+        <p className="muted files-path">当前路径：/{path || ''}</p>
+        {error && (
+          <div role="alert">
+            <p className="error">
+              {error}{loaded ? ' 当前继续显示上次成功读取的文件列表。' : ''}
+            </p>
+            <button className="btn btn-ghost" type="button" disabled={loading} onClick={() => void load()}>
+              {loading ? '正在重试…' : '重新读取'}
+            </button>
+          </div>
+        )}
+        {saved && <p className="muted">已保存</p>}
+        {!loaded && loading && (
+          <p className="muted" role="status" aria-live="polite">
+            正在读取文件列表…
+          </p>
+        )}
+        {loaded && loading && (
+          <p className="muted" role="status" aria-live="polite">
+            正在刷新文件列表，继续显示上次结果。
+          </p>
+        )}
+      </div>
+
+      {!loaded ? null : files.length === 0 ? (
+        <p className="muted" role="status">当前目录为空。</p>
+      ) : (
         <ul className="file-list">
           {files.map((f) => (
             <li key={f.path}>
-              <button className="linkish" type="button" onClick={() => void openFile(f)}>
-                {f.isDirectory ? '📁 ' : '📄 '}
-                {f.name}
-              </button>
-              <button className="btn btn-ghost" type="button" onClick={() => void remove(f)}>
-                删除
-              </button>
+              {f.isDirectory ? (
+                <button className="linkish" type="button" onClick={() => void openDirectory(f)}>
+                  <span className="file-kind dir" aria-hidden="true" />
+                  {f.name}
+                </button>
+              ) : (
+                <span className="file-name">
+                  <span className="file-kind file" aria-hidden="true" />
+                  {f.name}
+                </span>
+              )}
+              <div className="file-actions">
+                {!f.isDirectory && (
+                  <button
+                    className="btn btn-ghost"
+                    type="button"
+                    disabled={busyPath === f.path || deleting}
+                    onClick={() => void download(f)}
+                  >
+                    {busyPath === f.path ? '下载中…' : '下载'}
+                  </button>
+                )}
+                <button
+                  className="btn btn-ghost"
+                  type="button"
+                  disabled={busyPath === f.path || renaming || deleting}
+                  onClick={() => startRename(f)}
+                >
+                  重命名
+                </button>
+                {canEditFile(f) && (
+                  <button
+                    className="btn btn-ghost"
+                    type="button"
+                    disabled={deleting}
+                    onClick={() => void startEdit(f)}
+                  >
+                    编辑
+                  </button>
+                )}
+                <button
+                  className="btn btn-ghost"
+                  type="button"
+                  disabled={deleting}
+                  onClick={() => requestRemove(f)}
+                >
+                  删除
+                </button>
+              </div>
             </li>
           ))}
         </ul>
-        <div className="field" style={{ marginTop: '1rem' }}>
-          <label>新建文件夹</label>
-          <div className="btn-row">
-            <input value={newDir} onChange={(e) => setNewDir(e.target.value)} placeholder="目录名" />
-            <button className="btn btn-ghost" type="button" onClick={() => void createDir()}>
-              创建
-            </button>
-          </div>
+      )}
+
+      <div className="files-footer field">
+        <label>新建文件夹</label>
+        <div className="btn-row">
+          <input value={newDir} onChange={(e) => setNewDir(e.target.value)} placeholder="目录名" />
+          <button className="btn btn-ghost" type="button" onClick={() => void createDir()}>
+            创建
+          </button>
         </div>
       </div>
-      <div className="panel">
-        <h3 style={{ marginTop: 0 }}>{editPath ? `编辑：${editPath}` : '选择文件进行编辑'}</h3>
-        {editPath ? (
-          <>
-            <textarea value={content} onChange={(e) => setContent(e.target.value)} rows={18} />
-            <button className="btn" type="button" onClick={() => void saveFile()}>
-              保存
+
+      <dialog
+        ref={editDialogRef}
+        className="file-edit-dialog"
+        aria-labelledby="file-edit-dialog-title"
+        onClose={closeEditor}
+        onCancel={(event) => {
+          event.preventDefault();
+          closeEditor();
+        }}
+        onMouseDown={(event) => {
+          if (event.target === event.currentTarget) closeEditor();
+        }}
+      >
+        <div className="file-edit-dialog-panel">
+          <header className="file-edit-dialog-header">
+            <div>
+              <h2 id="file-edit-dialog-title">编辑文件</h2>
+              <p className="file-edit-dialog-path">{editPath}</p>
+            </div>
+            <button className="btn btn-ghost" type="button" aria-label="关闭编辑" onClick={closeEditor}>
+              关闭
             </button>
-          </>
-        ) : (
-          <p className="muted">点击左侧文本文件即可编辑。</p>
-        )}
-      </div>
+          </header>
+          {editError && <p className="error file-edit-dialog-error">{editError}</p>}
+          {loadingEdit ? (
+            <p className="muted file-edit-dialog-loading">加载中…</p>
+          ) : (
+            <textarea
+              className="file-edit-dialog-textarea"
+              value={content}
+              onChange={(e) => setContent(e.target.value)}
+              spellCheck={false}
+            />
+          )}
+          <footer className="file-edit-dialog-footer">
+            <button className="btn btn-ghost" type="button" onClick={closeEditor}>
+              取消
+            </button>
+            <button
+              className="btn"
+              type="button"
+              disabled={saving || loadingEdit || !editPath}
+              onClick={() => void saveFile()}
+            >
+              {saving ? '保存中…' : '保存'}
+            </button>
+          </footer>
+        </div>
+      </dialog>
+
+      <dialog
+        ref={renameDialogRef}
+        className="confirm-dialog"
+        aria-labelledby="file-rename-dialog-title"
+        onClose={closeRename}
+        onCancel={(event) => {
+          event.preventDefault();
+          closeRename();
+        }}
+        onMouseDown={(event) => {
+          if (event.target === event.currentTarget) closeRename();
+        }}
+      >
+        <div className="confirm-dialog-panel">
+          <h2 id="file-rename-dialog-title" className="confirm-dialog-title">
+            重命名
+          </h2>
+          <div className="confirm-dialog-body">
+            <p className="muted" style={{ marginTop: 0 }}>
+              仅同目录改名，不可包含路径分隔符。
+            </p>
+            <div className="field">
+              <label htmlFor="file-rename-input">新名称</label>
+              <input
+                id="file-rename-input"
+                value={renameName}
+                onChange={(e) => setRenameName(e.target.value)}
+                autoComplete="off"
+                autoFocus
+                disabled={renaming}
+              />
+            </div>
+            {renameError && <p className="error">{renameError}</p>}
+          </div>
+          <footer className="confirm-dialog-footer">
+            <button className="btn btn-ghost" type="button" disabled={renaming} onClick={closeRename}>
+              取消
+            </button>
+            <button
+              className="btn"
+              type="button"
+              disabled={renaming || !renameTarget}
+              onClick={() => void confirmRename()}
+            >
+              {renaming ? '重命名中…' : '确认'}
+            </button>
+          </footer>
+        </div>
+      </dialog>
+
+      <ConfirmDialog
+        open={Boolean(deleteTarget)}
+        title={deleteTarget?.isDirectory ? `删除文件夹「${deleteTarget.name}」？` : `删除文件「${deleteTarget?.name ?? ''}」？`}
+        description={
+          deleteTarget?.isDirectory ? (
+            <>
+              <p>将递归删除目录「/{deleteTarget.path}」及其中所有文件，且无法恢复。</p>
+              {deleting && <p role="status" aria-live="polite">正在删除文件夹…</p>}
+              {deleteError && <p className="error">{deleteError}</p>}
+            </>
+          ) : (
+            <>
+              <p>将删除文件「/{deleteTarget?.path ?? ''}」，且无法恢复。</p>
+              {deleting && <p role="status" aria-live="polite">正在删除文件…</p>}
+              {deleteError && <p className="error">{deleteError}</p>}
+            </>
+          )
+        }
+        confirmLabel="确认删除"
+        danger
+        busy={deleting}
+        onConfirm={() => void confirmRemove()}
+        onCancel={closeDelete}
+      />
     </div>
   );
 }
 
-function ConfigTab({ instanceId }: { instanceId: string }) {
-  const [props, setProps] = useState<Record<string, string>>({});
-  const [error, setError] = useState('');
-  const [saved, setSaved] = useState(false);
+type SettingsDraft = Pick<InstanceInfo, 'name' | 'jarFile' | 'jvmArgs' | 'acceptEula' | 'javaRuntimeId'>;
 
-  useEffect(() => {
-    void (async () => {
-      try {
-        setProps(await api(`/api/instances/${instanceId}/config/server.properties`));
-      } catch (err) {
-        setError(err instanceof Error ? err.message : String(err));
-      }
-    })();
-  }, [instanceId]);
+function settingsFromInstance(instance: InstanceInfo): SettingsDraft {
+  return {
+    name: instance.name,
+    jarFile: instance.jarFile,
+    jvmArgs: instance.jvmArgs,
+    acceptEula: instance.acceptEula,
+    javaRuntimeId: instance.javaRuntimeId,
+  };
+}
 
-  async function save() {
-    try {
-      await api(`/api/instances/${instanceId}/config/server.properties`, {
-        method: 'PUT',
-        json: props,
-      });
-      setSaved(true);
-      setError('');
-      setTimeout(() => setSaved(false), 1500);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    }
-  }
-
-  const keys = Object.keys(props).sort();
-
-  return (
-    <div className="panel">
-      <p className="page-desc">编辑 server.properties（修改后需重启实例生效）。</p>
-      {error && <p className="error">{error}</p>}
-      {saved && <p className="muted">已保存</p>}
-      <div className="grid grid-2">
-        {keys.map((key) => (
-          <div className="field" key={key}>
-            <label>{key}</label>
-            <input
-              value={props[key] ?? ''}
-              onChange={(e) => setProps((p) => ({ ...p, [key]: e.target.value }))}
-            />
-          </div>
-        ))}
-      </div>
-      <button className="btn" type="button" onClick={() => void save()}>
-        保存配置
-      </button>
-    </div>
-  );
+function isSameSettings(left: SettingsDraft, right: SettingsDraft): boolean {
+  return left.name === right.name
+    && left.jarFile === right.jarFile
+    && left.jvmArgs === right.jvmArgs
+    && left.acceptEula === right.acceptEula
+    && left.javaRuntimeId === right.javaRuntimeId;
 }
 
 function SettingsTab({
@@ -275,55 +651,163 @@ function SettingsTab({
   const [jarFile, setJarFile] = useState(instance.jarFile);
   const [jvmArgs, setJvmArgs] = useState(instance.jvmArgs);
   const [acceptEula, setAcceptEula] = useState(instance.acceptEula);
+  const [javaRuntimeId, setJavaRuntimeId] = useState<string | null>(instance.javaRuntimeId);
+  const [javaMajor, setJavaMajor] = useState<number | null>(null);
+  const [jvmValid, setJvmValid] = useState(true);
+  const [originalSettings, setOriginalSettings] = useState<SettingsDraft>(() => settingsFromInstance(instance));
   const [error, setError] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const draft = useMemo<SettingsDraft>(
+    () => ({ name, jarFile, jvmArgs, acceptEula, javaRuntimeId }),
+    [acceptEula, jarFile, javaRuntimeId, jvmArgs, name],
+  );
+  const dirty = !isSameSettings(draft, originalSettings);
+  const blocker = useBlocker(dirty || saving);
+
+  useEffect(() => {
+    // 用户在保存过程中触发导航时，保存成功后直接继续原导航。
+    if (blocker.state === 'blocked' && !dirty && !saving) blocker.proceed();
+  }, [blocker, dirty, saving]);
+
+  useEffect(() => {
+    if (!dirty) return;
+    function preventUnload(event: BeforeUnloadEvent) {
+      event.preventDefault();
+      event.returnValue = true;
+    }
+    window.addEventListener('beforeunload', preventUnload);
+    return () => window.removeEventListener('beforeunload', preventUnload);
+  }, [dirty]);
+
+  useEffect(() => {
+    const next = settingsFromInstance(instance);
+    setName(next.name);
+    setJarFile(next.jarFile);
+    setJvmArgs(next.jvmArgs);
+    setAcceptEula(next.acceptEula);
+    setJavaRuntimeId(next.javaRuntimeId);
+    setOriginalSettings(next);
+    setError('');
+    setSaved(false);
+  }, [instance.id]);
 
   async function save() {
+    if (!dirty || saving || !jvmValid) return;
+    setSaving(true);
+    setSaved(false);
     try {
       await api(`/api/instances/${instance.id}`, {
         method: 'PATCH',
-        json: { name, jarFile, jvmArgs, acceptEula },
+        json: draft,
       });
       setError('');
+      setOriginalSettings(draft);
+      setSaved(true);
       onSaved();
-      alert('设置已保存');
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setSaving(false);
     }
   }
 
   return (
     <div className="panel" style={{ maxWidth: 640 }}>
       {error && <p className="error">{error}</p>}
+      {dirty && <p className="muted" role="status">有未保存的设置。</p>}
+      {saved && !dirty && <p className="muted" role="status" aria-live="polite">设置已保存。</p>}
       <div className="field">
-        <label>名称</label>
-        <input value={name} onChange={(e) => setName(e.target.value)} />
+        <label htmlFor="instance-settings-name">名称</label>
+        <input
+          id="instance-settings-name"
+          value={name}
+          disabled={saving}
+          onChange={(e) => {
+            setName(e.target.value);
+            setSaved(false);
+          }}
+        />
       </div>
       <div className="field">
-        <label>Jar 文件名</label>
-        <input value={jarFile} onChange={(e) => setJarFile(e.target.value)} />
+        <label htmlFor="instance-settings-jar-file">Jar 文件名</label>
+        <input
+          id="instance-settings-jar-file"
+          value={jarFile}
+          disabled={saving}
+          onChange={(e) => {
+            setJarFile(e.target.value);
+            setSaved(false);
+          }}
+        />
       </div>
       <div className="field">
-        <label>安装路径</label>
-        <input value={instance.installPath ?? `配置的 DATA_DIR/instances/${instance.id}`} readOnly />
+        <label htmlFor="instance-settings-install-path">安装路径</label>
+        <input
+          id="instance-settings-install-path"
+          value={instance.installPath ?? `配置的 DATA_DIR/instances/${instance.id}`}
+          readOnly
+        />
         <p className="muted" style={{ margin: '0.25rem 0 0', fontSize: '0.8rem' }}>
           实例目录由面板托管，创建后不可修改。
         </p>
       </div>
-      <div className="field">
-        <label>JVM 参数</label>
-        <input value={jvmArgs} onChange={(e) => setJvmArgs(e.target.value)} />
-      </div>
-      <label style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginBottom: '1rem' }}>
+      <JavaRuntimeSelect
+        value={javaRuntimeId}
+        onChange={(nextRuntimeId) => {
+          setJavaRuntimeId(nextRuntimeId);
+          setSaved(false);
+        }}
+        mcVersion={instance.mcVersion}
+        disabled={saving}
+        onResolvedMajorChange={setJavaMajor}
+      />
+      <JvmSettingsEditor
+        value={jvmArgs}
+        onChange={(next) => {
+          setJvmArgs(next);
+          setSaved(false);
+        }}
+        coreType={instance.coreType}
+        javaMajor={javaMajor}
+        disabled={saving}
+        onValidityChange={setJvmValid}
+      />
+      <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginBottom: '1rem' }}>
         <input
+          id="instance-settings-accept-eula"
           type="checkbox"
           checked={acceptEula}
-          onChange={(e) => setAcceptEula(e.target.checked)}
+          disabled={saving}
+          onChange={(e) => {
+            setAcceptEula(e.target.checked);
+            setSaved(false);
+          }}
         />
-        启动时自动写入 eula=true
-      </label>
-      <button className="btn" type="button" onClick={() => void save()}>
-        保存设置
+        <label htmlFor="instance-settings-accept-eula">启动时自动写入 eula=true</label>
+      </div>
+      <button className="btn" type="button" disabled={!dirty || saving || !jvmValid} onClick={() => void save()}>
+        {saving ? '保存中…' : '保存设置'}
       </button>
+
+      <ConfirmDialog
+        open={blocker.state === 'blocked'}
+        title={saving ? '正在保存设置…' : '放弃未保存的设置修改？'}
+        description={
+          saving
+            ? '保存完成后会自动继续离开；保存期间无法放弃或取消。'
+            : '离开设置页会丢失尚未保存的实例设置。'
+        }
+        confirmLabel="放弃修改并离开"
+        danger={!saving}
+        busy={saving}
+        onConfirm={() => {
+          if (!saving && blocker.state === 'blocked') blocker.proceed();
+        }}
+        onCancel={() => {
+          if (!saving && blocker.state === 'blocked') blocker.reset();
+        }}
+      />
     </div>
   );
 }
@@ -333,6 +817,8 @@ export function InstancePage() {
   const [instance, setInstance] = useState<InstanceInfo | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [confirmRestart, setConfirmRestart] = useState(false);
+  const [confirmForceStop, setConfirmForceStop] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -349,10 +835,19 @@ export function InstancePage() {
     return () => clearInterval(timer);
   }, [load]);
 
-  async function act(action: 'start' | 'stop' | 'restart') {
+  async function act(action: 'start' | 'stop' | 'restart', options?: { force?: boolean }) {
     setBusy(true);
     try {
-      await api(`/api/instances/${id}/${action}`, { method: 'POST' });
+      const query = action === 'stop' && options?.force ? '?force=1' : '';
+      const result = await api<InstanceInfo | import('@mmd/shared').InstanceStopPendingResult>(
+        `/api/instances/${id}/${action}${query}`,
+        { method: 'POST' },
+      );
+      if (isInstanceStopPendingResult(result)) {
+        setError(result.error || '服务仍在保存，请等待或选择强制停止');
+      } else {
+        setError('');
+      }
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -366,69 +861,144 @@ export function InstancePage() {
   }
 
   return (
-    <div>
-      <p>
-        <Link to="/">← 返回总览</Link>
-      </p>
-      <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap' }}>
-        <div>
-          <h1 className="page-title">{instance.name}</h1>
-          <p className="page-desc">
-            {instance.coreType} {instance.mcVersion || ''} ·{' '}
-            <span className={`badge ${instance.status}`}>{statusLabel[instance.status]}</span>
-          </p>
+    <div className="instance-page" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+        <div className="instance-hub-header">
+          <div style={{ display: 'flex', alignItems: 'center', gap: '14px', flexWrap: 'wrap' }}>
+            <Link to="/" className="btn btn-icon" title="返回总览">
+              <ArrowLeft size={18} />
+            </Link>
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <h2 style={{ fontSize: '1.25rem', margin: 0, fontWeight: 700 }}>{instance.name}</h2>
+                <span className={`status-badge ${instance.requiresMigration ? 'starting' : instance.status}`}>
+                  {instance.requiresMigration ? '待迁移' : `● ${statusLabel[instance.status] || instance.status}`}
+                </span>
+              </div>
+              <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                核心: {instance.coreType.toUpperCase()} {instance.mcVersion ? `· 版本 ${instance.mcVersion}` : ''} · 节点 {instance.nodeId || 'local'}
+              </span>
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+            {canStartInstance(instance.status) && (
+              <button
+                className="btn btn-ok"
+                type="button"
+                disabled={busy || instance.requiresMigration}
+                onClick={() => void act('start')}
+              >
+                <Play size={14} />
+                启动
+              </button>
+            )}
+            {canStopInstance(instance.status) && (
+              <button
+                className="btn btn-danger"
+                type="button"
+                disabled={busy || instance.requiresMigration}
+                onClick={() => void act('stop')}
+              >
+                <Power size={14} />
+                停止
+              </button>
+            )}
+            <button
+              className="btn"
+              type="button"
+              disabled={busy || instance.requiresMigration || isLifecycleBusy(instance.status)}
+              onClick={() => setConfirmRestart(true)}
+            >
+              <RotateCcw size={14} />
+              重启
+            </button>
+            <button
+              className="btn btn-ghost"
+              type="button"
+              disabled={busy || instance.requiresMigration || !canForceStop(instance.status)}
+              onClick={() => setConfirmForceStop(true)}
+            >
+              强制停止
+            </button>
+          </div>
         </div>
-        <div className="btn-row">
-          <button className="btn" type="button" disabled={busy || instance.requiresMigration} onClick={() => void act('start')}>
-            启动
-          </button>
-          <button className="btn btn-ghost" type="button" disabled={busy || instance.requiresMigration} onClick={() => void act('stop')}>
-            停止
-          </button>
-          <button
-            className="btn btn-ghost"
-            type="button"
-            disabled={busy || instance.requiresMigration}
-            onClick={() => void act('restart')}
-          >
-            重启
-          </button>
-        </div>
+
+        {error && <p className="error" role="alert">{error}</p>}
+
+        {!instance.requiresMigration && (
+          <div className="hub-tabs">
+            <NavLink
+              to={`/instances/${id}`}
+              end
+              className={({ isActive }) => `hub-tab${isActive ? ' active' : ''}`}
+            >
+              <Terminal size={15} />
+              <span>控制台</span>
+            </NavLink>
+            <NavLink
+              to={`/instances/${id}/files`}
+              className={({ isActive }) => `hub-tab${isActive ? ' active' : ''}`}
+            >
+              <Folder size={15} />
+              <span>文件管理</span>
+            </NavLink>
+            <NavLink
+              to={`/instances/${id}/config`}
+              className={({ isActive }) => `hub-tab${isActive ? ' active' : ''}`}
+            >
+              <Sliders size={15} />
+              <span>参数配置</span>
+            </NavLink>
+            <NavLink
+              to={`/instances/${id}/settings`}
+              className={({ isActive }) => `hub-tab${isActive ? ' active' : ''}`}
+            >
+              <Settings size={15} />
+              <span>实例设置 & JVM</span>
+            </NavLink>
+          </div>
+        )}
       </div>
 
-      {error && <p className="error">{error}</p>}
-
-      {instance.requiresMigration ? <MigrationPanel instance={instance} onAdopt={load} /> : <>
-      <div className="tabs">
-        <NavLink to={`/instances/${id}`} end className={({ isActive }) => (isActive ? 'active' : undefined)}>
-          控制台
-        </NavLink>
-        <NavLink
-          to={`/instances/${id}/files`}
-          className={({ isActive }) => (isActive ? 'active' : undefined)}
-        >
-          文件
-        </NavLink>
-        <NavLink
-          to={`/instances/${id}/config`}
-          className={({ isActive }) => (isActive ? 'active' : undefined)}
-        >
-          配置
-        </NavLink>
-        <NavLink
-          to={`/instances/${id}/settings`}
-          className={({ isActive }) => (isActive ? 'active' : undefined)}
-        >
-          设置
-        </NavLink>
+      <div className="instance-body">
+        {instance.requiresMigration ? (
+          <MigrationPanel instance={instance} onAdopt={load} />
+        ) : (
+          <Routes>
+            <Route index element={<ConsoleTab instance={instance} onChange={load} />} />
+            <Route path="files" element={<FilesTab instanceId={instance.id} />} />
+            <Route path="config" element={<ConfigTab instanceId={instance.id} />} />
+            <Route path="settings" element={<SettingsTab instance={instance} onSaved={load} />} />
+          </Routes>
+        )}
       </div>
 
-      <Routes>
-        <Route index element={<ConsoleTab instance={instance} onChange={load} />} />
-        <Route path="files" element={<FilesTab instanceId={instance.id} />} />
-        <Route path="config" element={<ConfigTab instanceId={instance.id} />} />
-        <Route path="settings" element={<SettingsTab instance={instance} onSaved={load} />} />
-      </Routes></>}
+      <ConfirmDialog
+        open={confirmRestart}
+        title={`重启实例「${instance.name}」？`}
+        description="重启会中断当前游戏进程并断开所有在线玩家，未保存的世界数据可能丢失。"
+        confirmLabel="确认重启"
+        busy={busy}
+        onConfirm={() => {
+          setConfirmRestart(false);
+          void act('restart');
+        }}
+        onCancel={() => setConfirmRestart(false)}
+      />
+      <ConfirmDialog
+        open={confirmForceStop}
+        title={`强制停止实例「${instance.name}」？`}
+        description="强制停止会立即强制结束进程，可能导致世界损坏。建议先尝试普通「停止」。"
+        confirmLabel="确认强制停止"
+        danger
+        busy={busy}
+        onConfirm={() => {
+          setConfirmForceStop(false);
+          void act('stop', { force: true });
+        }}
+        onCancel={() => setConfirmForceStop(false)}
+      />
     </div>
   );
 }

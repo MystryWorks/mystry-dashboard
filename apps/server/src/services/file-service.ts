@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { randomBytes } from 'node:crypto';
 import type { Readable } from 'node:stream';
 import type { FileEntry } from '@mmd/shared';
 import { config } from '../config.js';
@@ -24,6 +25,25 @@ export function isFileDownloadCapacityError(error: unknown): error is FileDownlo
       && typeof error === 'object'
       && 'code' in error
       && error.code === 'FILE_DOWNLOAD_CAPACITY');
+}
+
+export class FileRenameConflictError extends Error {
+  readonly code = 'FILE_RENAME_CONFLICT' as const;
+  readonly httpStatus = 409 as const;
+
+  constructor(message = '目标路径已存在，无法重命名') {
+    super(message);
+    this.name = 'FileRenameConflictError';
+  }
+}
+
+export function isFileRenameConflictError(error: unknown): error is FileRenameConflictError {
+  return error instanceof FileRenameConflictError;
+}
+
+export function fileServiceErrorHttpStatus(error: unknown): number {
+  if (isFileRenameConflictError(error)) return 409;
+  return 400;
 }
 
 let activeFileDownloads = 0;
@@ -71,19 +91,27 @@ export function listFiles(instanceId: string, relativePath = ''): FileEntry[] {
     throw new Error('目标不是目录');
   }
 
-  return fs.readdirSync(target, { withFileTypes: true }).map((entry) => {
-    const full = resolveSafePath(root, path.relative(root, path.join(target, entry.name)));
-    const s = fs.lstatSync(full);
-    if (s.isSymbolicLink()) throw new Error('目录中存在 symlink/junction，已拒绝访问');
-    const rel = path.relative(root, full).replace(/\\/g, '/');
-    return {
-      name: entry.name,
-      path: rel,
-      isDirectory: entry.isDirectory(),
-      size: entry.isDirectory() ? 0 : s.size,
-      modifiedAt: s.mtime.toISOString(),
-    };
-  });
+  // 按运行环境区域设置排序（Windows 资源管理器风格：目录优先 + 自然序）
+  const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
+  return fs
+    .readdirSync(target, { withFileTypes: true })
+    .map((entry) => {
+      const full = resolveSafePath(root, path.relative(root, path.join(target, entry.name)));
+      const s = fs.lstatSync(full);
+      if (s.isSymbolicLink()) throw new Error('目录中存在 symlink/junction，已拒绝访问');
+      const rel = path.relative(root, full).replace(/\\/g, '/');
+      return {
+        name: entry.name,
+        path: rel,
+        isDirectory: entry.isDirectory(),
+        size: entry.isDirectory() ? 0 : s.size,
+        modifiedAt: s.mtime.toISOString(),
+      };
+    })
+    .sort((a, b) => {
+      if (a.isDirectory !== b.isDirectory) return a.isDirectory ? -1 : 1;
+      return collator.compare(a.name, b.name);
+    });
 }
 
 export function readTextFile(instanceId: string, relativePath: string): string {
@@ -125,7 +153,7 @@ export function writeTextFile(instanceId: string, relativePath: string, content:
       throw new Error('目标不是普通文件');
     }
   }
-  fs.mkdirSync(path.dirname(target), { recursive: true });
+  fs.mkdirSync(path.dirname(target), { recursive: true, mode: 0o700 });
   fs.writeFileSync(target, Buffer.from(content, 'utf8'));
 }
 
@@ -159,13 +187,23 @@ export function deletePath(instanceId: string, relativePath: string): void {
 }
 
 export function renamePath(instanceId: string, from: string, to: string): void {
+  const fromNorm = from.replace(/\\/g, '/');
+  const toNorm = to.replace(/\\/g, '/');
+  const fromDir = path.posix.dirname(fromNorm);
+  const toDir = path.posix.dirname(toNorm);
+  if (fromDir !== toDir) {
+    throw new Error('重命名只能在同一目录内进行');
+  }
+
   const root = getInstanceDir(instanceId);
   const src = resolveSafePath(root, from);
   const dest = resolveSafePath(root, to);
   assertMutableTarget(root, src);
   assertMutableTarget(root, dest);
   if (!fs.existsSync(src)) throw new Error('源路径不存在');
-  fs.mkdirSync(path.dirname(dest), { recursive: true });
+  if (fs.existsSync(dest)) {
+    throw new FileRenameConflictError();
+  }
   fs.renameSync(src, dest);
 }
 
@@ -173,7 +211,7 @@ export function mkdirPath(instanceId: string, relativePath: string): void {
   const root = getInstanceDir(instanceId);
   const target = resolveSafePath(root, relativePath);
   assertMutableTarget(root, target);
-  fs.mkdirSync(target, { recursive: true });
+  fs.mkdirSync(target, { recursive: true, mode: 0o700 });
 }
 
 export function getAbsoluteFilePath(instanceId: string, relativePath: string): string {
@@ -193,27 +231,67 @@ export function getAbsoluteFilePath(instanceId: string, relativePath: string): s
   return target;
 }
 
+type UploadReplaceOperations = {
+  renameSync?: typeof fs.renameSync;
+  unlinkSync?: typeof fs.unlinkSync;
+};
+
+function createUploadBackupPath(target: string): string {
+  const directory = path.dirname(target);
+  const name = path.basename(target);
+  for (let attempt = 0; attempt < 10; attempt += 1) {
+    const backup = path.join(directory, `.${name}.mmd-upload-backup-${randomBytes(12).toString('hex')}`);
+    if (!fs.existsSync(backup)) return backup;
+  }
+  throw new Error('无法创建上传覆盖备份文件');
+}
+
 export async function saveUploadedFile(
   instanceId: string,
   relativeDir: string,
   filename: string,
   input: Readable,
+  replaceOperations: UploadReplaceOperations = { renameSync: fs.renameSync },
 ): Promise<string> {
   const root = getInstanceDir(instanceId);
   const safeName = path.posix.basename(filename.replace(/\\/g, '/'));
   const target = resolveSafePath(root, path.posix.join(relativeDir || '', safeName));
   assertMutableTarget(root, target);
-  fs.mkdirSync(path.dirname(target), { recursive: true });
+  fs.mkdirSync(path.dirname(target), { recursive: true, mode: 0o700 });
   const temp = await streamToUploadTemp(input, 'file');
+  const renameSync = replaceOperations.renameSync ?? fs.renameSync;
+  const unlinkSync = replaceOperations.unlinkSync ?? fs.unlinkSync;
+  let backup: string | null = null;
   try {
     if (fs.existsSync(target)) {
       const existing = fs.lstatSync(target);
       if (existing.isSymbolicLink() || !existing.isFile()) {
         throw new Error('目标不是普通文件');
       }
-      fs.unlinkSync(target);
+      backup = createUploadBackupPath(target);
+      renameSync(target, backup);
     }
-    fs.renameSync(temp, target);
+    try {
+      renameSync(temp, target);
+    } catch (error) {
+      if (backup) {
+        try {
+          renameSync(backup, target);
+          backup = null;
+        } catch {
+          throw new Error('上传覆盖失败，且旧文件恢复失败');
+        }
+      }
+      throw error;
+    }
+    if (backup) {
+      try {
+        unlinkSync(backup);
+        backup = null;
+      } catch (error) {
+        console.warn(`上传已完成，但无法删除旧文件备份，需手动清理：${backup}`, error);
+      }
+    }
     return path.relative(root, target).replace(/\\/g, '/');
   } finally {
     if (fs.existsSync(temp)) removeUploadTemp(temp);

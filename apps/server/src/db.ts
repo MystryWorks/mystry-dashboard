@@ -1,6 +1,12 @@
-import fs from 'node:fs';
+import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { config } from './config.js';
+import { STAGING_ROOT_DIR } from './services/task-staging-service.js';
+import {
+  finalizeSensitiveDataFiles,
+  forceSecureSensitiveFile,
+  prepareSecureDataLayout,
+} from './utils/data-dir-permissions.js';
 
 export type UserRow = {
   id: string;
@@ -23,8 +29,22 @@ export type InstanceRow = {
   ownership_marker: string | null;
   /** 所属节点 ID，默认为内置本机节点 'local' */
   node_id: string;
+  /** 绑定的 Java 运行时 ID（java_runtimes.id）；NULL 表示使用 PATH 中的 java */
+  java_runtime_id: string | null;
   created_at: string;
   updated_at: string;
+};
+
+/** 面板探测并验证过的 Java 运行时；路径只允许来自面板扫描，不接受请求提交 */
+export type JavaRuntimeRow = {
+  id: string;
+  path: string;
+  version: string | null;
+  major_version: number | null;
+  source: 'env' | 'scan';
+  verified_at: string;
+  /** 最近一次完整扫描是否仍发现并验证此运行时 */
+  available: number;
 };
 
 /** 节点：本机节点（内置，id='local'）或远程 Agent 节点 */
@@ -44,6 +64,8 @@ export type TaskRow = {
   id: string;
   type: string;
   status: string;
+  /** 任务文件阶段：staging / finalizing / completed / failed；旧库可为 NULL */
+  phase: string | null;
   progress: number;
   message: string;
   result_json: string | null;
@@ -52,7 +74,14 @@ export type TaskRow = {
   updated_at: string;
 };
 
-let db: DatabaseSync;
+let db: DatabaseSync | undefined;
+
+export function closeDb(): void {
+  if (db) {
+    db.close();
+    db = undefined;
+  }
+}
 
 export function getDb(): DatabaseSync {
   if (!db) {
@@ -62,14 +91,23 @@ export function getDb(): DatabaseSync {
 }
 
 export function initDb(): void {
-  fs.mkdirSync(config.dataDir, { recursive: true });
-  fs.mkdirSync(config.instancesDir, { recursive: true });
-  fs.mkdirSync(config.cacheDir, { recursive: true });
-  fs.mkdirSync(config.uploadDir, { recursive: true });
+  prepareSecureDataLayout(config.dataDir, [
+    'instances',
+    'imports',
+    path.join('cache', 'cores'),
+    'uploads',
+    STAGING_ROOT_DIR,
+    '.mmd-panel-lock',
+  ]);
 
   db = new DatabaseSync(config.dbPath);
   db.exec('PRAGMA journal_mode = WAL');
   db.exec('PRAGMA foreign_keys = ON');
+  // SQLite 按进程 umask 创建主库与 WAL/SHM 文件，立即收紧为 0600
+  forceSecureSensitiveFile(config.dbPath);
+  forceSecureSensitiveFile(`${config.dbPath}-wal`);
+  forceSecureSensitiveFile(`${config.dbPath}-shm`);
+  finalizeSensitiveDataFiles(config.dbPath);
 
   db.exec(`
     CREATE TABLE IF NOT EXISTS users (
@@ -116,6 +154,16 @@ export function initDb(): void {
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS java_runtimes (
+      id TEXT PRIMARY KEY,
+      path TEXT NOT NULL UNIQUE,
+      version TEXT,
+      major_version INTEGER,
+      source TEXT NOT NULL,
+      verified_at TEXT NOT NULL,
+      available INTEGER NOT NULL DEFAULT 1
+    );
   `);
 
   // 兼容已有数据库：补齐实例目录安全字段
@@ -130,6 +178,27 @@ export function initDb(): void {
   if (!cols.some((c) => c.name === 'ownership_marker')) {
     db.exec('ALTER TABLE instances ADD COLUMN ownership_marker TEXT');
   }
+  if (!cols.some((c) => c.name === 'java_runtime_id')) {
+    db.exec('ALTER TABLE instances ADD COLUMN java_runtime_id TEXT');
+  }
+  const runtimeCols = db.prepare('PRAGMA table_info(java_runtimes)').all() as Array<{ name: string }>;
+  if (!runtimeCols.some((c) => c.name === 'available')) {
+    db.exec('ALTER TABLE java_runtimes ADD COLUMN available INTEGER NOT NULL DEFAULT 1');
+  }
+
+  let taskCols = db.prepare('PRAGMA table_info(tasks)').all() as Array<{ name: string }>;
+  if (!taskCols.some((c) => c.name === 'phase')) {
+    db.exec('ALTER TABLE tasks ADD COLUMN phase TEXT');
+  }
+  taskCols = db.prepare('PRAGMA table_info(tasks)').all() as Array<{ name: string }>;
+  migrateLegacyTaskPhases(taskCols);
+
+  // 索引必须放在列迁移之后，旧库缺列时 CREATE INDEX 会失败。
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
+    CREATE INDEX IF NOT EXISTS idx_tasks_created_at ON tasks(created_at);
+    CREATE INDEX IF NOT EXISTS idx_instances_node_id ON instances(node_id);
+  `);
 
   ensureLocalNode();
 
@@ -139,12 +208,25 @@ export function initDb(): void {
   }
 }
 
+/** 为旧任务行补齐 phase，幂等且可重复执行。 */
+function migrateLegacyTaskPhases(taskCols: Array<{ name: string }>): void {
+  if (!taskCols.some((c) => c.name === 'phase')) return;
+  getDb().exec(`
+    UPDATE tasks SET phase = 'completed'
+    WHERE phase IS NULL AND status = 'completed';
+    UPDATE tasks SET phase = 'failed'
+    WHERE phase IS NULL AND status = 'failed';
+    UPDATE tasks SET phase = 'staging'
+    WHERE phase IS NULL AND status IN ('pending', 'running');
+  `);
+}
+
 /** 确保内置本机节点存在（面板自身，代表当前直接 spawn 的本机执行能力） */
 function ensureLocalNode(): void {
-  const row = db.prepare('SELECT id FROM nodes WHERE id = ?').get('local');
+  const row = getDb().prepare('SELECT id FROM nodes WHERE id = ?').get('local');
   if (row) return;
   const now = new Date().toISOString();
-  db.prepare(
+  getDb().prepare(
     `INSERT INTO nodes (id, name, secret_hash, is_local, host_info, created_at, updated_at)
      VALUES ('local', '本机节点', '', 1, NULL, ?, ?)`,
   ).run(now, now);

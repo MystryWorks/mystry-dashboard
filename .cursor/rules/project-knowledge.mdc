@@ -1,0 +1,9 @@
+---
+description: Minecraft Mystry Dashboard 项目统一知识库入口
+globs:
+alwaysApply: true
+---
+
+必须遵守 @AGENTS.md。
+
+开始任务时读取 @docs/ai/README.md，并按其中的任务路由加载相关页面。不要在本规则中复制项目事实；若规则、知识库与源码冲突，以当前源码和配置为事实，并同步修正文档。

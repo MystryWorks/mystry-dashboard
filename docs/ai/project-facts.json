@@ -1,0 +1,261 @@
+{
+  "schemaVersion": 1,
+  "nodeEngine": ">=22",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "entrypoints": {
+    "shared": "packages/shared/src/index.ts",
+    "server": "apps/server/src/index.ts",
+    "web": "apps/web/src/App.tsx",
+    "panelManager": "PanelManager.cmd",
+    "portableManager": "scripts/portable/mmdctl.mjs",
+    "linuxPanelManager": "PanelManager.sh"
+  },
+  "routeModules": [
+    {
+      "file": "auth.ts",
+      "register": "authRoutes"
+    },
+    {
+      "file": "console.ts",
+      "register": "consoleRoutes"
+    },
+    {
+      "file": "cores.ts",
+      "register": "coreRoutes"
+    },
+    {
+      "file": "files.ts",
+      "register": "fileRoutes"
+    },
+    {
+      "file": "instances.ts",
+      "register": "instanceRoutes"
+    },
+    {
+      "file": "launcher.ts",
+      "register": "launcherRoutes"
+    },
+    {
+      "file": "nodes.ts",
+      "register": "nodeRoutes"
+    },
+    {
+      "file": "system.ts",
+      "register": "systemRoutes"
+    }
+  ],
+  "environmentVariables": [
+    "AUTH_RATE_LIMIT_MAX",
+    "AUTH_RATE_LIMIT_WINDOW_MS",
+    "CONSOLE_COMMAND_WINDOW_MS",
+    "CONSOLE_TICKET_TTL_SECONDS",
+    "CORE_DOWNLOAD_TIMEOUT_MS",
+    "CORE_METADATA_TIMEOUT_MS",
+    "CORS_ORIGINS",
+    "DATA_DIR",
+    "FILE_DOWNLOAD_IDLE_TIMEOUT_MS",
+    "FILE_DOWNLOAD_TICKET_TTL_SECONDS",
+    "HOST",
+    "HTTP_CONNECTION_TIMEOUT_MS",
+    "HTTP_KEEP_ALIVE_TIMEOUT_MS",
+    "HTTP_REQUEST_TIMEOUT_MS",
+    "IMPORT_PREVIEW_TTL_SECONDS",
+    "INSTALLER_KILL_GRACE_MS",
+    "JWT_EXPIRES_IN",
+    "JWT_SECRET",
+    "LAUNCHER_TOKEN",
+    "MAX_COMMAND_BYTES",
+    "MAX_CONCURRENT_FILE_DOWNLOADS",
+    "MAX_CONCURRENT_TASKS",
+    "MAX_CONCURRENT_UPLOADS",
+    "MAX_CONSOLE_BUFFER_BYTES",
+    "MAX_CONSOLE_CHUNK_BYTES",
+    "MAX_CONSOLE_COMMANDS_PER_WINDOW",
+    "MAX_CONSOLE_CONNECTIONS",
+    "MAX_CONSOLE_INCOMING_BYTES",
+    "MAX_CONSOLE_STDIN_BYTES",
+    "MAX_CORE_DOWNLOAD_BYTES",
+    "MAX_CORE_METADATA_BYTES",
+    "MAX_EXISTING_IMPORT_BYTES",
+    "MAX_EXISTING_IMPORT_ENTRIES",
+    "MOD_LOADER_PRECHECK_MAX_DEPTH",
+    "MOD_LOADER_PRECHECK_MAX_ENTRIES",
+    "MOD_LOADER_PRECHECK_TIMEOUT_MS",
+    "MOD_LOADER_SCAN_MAX_DEPTH",
+    "MOD_LOADER_SCAN_MAX_ENTRIES",
+    "MOD_LOADER_SCAN_TIMEOUT_MS",
+    "MAX_INSTALLER_OUTPUT_BYTES",
+    "MAX_IMPORT_PREVIEWS",
+    "MAX_JSON_BODY_BYTES",
+    "MAX_QUEUED_TASKS",
+    "MAX_TEXT_FILE_BYTES",
+    "MAX_UPLOAD_BYTES",
+    "MAX_ZIP_CENTRAL_DIRECTORY_BYTES",
+    "MAX_ZIP_ENTRIES",
+    "MAX_ZIP_ENTRY_BYTES",
+    "MAX_ZIP_UNCOMPRESSED_BYTES",
+    "MMD_CONFIG_PATH",
+    "MMD_DATA_DIR",
+    "MMD_HOME",
+    "MMD_PROCESS_FINGERPRINT",
+    "PORT",
+    "RATE_LIMIT_MAX",
+    "RATE_LIMIT_WINDOW_MS",
+    "SETUP_TOKEN",
+    "TASK_TIMEOUT_MS",
+    "UPLOAD_IDLE_TIMEOUT_MS"
+  ],
+  "requiredScripts": {
+    "build": "npm run build -w @mmd/shared && npm run build -w @mmd/server && npm run build -w @mmd/web",
+    "typecheck": "npm run typecheck -w @mmd/shared && npm run typecheck -w @mmd/server && npm run typecheck -w @mmd/web",
+    "knowledge:check": "node scripts/check-project-knowledge.mjs",
+    "knowledge:test": "node --test scripts/check-project-knowledge.test.mjs",
+    "portable:test": "node --test scripts/portable/portable.test.mjs",
+    "windows:test": "node --test scripts/windows/panel-manager.test.mjs",
+    "test:static": "npm run test:static -w @mmd/server",
+    "audit:production": "node scripts/check-production-audit.mjs",
+    "test:interaction": "npm run test:interaction -w @mmd/web",
+    "test:smoke": "node --test scripts/smoke/panel-smoke.test.mjs",
+    "verify": "npm run knowledge:check && npm run knowledge:test && npm run portable:test && npm run windows:test && npm run linux:test && npm run build -w @mmd/shared && npm run typecheck && npm run test:interaction && npm run test:security -w @mmd/server && npm run test:smoke && npm run test:regression -w @mmd/server && npm run build && npm run test:static",
+    "linux:test": "node --test scripts/linux/panel-manager.test.mjs"
+  },
+  "knowledgeDocuments": [
+    "docs/ai/README.md",
+    "docs/ai/current-state.md",
+    "docs/ai/guardrails.md",
+    "docs/ai/change-playbooks.md",
+    "docs/ai/verification.md",
+    "docs/ai/known-failures.md",
+    "docs/ai/decisions.md"
+  ],
+  "sourcePaths": [
+    "apps/server/src/config.ts",
+    "apps/server/src/index.ts",
+    "apps/server/src/services/existing-server-import-service.ts",
+    "apps/server/src/services/import-preview-service.ts",
+    "apps/server/src/services/jvm-validation-service.ts",
+    "apps/server/src/services/file-service.ts",
+    "apps/server/src/services/process-manager.ts",
+    "apps/server/src/services/server-launch-detect.ts",
+    "apps/server/src/services/task-service.ts",
+    "apps/server/src/utils/path.ts",
+    "apps/web/src/api.ts",
+    "apps/web/src/App.tsx",
+    "apps/web/src/components/JvmSettingsEditor.tsx",
+    "packages/shared/src/index.ts",
+    "packages/shared/src/jvm-config.ts",
+    "packages/shared/src/schemas.ts",
+    "PanelManager.sh",
+    "scripts/linux/panel-manager.test.mjs",
+    "scripts/windows/panel-manager.ps1",
+    "scripts/portable/mmdctl.mjs",
+    "scripts/portable/package-portable.mjs",
+    "scripts/portable/smoke-portable.mjs",
+    "scripts/smoke/panel-smoke.test.mjs",
+    ".github/workflows/portable-release.yml"
+  ],
+  "aiEntrypoints": {
+    "codexAndOpenCode": "AGENTS.md",
+    "cursor": ".cursor/rules/project-knowledge.mdc",
+    "knowledgeIndex": "docs/ai/README.md"
+  },
+  "requiredContent": [
+    {
+      "path": "apps/server/src/routes/system.ts",
+      "includes": ["/api/system/metrics", "MetricsService", "app.authenticate"]
+    },
+    {
+      "path": "AGENTS.md",
+      "includes": [
+        "docs/ai/README.md",
+        "docs/ai/project-facts.json",
+        "npm.cmd run verify",
+        ".slim/deepwork/**"
+      ]
+    },
+    {
+      "path": ".cursor/rules/project-knowledge.mdc",
+      "includes": [
+        "alwaysApply: true",
+        "@AGENTS.md",
+        "@docs/ai/README.md"
+      ]
+    },
+    {
+      "path": ".ignore",
+      "includes": [
+        ".slim/deepwork/"
+      ]
+    },
+    {
+      "path": "docs/architecture.md",
+      "includes": [
+        "launcher.ts",
+        "/api/launcher/shutdown"
+      ]
+    },
+    {
+      "path": "docs/api.md",
+      "includes": [
+        "/api/launcher/shutdown",
+        "X-Launcher-Token"
+      ]
+    },
+    {
+      "path": "docs/development.md",
+      "includes": [
+        "knowledge:check",
+        "docs/ai/"
+      ]
+    },
+    {
+      "path": ".github/PULL_REQUEST_TEMPLATE.md",
+      "includes": [
+        "npm run verify",
+        "知识库"
+      ]
+    },
+    {
+      "path": ".github/workflows/quality.yml",
+      "includes": [
+        "actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+        "actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38",
+        "node-version: 22",
+        "npm run verify"
+      ]
+    },
+    {
+      "path": ".github/workflows/portable-release.yml",
+      "includes": [
+        "windows-2025",
+        "ubuntu-24.04",
+        "windows-x64.zip",
+        "linux-x64.tar.gz",
+        "npm run audit:production",
+        "npm run windows:test",
+        "scripts/portable/smoke-portable.mjs",
+        "RELEASE_GPG_FINGERPRINT",
+        "mmd-release-signing-key.asc",
+        "gh release create",
+        "--verify-tag",
+        "--generate-notes",
+        "--notes",
+        "--prerelease"
+      ]
+    },
+    {
+      "path": "docs/portable-release.md",
+      "includes": [
+        "SHA256SUMS.asc",
+        "mmd-release-signing-key.asc",
+        "MMD_CONFIG_PATH",
+        "data/instances/<id>",
+        "RELEASE_GPG_PRIVATE_KEY",
+        "RELEASE_GPG_FINGERPRINT"
+      ]
+    }
+  ]
+}

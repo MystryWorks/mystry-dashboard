@@ -74,7 +74,7 @@ export async function streamToUploadTemp(input: Readable, prefix: string): Promi
   };
 
   try {
-    fs.mkdirSync(config.uploadDir, { recursive: true });
+    fs.mkdirSync(config.uploadDir, { recursive: true, mode: 0o700 });
     target = tempPath(prefix);
     let bytes = 0;
     const counter = new Transform({
@@ -127,6 +127,15 @@ export function assertUploadPath(filePath: string): string {
   const safe = resolveSafePath(config.uploadDir, path.basename(filePath));
   if (!path.basename(safe).startsWith('.tmp-import-')) {
     throw new Error('非法上传临时文件');
+  }
+  return safe;
+}
+
+/** ZIP 预览只能引用专用前缀的受控上传临时文件。 */
+export function assertImportPreviewUploadPath(filePath: string): string {
+  const safe = resolveSafePath(config.uploadDir, path.basename(filePath));
+  if (!path.basename(safe).startsWith('.tmp-import-preview-')) {
+    throw new Error('非法 ZIP 预览临时文件');
   }
   return safe;
 }
