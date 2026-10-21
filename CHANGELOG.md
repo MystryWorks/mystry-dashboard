@@ -24,6 +24,10 @@
 - 部署表单与移动抽屉可访问性（标签关联、LazyScrollSelect 键盘、焦点陷阱）
 - `mmdctl` 包装脚本尊重用户已设置的 `MMD_HOME`
 
+### Security
+
+- 2026-10-21 官方 registry 生产依赖审计为 0 critical、0 high、2 moderate。通过 `npm audit fix` 升级传递依赖 `fastify`（5.12.7）、`fast-jwt`（6.3.5）、`@fastify/busboy`（3.2.3）、`fast-uri`（3.1.9 / 4.2.3）与 `brace-expansion`（5.0.12），消除 5 项阻断公开发布的 high 公告；React Router 6 的两项 moderate 公告仍作为 Preview 残余风险记录。
+
 ## [0.2.0-preview.1] - 2026-08-06
 
 ### Added

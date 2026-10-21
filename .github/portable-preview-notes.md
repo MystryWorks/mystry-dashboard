@@ -11,7 +11,7 @@
 ## 安全与已知限制
 
 - 默认只监听 `127.0.0.1`；不要把面板端口直接暴露到不可信公网。
-- 2026-08-06 生产依赖审计为 0 critical、0 high、2 moderate。两项 moderate 来自 React Router 6 系依赖公告；当前前端没有 SSR hydration，并且导航目标来自固定站内路径或服务端生成的实例 ID，但仍作为 Preview 残余风险保留并在每次发布重新审计。
+- 2026-10-21 官方 registry 生产依赖审计为 0 critical、0 high、2 moderate（已升级 `fastify`、`fast-jwt`、`@fastify/busboy`、`fast-uri`、`brace-expansion` 消除 5 项 high 公告）。两项 moderate 来自 React Router 6 系依赖公告；当前前端没有 SSR hydration，并且导航目标来自固定站内路径或服务端生成的实例 ID，但仍作为 Preview 残余风险保留并在每次发布重新审计。
 - 下载后请先使用 `SHA256SUMS` 校验文件，导入 `mystry-release-signing-key.asc` 核对指纹后，再用该公钥验证 `SHA256SUMS.asc`。
 
 完整说明见仓库中的 `docs/portable-release.md`。

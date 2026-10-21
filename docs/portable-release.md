@@ -130,7 +130,7 @@ mystry-dashboard/
 - Java 8/17/21 不随包提供，也不会自动下载；用户可正确配置系统 `PATH` 作为默认运行时，或启动面板后扫描并选择其他已安装版本。
 - 登录仍使用浏览器本地 JWT；Cookie 会话、CSRF、TOTP 和公网部署向导尚未实现。
 - 默认只监听 `127.0.0.1`。不要把面板端口直接暴露到不可信公网。
-- 2026-08-06 的官方 registry 生产依赖审计结果为 0 critical、0 high、2 moderate。两项 moderate 来自 React Router 6 系公告；当前 SPA 不使用 SSR hydration，导航目标来自固定站内路径或服务端生成的实例 ID，但这些公告仍作为 Preview 残余风险记录，并须在每次发布时重新审计。`brace-expansion` 与 `fast-uri` 的 high 公告已通过依赖升级消除。
+- 2026-10-21 的官方 registry 生产依赖审计结果为 0 critical、0 high、2 moderate。两项 moderate 来自 React Router 6 系公告；当前 SPA 不使用 SSR hydration，导航目标来自固定站内路径或服务端生成的实例 ID，但这些公告仍作为 Preview 残余风险记录，并须在每次发布时重新审计。此前 `fastify`、`fast-jwt`、`@fastify/busboy`、`fast-uri`、`brace-expansion` 的 high 公告已通过升级传递依赖（`fastify` 5.12.7、`fast-jwt` 6.3.5、`@fastify/busboy` 3.2.3、`fast-uri` 3.1.9 / 4.2.3、`brace-expansion` 5.0.12）消除。开发依赖 `vitest` 3 系的 `tinypool` critical 公告不进入便携包，升级需跨大版本，暂未处理。
 
 ## 发布维护
 
