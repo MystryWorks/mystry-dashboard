@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { DashboardMetrics as Metrics, InstanceInfo } from '@mmd/shared';
+import type { DashboardMetrics as Metrics, InstanceInfo } from '@mystry/shared';
 import { api } from '../api';
 
 export function gib(bytes: number): string { return (bytes / 1024 ** 3).toFixed(1); }

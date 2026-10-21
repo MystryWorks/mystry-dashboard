@@ -12,7 +12,7 @@ import test from 'node:test';
 import type { InstanceRow } from '../db.js';
 
 function prepareTempDataRoot(t: test.TestContext): string {
-  const dataRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'mmd-process-mgr-test-'));
+  const dataRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'mystry-process-mgr-test-'));
   t.after(async () => {
     try {
       const { closeDb } = await import('../db.js');
@@ -22,7 +22,7 @@ function prepareTempDataRoot(t: test.TestContext): string {
     }
     fs.rmSync(dataRoot, { recursive: true, force: true });
   });
-  process.env.MMD_DATA_DIR = dataRoot;
+  process.env.MYSTRY_DATA_DIR = dataRoot;
   process.env.JWT_SECRET = 'a'.repeat(64);
   process.env.SETUP_TOKEN = 'b'.repeat(64);
   return dataRoot;
@@ -115,9 +115,9 @@ test('首次启动写入普通难度，已有 server.properties 不覆盖', asyn
 
 test('R0-03: 普通 stop 超时不得隐式 SIGKILL', async (t) => {
   prepareTempDataRoot(t);
-  process.env.MMD_TEST_STOP_GRACE_MS = '40';
+  process.env.MYSTRY_TEST_STOP_GRACE_MS = '40';
   t.after(() => {
-    delete process.env.MMD_TEST_STOP_GRACE_MS;
+    delete process.env.MYSTRY_TEST_STOP_GRACE_MS;
   });
 
   const { ProcessManager, isInstanceStopPendingError } = await import('./process-manager.js');
@@ -151,7 +151,7 @@ test('Forge 启动按规范参数重写 user_jvm_args.txt', async (t) => {
   const { initDb } = await import('../db.js');
   const { createInstance, getInstanceRow } = await import('./instance-service.js');
   const { defaultInstanceDir } = await import('../utils/path.js');
-  const { parseJvmArgFile } = await import('@mmd/shared');
+  const { parseJvmArgFile } = await import('@mystry/shared');
 
   initDb();
   const info = createInstance({

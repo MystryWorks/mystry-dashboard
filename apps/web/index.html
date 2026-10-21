@@ -3,13 +3,13 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Minecraft Mystry Dashboard</title>
+    <title>Mystry Dashboard</title>
     <script>
-      // 渲染前确定主题，避免闪烁。已保存则用 mmd_theme；
+      // 渲染前确定主题，避免闪烁。已保存则用 mystry_theme；
       // 未保存时仅在 Mystry 暗/亮之间跟随系统偏好。
       (function () {
         try {
-          var t = localStorage.getItem('mmd_theme');
+          var t = localStorage.getItem('mystry_theme');
           if (
             t !== 'light' &&
             t !== 'dark' &&

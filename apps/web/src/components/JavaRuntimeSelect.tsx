@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
-import { recommendedJavaMajor, type JavaDetectResult, type JavaRuntimeInfo } from '@mmd/shared';
+import { recommendedJavaMajor, type JavaDetectResult, type JavaRuntimeInfo } from '@mystry/shared';
 import { detectDefaultJava, listJavaRuntimes } from '../api';
 
 /**

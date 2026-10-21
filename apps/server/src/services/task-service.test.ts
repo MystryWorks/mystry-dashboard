@@ -8,7 +8,7 @@ import path from 'node:path';
 import test from 'node:test';
 
 function prepareTempDataRoot(t: test.TestContext): string {
-  const dataRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'mmd-task-service-test-'));
+  const dataRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'mystry-task-service-test-'));
   t.after(async () => {
     try {
       const { closeDb } = await import('../db.js');
@@ -18,7 +18,7 @@ function prepareTempDataRoot(t: test.TestContext): string {
     }
     fs.rmSync(dataRoot, { recursive: true, force: true });
   });
-  process.env.MMD_DATA_DIR = dataRoot;
+  process.env.MYSTRY_DATA_DIR = dataRoot;
   process.env.JWT_SECRET = 'a'.repeat(64);
   process.env.SETUP_TOKEN = 'b'.repeat(64);
   return dataRoot;
@@ -36,7 +36,7 @@ test('R0-04: recoverInterruptedTasks 不得因 result.instanceId 删除最终实
   recordTaskInstance(task.id, inst.id);
   getDb().prepare("UPDATE tasks SET status = 'running' WHERE id = ?").run(task.id);
 
-  const instanceDir = path.join(process.env.MMD_DATA_DIR!, 'instances', inst.id);
+  const instanceDir = path.join(process.env.MYSTRY_DATA_DIR!, 'instances', inst.id);
   assert.ok(fs.existsSync(instanceDir), '前置：实例目录应已创建');
 
   recoverInterruptedTasks();
@@ -47,7 +47,7 @@ test('R0-04: recoverInterruptedTasks 不得因 result.instanceId 删除最终实
   );
 });
 
-test('R0-04: 仅清理 .mmd-staging 内 marker 匹配且任务未完成的半成品', async (t) => {
+test('R0-04: 仅清理 .mystry-staging 内 marker 匹配且任务未完成的半成品', async (t) => {
   const dataRoot = prepareTempDataRoot(t);
   const { initDb } = await import('../db.js');
   const { createTask, recordTaskStaging, recoverInterruptedTasks } = await import('./task-service.js');

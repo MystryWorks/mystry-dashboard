@@ -12,7 +12,7 @@ async function write(root, relative, content = '') {
 }
 
 async function createFixture(t) {
-  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'mmd-knowledge-'));
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'mystry-knowledge-'));
   t.after(async () => {
     await fs.rm(root, { recursive: true, force: true });
   });

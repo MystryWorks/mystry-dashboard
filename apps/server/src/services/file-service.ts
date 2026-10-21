@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { randomBytes } from 'node:crypto';
 import type { Readable } from 'node:stream';
-import type { FileEntry } from '@mmd/shared';
+import type { FileEntry } from '@mystry/shared';
 import { config } from '../config.js';
 import { getInstanceDir, OWNERSHIP_MARKER_FILE, resolveSafePath } from '../utils/path.js';
 import { streamToUploadTemp, removeUploadTemp } from './upload-service.js';
@@ -240,7 +240,7 @@ function createUploadBackupPath(target: string): string {
   const directory = path.dirname(target);
   const name = path.basename(target);
   for (let attempt = 0; attempt < 10; attempt += 1) {
-    const backup = path.join(directory, `.${name}.mmd-upload-backup-${randomBytes(12).toString('hex')}`);
+    const backup = path.join(directory, `.${name}.mystry-upload-backup-${randomBytes(12).toString('hex')}`);
     if (!fs.existsSync(backup)) return backup;
   }
   throw new Error('无法创建上传覆盖备份文件');

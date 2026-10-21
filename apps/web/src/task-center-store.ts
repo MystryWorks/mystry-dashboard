@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useReducer, useRef } from 'react';
-import type { TaskInfo } from '@mmd/shared';
+import type { TaskInfo } from '@mystry/shared';
 import { ApiError, listTasks } from './api';
 
 /**

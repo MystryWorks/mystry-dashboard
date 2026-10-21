@@ -2,7 +2,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { EventEmitter } from 'node:events';
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileDownloadQuerySchema, fileDownloadTicketBodySchema } from '@mmd/shared';
+import { fileDownloadQuerySchema, fileDownloadTicketBodySchema } from '@mystry/shared';
 import { config } from '../config.js';
 import {
   acquireFileDownloadSlot,

@@ -3,7 +3,7 @@ import path from 'node:path';
 import { createInflateRaw } from 'node:zlib';
 import { pipeline } from 'node:stream/promises';
 import { Readable, Transform, Writable } from 'node:stream';
-import { inspectJvmArgFile, type DetectedJvmConfig } from '@mmd/shared';
+import { inspectJvmArgFile, type DetectedJvmConfig } from '@mystry/shared';
 import { config } from '../config.js';
 import { assertSafeInstanceRoot, resolveSafePath } from '../utils/path.js';
 import { MAX_DETECTED_JVM_ARGS_BYTES } from './jvm-detection-service.js';

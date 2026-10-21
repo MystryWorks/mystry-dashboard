@@ -3,7 +3,7 @@ import type {
   FileDownloadTicketResult,
   FileDownloadTicketStatus,
   FileDownloadTicketStatusResult,
-} from '@mmd/shared';
+} from '@mystry/shared';
 import { config } from '../config.js';
 
 type DownloadTicketRecord = {

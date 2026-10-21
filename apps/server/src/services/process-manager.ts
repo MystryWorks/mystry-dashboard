@@ -3,7 +3,7 @@ import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import type { Writable } from 'node:stream';
-import type { InstanceStatus } from '@mmd/shared';
+import type { InstanceStatus } from '@mystry/shared';
 import type { InstanceRow } from '../db.js';
 import { config } from '../config.js';
 import { assertSafeInstanceRoot, resolveDirFromRow, resolveSafePath } from '../utils/path.js';
@@ -28,7 +28,7 @@ const maxConsoleStdinBytes = resourceLimits.maxConsoleStdinBytes ?? 65_536;
 const defaultStopGraceMs = 15_000;
 
 function getStopGraceMs(): number {
-  const fromEnv = process.env.MMD_TEST_STOP_GRACE_MS;
+  const fromEnv = process.env.MYSTRY_TEST_STOP_GRACE_MS;
   if (!fromEnv) return defaultStopGraceMs;
   const parsed = Number(fromEnv);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : defaultStopGraceMs;
@@ -327,7 +327,7 @@ export class ProcessManager extends EventEmitter {
     }
 
     const normalizedJvmArgs = normalizeAndAssertJvmArgs(instance.jvm_args, {
-      coreType: instance.core_type as import('@mmd/shared').CoreType,
+      coreType: instance.core_type as import('@mystry/shared').CoreType,
       javaRuntimeId: instance.java_runtime_id,
     });
     const jvmArgs = parseJvmArgs(normalizedJvmArgs);

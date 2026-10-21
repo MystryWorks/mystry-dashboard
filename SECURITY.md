@@ -49,7 +49,7 @@
 
 ## 发布资产完整性
 
-公开 Preview 的 GitHub Release 提供压缩包、`SHA256SUMS`、`SHA256SUMS.asc` 与 `mmd-release-signing-key.asc`。维护者配置与指纹说明见 [`.github/RELEASE_SIGNING.md`](.github/RELEASE_SIGNING.md)；用户验证步骤见 [docs/portable-release.md](docs/portable-release.md#下载与校验)。
+公开 Preview 的 GitHub Release 提供压缩包、`SHA256SUMS`、`SHA256SUMS.asc` 与 `mystry-release-signing-key.asc`。维护者配置与指纹说明见 [`.github/RELEASE_SIGNING.md`](.github/RELEASE_SIGNING.md)；用户验证步骤见 [docs/portable-release.md](docs/portable-release.md#下载与校验)。
 
 验证要点：
 

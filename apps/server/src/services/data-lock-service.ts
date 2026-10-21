@@ -7,7 +7,7 @@ import { config } from '../config.js';
 const require = createRequire(import.meta.url);
 const panelVersion: string = (require('../../package.json') as { version: string }).version;
 
-const LOCK_DIR_NAME = '.mmd-panel-lock';
+const LOCK_DIR_NAME = '.mystry-panel-lock';
 const OWNER_FILE = 'owner.json';
 
 export type PanelLockOwner = {

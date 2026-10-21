@@ -12,7 +12,7 @@ import { fetchNodeRuntime } from './fetch-node-runtime.mjs';
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(scriptDir, '..', '..');
-const packageRootName = 'minecraft-mystry-dashboard';
+const packageRootName = 'mystry-dashboard';
 
 function parseArguments(argv) {
   const result = {};
@@ -127,7 +127,7 @@ async function installProductionDependencies(tempRoot) {
       env: {
         ...process.env,
         NPM_CONFIG_CACHE: process.env.NPM_CONFIG_CACHE
-          || path.join(os.tmpdir(), 'mmd-portable-npm-cache'),
+          || path.join(os.tmpdir(), 'mystry-portable-npm-cache'),
       },
     },
   );
@@ -137,9 +137,9 @@ async function installProductionDependencies(tempRoot) {
 function workspaceEntry(relative) {
   const normalized = relative.split(path.sep).join('/');
   return [
-    'node_modules/@mmd/server',
-    'node_modules/@mmd/web',
-    'node_modules/@mmd/shared',
+    'node_modules/@mystry/server',
+    'node_modules/@mystry/web',
+    'node_modules/@mystry/shared',
   ].some((entry) => normalized === entry || normalized.startsWith(`${entry}/`));
 }
 
@@ -153,7 +153,7 @@ async function copyProductionDependencies(source, destination) {
       return !workspaceEntry(relative);
     },
   });
-  const sharedDestination = path.join(destination, '@mmd', 'shared');
+  const sharedDestination = path.join(destination, '@mystry', 'shared');
   await fsp.mkdir(sharedDestination, { recursive: true });
   await copyFileOrDirectory(
     path.join(repoRoot, 'packages', 'shared', 'package.json'),
@@ -197,12 +197,12 @@ async function collectFiles(rootDir) {
 }
 
 function assertCleanWorktreeForRelease(allowDirty) {
-  if (allowDirty || process.env.MMD_PORTABLE_ALLOW_DIRTY === '1') return;
+  if (allowDirty || process.env.MYSTRY_PORTABLE_ALLOW_DIRTY === '1') return;
   try {
     const status = run('git', ['status', '--porcelain']);
     if (status) {
       throw new Error(
-        '工作树不干净，拒绝生成可发布便携包；本地调试可设置 MMD_PORTABLE_ALLOW_DIRTY=1 或传入 --allow-dirty',
+        '工作树不干净，拒绝生成可发布便携包；本地调试可设置 MYSTRY_PORTABLE_ALLOW_DIRTY=1 或传入 --allow-dirty',
       );
     }
   } catch (error) {
@@ -221,15 +221,15 @@ function getGitSha() {
 }
 
 async function createPortableReadme(destination, version) {
-  const content = `Minecraft Mystry Dashboard ${version} 便携预览版
+  const content = `Mystry Dashboard ${version} 便携预览版
 ============================================================
 
 Windows：
-  双击 mmdctl.cmd，或运行 mmdctl.cmd start
+  双击 mystryctl.cmd，或运行 mystryctl.cmd start
 
 Linux / macOS：
-  chmod +x mmdctl
-  ./mmdctl start
+  chmod +x mystryctl
+  ./mystryctl start
 
 支持命令：
   start, foreground, stop, restart, status, logs, open
@@ -309,7 +309,7 @@ export async function packagePortable({
   const rootPackage = JSON.parse(await fsp.readFile(path.join(repoRoot, 'package.json'), 'utf8'));
   const version = rootPackage.version;
   const extension = targetPlatform === 'win32' ? 'zip' : 'tar.gz';
-  const archiveName = `mmd-v${version}-${releasePlatform(targetPlatform)}-${targetArch}.${extension}`;
+  const archiveName = `mystry-v${version}-${releasePlatform(targetPlatform)}-${targetArch}.${extension}`;
   const resolvedOutput = path.resolve(outputDir);
   const archivePath = path.join(resolvedOutput, archiveName);
   await fsp.mkdir(resolvedOutput, { recursive: true });
@@ -318,7 +318,7 @@ export async function packagePortable({
     await fsp.unlink(archivePath);
   }
 
-  const tempRoot = await fsp.mkdtemp(path.join(os.tmpdir(), 'mmd-portable-package-'));
+  const tempRoot = await fsp.mkdtemp(path.join(os.tmpdir(), 'mystry-portable-package-'));
   const stageRoot = path.join(tempRoot, 'stage');
   const portableRoot = path.join(stageRoot, packageRootName);
   try {
@@ -360,8 +360,8 @@ export async function packagePortable({
       path.join(portableRoot, 'app', 'shared', 'package.json'),
     );
     await copyFileOrDirectory(
-      path.join(scriptDir, 'mmdctl.mjs'),
-      path.join(portableRoot, 'app', 'mmdctl.mjs'),
+      path.join(scriptDir, 'mystryctl.mjs'),
+      path.join(portableRoot, 'app', 'mystryctl.mjs'),
     );
     await copyFileOrDirectory(
       path.join(repoRoot, 'LICENSE'),
@@ -370,12 +370,12 @@ export async function packagePortable({
 
     if (targetPlatform === 'win32') {
       await copyFileOrDirectory(
-        path.join(scriptDir, 'mmdctl.cmd'),
-        path.join(portableRoot, 'mmdctl.cmd'),
+        path.join(scriptDir, 'mystryctl.cmd'),
+        path.join(portableRoot, 'mystryctl.cmd'),
       );
     } else {
-      const wrapperPath = path.join(portableRoot, 'mmdctl');
-      await copyFileOrDirectory(path.join(scriptDir, 'mmdctl.sh'), wrapperPath);
+      const wrapperPath = path.join(portableRoot, 'mystryctl');
+      await copyFileOrDirectory(path.join(scriptDir, 'mystryctl.sh'), wrapperPath);
       await fsp.chmod(wrapperPath, 0o755);
     }
 
@@ -393,7 +393,7 @@ export async function packagePortable({
     const files = await collectFiles(portableRoot);
     const manifest = {
       schemaVersion: 1,
-      product: 'minecraft-mystry-dashboard',
+      product: 'mystry-dashboard',
       version,
       gitSha: getGitSha(),
       nodeVersion: runtime.nodeVersion,

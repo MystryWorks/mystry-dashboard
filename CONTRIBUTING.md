@@ -1,6 +1,6 @@
 # 贡献指南
 
-感谢你对 **Minecraft Mystry Dashboard** 的关注。本指南说明如何参与开发与文档改进。
+感谢你对 **Mystry Dashboard** 的关注。本指南说明如何参与开发与文档改进。
 
 ## 行为准则
 

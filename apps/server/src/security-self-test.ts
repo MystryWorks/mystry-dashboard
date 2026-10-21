@@ -39,12 +39,12 @@ function makeStoredZip(name: string, content: Buffer): Buffer {
 }
 
 async function main(): Promise<void> {
-  const dataRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'mmd-security-self-test-'));
-  process.env.MMD_DATA_DIR = dataRoot;
+  const dataRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'mystry-security-self-test-'));
+  process.env.MYSTRY_DATA_DIR = dataRoot;
   process.env.JWT_SECRET = 'a'.repeat(64);
   process.env.SETUP_TOKEN = 'b'.repeat(64);
   process.env.LAUNCHER_TOKEN = 'c'.repeat(64);
-  process.env.MMD_PROCESS_FINGERPRINT = 'security-self-test';
+  process.env.MYSTRY_PROCESS_FINGERPRINT = 'security-self-test';
   process.env.MAX_CONCURRENT_UPLOADS = '1';
   process.env.MAX_UPLOAD_BYTES = '256';
   process.env.MAX_CONCURRENT_FILE_DOWNLOADS = '1';
@@ -294,7 +294,7 @@ async function main(): Promise<void> {
     fs.mkdirSync(reservedSourceDir, { recursive: true });
     fs.writeFileSync(path.join(reservedSourceDir, 'server.jar'), 'managed');
     fs.writeFileSync(
-      path.join(reservedSourceDir, '.mmd-instance.json'),
+      path.join(reservedSourceDir, '.mystry-instance.json'),
       `${JSON.stringify({ version: 1, instanceId: 'managed', marker: 'reserved' })}\n`,
     );
 
@@ -433,7 +433,7 @@ async function main(): Promise<void> {
     fs.mkdirSync(invalidMarkerDir, { recursive: true });
     fs.writeFileSync(path.join(invalidMarkerDir, 'server.jar'), 'copied');
     fs.writeFileSync(
-      path.join(invalidMarkerDir, '.mmd-instance.json'),
+      path.join(invalidMarkerDir, '.mystry-instance.json'),
       `${JSON.stringify({ version: 1, instanceId: 'another-instance', marker: 'foreign' })}\n`,
     );
     const invalidNow = new Date().toISOString();
@@ -603,7 +603,7 @@ async function main(): Promise<void> {
     assert.equal(uploadInstance.statusCode, 200);
     const uploadInstanceId = uploadInstance.json<{ id: string }>().id;
     fs.writeFileSync(path.join(defaultInstanceDir(uploadInstanceId), 'download.txt'), 'download');
-    const boundary = 'mmd-security-test-boundary';
+    const boundary = 'mystry-security-test-boundary';
     const multipartPayload = Buffer.concat([
       Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="test.txt"\r\nContent-Type: application/octet-stream\r\n\r\n`),
       Buffer.from('full'),
@@ -629,7 +629,7 @@ async function main(): Promise<void> {
     releaseUpload();
     removeUploadTemp(await slowUpload);
 
-    const oversizedBoundary = 'mmd-security-test-oversized-boundary';
+    const oversizedBoundary = 'mystry-security-test-oversized-boundary';
     const oversizedMultipartPayload = Buffer.concat([
       Buffer.from(`--${oversizedBoundary}\r\nContent-Disposition: form-data; name="file"; filename="too-large.txt"\r\nContent-Type: application/octet-stream\r\n\r\n`),
       Buffer.alloc(config.maxUploadBytes + 1, 0x61),
@@ -667,7 +667,7 @@ async function main(): Promise<void> {
     assert.equal(protectedInstance.statusCode, 200);
     const protectedInstanceId = protectedInstance.json<{ id: string }>().id;
     const protectedRoot = defaultInstanceDir(protectedInstanceId);
-    const markerPath = path.join(protectedRoot, '.mmd-instance.json');
+    const markerPath = path.join(protectedRoot, '.mystry-instance.json');
     const markerBefore = fs.readFileSync(markerPath, 'utf8');
     const deleteRoot = await app.inject({
       method: 'DELETE',
@@ -680,7 +680,7 @@ async function main(): Promise<void> {
       method: 'PUT',
       url: `/api/instances/${protectedInstanceId}/files/content`,
       headers: authorization,
-      payload: { path: 'nested/../.mmd-instance.json', content: 'tampered' },
+      payload: { path: 'nested/../.mystry-instance.json', content: 'tampered' },
     });
     assert.equal(writeMarker.statusCode, 400);
     assert.equal(fs.readFileSync(markerPath, 'utf8'), markerBefore);

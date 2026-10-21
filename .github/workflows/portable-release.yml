@@ -136,13 +136,13 @@ jobs:
       - name: Smoke test final archive
         run: >-
           node scripts/portable/smoke-portable.mjs
-          "release/mmd-${{ needs.prepare.outputs.tag }}-${{ matrix.asset_suffix }}"
+          "release/mystry-${{ needs.prepare.outputs.tag }}-${{ matrix.asset_suffix }}"
 
       - name: Upload portable archive
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: portable-${{ matrix.platform }}-${{ matrix.arch }}
-          path: release/mmd-${{ needs.prepare.outputs.tag }}-${{ matrix.asset_suffix }}
+          path: release/mystry-${{ needs.prepare.outputs.tag }}-${{ matrix.asset_suffix }}
           if-no-files-found: error
           retention-days: 14
 
@@ -241,7 +241,7 @@ jobs:
               --output release-assets/SHA256SUMS.asc \
               release-assets/SHA256SUMS
           fi
-          cp "$PUB_KEY" release-assets/mmd-release-signing-key.asc
+          cp "$PUB_KEY" release-assets/mystry-release-signing-key.asc
 
       - name: Verify checksum signature in isolated keyring
         shell: bash
@@ -269,12 +269,12 @@ jobs:
         run: |
           set -euo pipefail
           VERSION="${{ needs.prepare.outputs.tag }}"
-          test -f "release-assets/mmd-${VERSION}-windows-x64.zip"
-          test -f "release-assets/mmd-${VERSION}-linux-x64.tar.gz"
+          test -f "release-assets/mystry-${VERSION}-windows-x64.zip"
+          test -f "release-assets/mystry-${VERSION}-linux-x64.tar.gz"
           test -f release-assets/SHA256SUMS
           test -f release-assets/SHA256SUMS.asc
           test -f release-assets/sbom.cdx.json
-          test -f release-assets/mmd-release-signing-key.asc
+          test -f release-assets/mystry-release-signing-key.asc
 
       - name: Create GitHub prerelease
         shell: bash

@@ -1,6 +1,6 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import type { JavaDetectResult } from '@mmd/shared';
+import type { JavaDetectResult } from '@mystry/shared';
 import { getMinecraftChildEnv } from '../utils/child-env.js';
 
 const execFileAsync = promisify(execFile);

@@ -89,7 +89,7 @@ export async function fetchNodeRuntime({
   const targetArch = arch === 'amd64' ? 'x64' : arch;
   const archiveName = archiveFor(version, targetPlatform, targetArch);
   const baseUrl = `https://nodejs.org/dist/v${version}`;
-  const tempRoot = await fsp.mkdtemp(path.join(os.tmpdir(), 'mmd-node-runtime-'));
+  const tempRoot = await fsp.mkdtemp(path.join(os.tmpdir(), 'mystry-node-runtime-'));
   const archivePath = path.join(tempRoot, archiveName);
   const checksumsPath = path.join(tempRoot, 'SHASUMS256.txt');
   const extractDir = path.join(tempRoot, 'extract');

@@ -58,7 +58,7 @@ export function LoginPage() {
           <p className="page-desc">
             {needsSetup
               ? '首次启动，请创建管理员账号。'
-              : '使用管理员账号登录 Minecraft Mystry Dashboard。'}
+              : '使用管理员账号登录 Mystry Dashboard。'}
           </p>
           <div className="field">
             <label htmlFor="username">用户名</label>

@@ -42,7 +42,7 @@ function runControl(root, command, env) {
     : path.join(root, 'runtime', 'bin', 'node');
   return run(
     nodeExecutable,
-    ['--experimental-sqlite', path.join(root, 'app', 'mmdctl.mjs'), command],
+    ['--experimental-sqlite', path.join(root, 'app', 'mystryctl.mjs'), command],
     { cwd: root, env },
   );
 }
@@ -51,11 +51,11 @@ function verifyWrapper(root, env) {
   const output = process.platform === 'win32'
     ? run(
         process.env.ComSpec || 'cmd.exe',
-        ['/d', '/s', '/c', 'mmdctl.cmd help'],
+        ['/d', '/s', '/c', 'mystryctl.cmd help'],
         { cwd: root, env },
       )
-    : run(path.join(root, 'mmdctl'), ['help'], { cwd: root, env });
-  if (!output.includes('Minecraft Mystry Dashboard 便携版管理器')) {
+    : run(path.join(root, 'mystryctl'), ['help'], { cwd: root, env });
+  if (!output.includes('Mystry Dashboard 便携版管理器')) {
     throw new Error('平台入口脚本未能调用包内便携控制器');
   }
 }
@@ -108,7 +108,7 @@ async function main() {
   const archivePath = path.resolve(archive);
   if (!fs.existsSync(archivePath)) throw new Error(`便携包不存在：${archivePath}`);
 
-  const tempRoot = await fsp.mkdtemp(path.join(os.tmpdir(), 'mmd-portable-smoke-'));
+  const tempRoot = await fsp.mkdtemp(path.join(os.tmpdir(), 'mystry-portable-smoke-'));
   const extractDir = path.join(tempRoot, 'extract');
   let portableRoot = '';
   let started = false;
@@ -116,7 +116,7 @@ async function main() {
   try {
     await fsp.mkdir(extractDir);
     run('tar', ['-xf', archivePath, '-C', extractDir]);
-    portableRoot = path.join(extractDir, 'minecraft-mystry-dashboard');
+    portableRoot = path.join(extractDir, 'mystry-dashboard');
     const manifest = JSON.parse(
       await fsp.readFile(path.join(portableRoot, 'manifest.json'), 'utf8'),
     );
@@ -132,10 +132,10 @@ async function main() {
       if (entries.length !== 0) throw new Error(`发布包的 ${name}/ 必须为空`);
     }
     const sharedStat = await fsp.lstat(
-      path.join(portableRoot, 'app', 'node_modules', '@mmd', 'shared'),
+      path.join(portableRoot, 'app', 'node_modules', '@mystry', 'shared'),
     );
     if (!sharedStat.isDirectory() || sharedStat.isSymbolicLink()) {
-      throw new Error('@mmd/shared 必须是发布包内的物理目录');
+      throw new Error('@mystry/shared 必须是发布包内的物理目录');
     }
     if (fs.existsSync(path.join(portableRoot, 'app', 'node_modules', 'typescript'))) {
       throw new Error('发布包不得包含 TypeScript 开发依赖');
@@ -144,10 +144,10 @@ async function main() {
     const port = await reservePort();
     const env = {
       ...process.env,
-      MMD_HOME: portableRoot,
-      MMD_CONFIG_PATH: path.join(portableRoot, 'config', 'panel.env'),
-      MMD_DATA_DIR: path.join(portableRoot, 'data'),
-      MMD_NO_BROWSER: '1',
+      MYSTRY_HOME: portableRoot,
+      MYSTRY_CONFIG_PATH: path.join(portableRoot, 'config', 'panel.env'),
+      MYSTRY_DATA_DIR: path.join(portableRoot, 'data'),
+      MYSTRY_NO_BROWSER: '1',
       PORT: String(port),
     };
     controlEnv = env;
@@ -168,7 +168,7 @@ async function main() {
     }
     const health = await fetch(`http://127.0.0.1:${port}/api/health`);
     const body = await health.json();
-    if (!health.ok || body?.service !== 'minecraft-mystry-dashboard') {
+    if (!health.ok || body?.service !== 'mystry-dashboard') {
       throw new Error(`健康检查失败：HTTP ${health.status}`);
     }
     const statusOutput = runControl(portableRoot, 'status', env);

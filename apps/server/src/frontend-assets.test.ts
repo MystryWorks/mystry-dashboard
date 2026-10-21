@@ -7,7 +7,7 @@ import Fastify from 'fastify';
 import { registerFrontendAssets } from './frontend-assets.js';
 
 test('构建产物更新后仍以 JavaScript MIME 提供新增模块资源', async (t) => {
-  const webDist = await mkdtemp(path.join(os.tmpdir(), 'mmd-static-assets-'));
+  const webDist = await mkdtemp(path.join(os.tmpdir(), 'mystry-static-assets-'));
   t.after(async () => {
     await rm(webDist, { recursive: true, force: true });
   });

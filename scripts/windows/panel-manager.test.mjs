@@ -31,7 +31,7 @@ function runPowerShell(command) {
 
 test('Invoke-Npm 不会把 npm 输出混入函数返回值', { skip: process.platform !== 'win32' }, () => {
   const result = runPowerShell(`
-    $env:MMD_PANEL_MANAGER_LIBRARY_ONLY = '1'
+    $env:MYSTRY_PANEL_MANAGER_LIBRARY_ONLY = '1'
     . ${quotePowerShell(managerPath)}
     $captured = @(Invoke-Npm -Arguments @('--version') -FailureMessageKey 'InstallFailed')
     if ($captured.Count -ne 0) { throw "Invoke-Npm 返回了 $($captured.Count) 个对象" }
@@ -40,7 +40,7 @@ test('Invoke-Npm 不会把 npm 输出混入函数返回值', { skip: process.pla
 });
 
 test('PanelManager 自动把三个重复密钥修复为不同值', { skip: process.platform !== 'win32' }, () => {
-  const testRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'mmd-panel-manager-test-'));
+  const testRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'mystry-panel-manager-test-'));
   try {
     const envPath = path.join(testRoot, 'panel.env');
     const envExamplePath = path.join(testRoot, 'panel.env.example');
@@ -57,7 +57,7 @@ test('PanelManager 自动把三个重复密钥修复为不同值', { skip: proce
     fs.writeFileSync(envExamplePath, content, 'utf8');
 
     const result = runPowerShell(`
-      $env:MMD_PANEL_MANAGER_LIBRARY_ONLY = '1'
+      $env:MYSTRY_PANEL_MANAGER_LIBRARY_ONLY = '1'
       . ${quotePowerShell(managerPath)}
       $script:EnvPath = ${quotePowerShell(envPath)}
       $script:EnvExamplePath = ${quotePowerShell(envExamplePath)}
@@ -82,7 +82,7 @@ test('PanelManager 自动把三个重复密钥修复为不同值', { skip: proce
 });
 
 test('R1-03: 伪造健康响应时 Invoke-SafeShutdown 不得发送 LAUNCHER_TOKEN', { skip: process.platform !== 'win32' }, () => {
-  const testRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'mmd-panel-shutdown-test-'));
+  const testRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'mystry-panel-shutdown-test-'));
   try {
     const statePath = path.join(testRoot, 'state.json');
     const envPath = path.join(testRoot, 'panel.env');
@@ -99,7 +99,7 @@ test('R1-03: 伪造健康响应时 Invoke-SafeShutdown 不得发送 LAUNCHER_TOK
     );
 
     const result = runPowerShell(`
-      $env:MMD_PANEL_MANAGER_LIBRARY_ONLY = '1'
+      $env:MYSTRY_PANEL_MANAGER_LIBRARY_ONLY = '1'
       . ${quotePowerShell(managerPath)}
       $script:StatePath = ${quotePowerShell(statePath)}
       $script:EnvPath = ${quotePowerShell(envPath)}
@@ -129,7 +129,7 @@ test('R1-03: 伪造健康响应时 Invoke-SafeShutdown 不得发送 LAUNCHER_TOK
         param([string]$ExpectedFingerprint)
         $body = @{
           ok = $true
-          service = 'minecraft-mystry-dashboard'
+          service = 'mystry-dashboard'
           processFingerprint = 'wrong-fingerprint'
         }
         if ($ExpectedFingerprint -and ([string]$body.processFingerprint -ne [string]$ExpectedFingerprint)) {

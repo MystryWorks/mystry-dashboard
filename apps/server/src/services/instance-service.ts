@@ -5,8 +5,8 @@ import type {
   InstanceInfo,
   InstanceStatus,
   UpdateInstanceInput,
-} from '@mmd/shared';
-import { LOCAL_NODE_ID } from '@mmd/shared';
+} from '@mystry/shared';
+import { LOCAL_NODE_ID } from '@mystry/shared';
 import { getDb, type InstanceRow } from '../db.js';
 import {
   defaultInstanceDir,

@@ -4,21 +4,21 @@
 
 | 方式 | 适合 | 环境与入口 |
 |---|---|---|
-| 便携版 | 直接使用面板 | Windows/Linux x64，自带 Node.js，使用 `mmdctl` |
+| 便携版 | 直接使用面板 | Windows/Linux x64，自带 Node.js，使用 `mystryctl` |
 | 源码管理器 | 从源码构建并统一启停 | Node.js ≥ 22，使用 `PanelManager` |
 | 手动开发 | 修改前后端代码 | Node.js ≥ 22，运行两个开发终端 |
 
-所有方式均需另行准备服务端所需的 Java。macOS 没有本 Preview 便携包。配置文件随入口不同而变化，见 [配置文件对照表](configuration.md)；文档中的 `DATA_DIR/...` 表示最终数据根，`MMD_DATA_DIR` 优先于 `DATA_DIR`。
+所有方式均需另行准备服务端所需的 Java。macOS 没有本 Preview 便携包。配置文件随入口不同而变化，见 [配置文件对照表](configuration.md)；文档中的 `DATA_DIR/...` 表示最终数据根，`MYSTRY_DATA_DIR` 优先于 `DATA_DIR`。
 
 Windows PowerShell 使用 `npm.cmd`；下文通用 npm 脚本在 Linux/macOS 使用 `npm`。
 
 ## 便携版（普通用户推荐）
 
-便携包已经包含 Node.js、生产依赖和构建产物。Windows 解压后双击 `mmdctl.cmd`；Linux x64 解压后运行：
+便携包已经包含 Node.js、生产依赖和构建产物。Windows 解压后双击 `mystryctl.cmd`；Linux x64 解压后运行：
 
 ```bash
-chmod +x mmdctl
-./mmdctl start
+chmod +x mystryctl
+./mystryctl start
 ```
 
 无需执行 `npm install`。请先安装适配目标服务端的 Java；可用 `java -version` 检查默认 PATH 运行时，或在面板中探测并选择其他已安装运行时。完整平台列表、校验、升级和限制见 [便携预览版](portable-release.md)。
@@ -77,8 +77,8 @@ chmod +x PanelManager.sh
 如需隔离 WSL 测试数据，请在启动、停止、查看状态等每次操作前使用相同的环境变量：
 
 ```bash
-export MMD_CONFIG_PATH="${HOME}/mmd-test/config/panel.env"
-export MMD_DATA_DIR="${HOME}/mmd-test"
+export MYSTRY_CONFIG_PATH="${HOME}/mystry-test/config/panel.env"
+export MYSTRY_DATA_DIR="${HOME}/mystry-test"
 ./PanelManager.sh start
 ```
 
@@ -90,7 +90,7 @@ export MMD_DATA_DIR="${HOME}/mmd-test"
 
 ```bash
 npm install
-npm run build -w @mmd/shared
+npm run build -w @mystry/shared
 ```
 
 仅首次配置时复制环境变量模板；已有 `.env` 请保留并检查所需字段。
@@ -159,7 +159,7 @@ npm start
 2. 空用户库会显示「初始化管理员」。在「初始化令牌」中填入当前配置的 `SETUP_TOKEN`：管理器按启动提示提供令牌；手动运行时从自己配置的 `.env` 取得。默认配置位置见 [配置说明](configuration.md)，请勿把令牌或配置文件分享出去。
 3. 填写用户名（去除首尾空白后 2–64 个字符）与密码（至少 12 个字符，UTF-8 编码不超过 72 字节），点击「创建并进入」。页面自动发送所需的 `X-Setup-Token` 请求头，成功后进入面板。
 4. 已创建管理员时，页面显示「登录面板」，使用该账号登录即可。初始化令牌不能用作登录密码。
-5. 手动配置模式完成后，从实际使用的配置文件移除 `SETUP_TOKEN` 并重启面板；源码管理器和 `mmdctl` 提供自动清理。若自动清理未完成，也可从当前配置文件移除后重启。
+5. 手动配置模式完成后，从实际使用的配置文件移除 `SETUP_TOKEN` 并重启面板；源码管理器和 `mystryctl` 提供自动清理。若自动清理未完成，也可从当前配置文件移除后重启。
 
 看到总览后，按 [分步教程：第一次开服](tutorials.md#教程-1第一次开服推荐-paper) 部署实例，再启动 Minecraft 服务端。
 
@@ -167,8 +167,8 @@ npm start
 
 | 命令 | 作用 |
 |------|------|
-| `npm run dev:server` | 后端热重载开发（`@mmd/server`） |
-| `npm run dev:web` | 前端 Vite 开发服务器（`@mmd/web`） |
+| `npm run dev:server` | 后端热重载开发（`@mystry/server`） |
+| `npm run dev:web` | 前端 Vite 开发服务器（`@mystry/web`） |
 | `npm run build` | 构建 shared → server → web |
 | `npm run portable:test` | 验证便携控制器和发布辅助脚本 |
 | `npm run audit:production` | 使用官方 registry 检查生产依赖，阻断 high / critical |

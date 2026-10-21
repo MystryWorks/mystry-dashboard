@@ -100,7 +100,7 @@ afterEach(() => { cleanup(); vi.useRealTimers(); vi.unstubAllGlobals(); vi.resto
 
 test('导航菜单禁用主内容和顶栏右侧，Escape 后解除并恢复入口焦点', async () => {
   const user = userEvent.setup();
-  localStorage.setItem('mmd_token', 'test-only');
+  localStorage.setItem('mystry_token', 'test-only');
   mount(<AuthProvider><App /></AuthProvider>);
   const trigger = await screen.findByRole('button', { name: '打开导航菜单' });
   await user.click(trigger);
@@ -118,7 +118,7 @@ test('导航菜单禁用主内容和顶栏右侧，Escape 后解除并恢复入�
 
 test('导航菜单关闭按钮可点，点击后关菜单并恢复入口焦点', async () => {
   const user = userEvent.setup();
-  localStorage.setItem('mmd_token', 'test-only');
+  localStorage.setItem('mystry_token', 'test-only');
   mount(<AuthProvider><App /></AuthProvider>);
   const trigger = await screen.findByRole('button', { name: '打开导航菜单' });
   await user.click(trigger);
@@ -132,7 +132,7 @@ test('导航菜单关闭按钮可点，点击后关菜单并恢复入口焦点',
 
 test('打开导航菜单后点击导航会跳转并关闭菜单', async () => {
   const user = userEvent.setup();
-  localStorage.setItem('mmd_token', 'test-only');
+  localStorage.setItem('mystry_token', 'test-only');
   mount(<AuthProvider><App /></AuthProvider>);
   const trigger = await screen.findByRole('button', { name: '打开导航菜单' });
   await user.click(trigger);
@@ -224,7 +224,7 @@ test('ZIP 按钮可用键盘触发，选择与拖放拒绝非 ZIP 并允许重�
 
 test('恢复预览和上传期间锁定 ZIP 选择与拖放', async () => {
   const user = userEvent.setup();
-  sessionStorage.setItem('mmd_import_preview_id', 'restoring');
+  sessionStorage.setItem('mystry_import_preview_id', 'restoring');
   const fetchDefault = globalThis.fetch;
   let resolvePreview: (response: Response) => void = () => {};
   vi.stubGlobal('fetch', vi.fn((url, options) => String(url).includes('/import/previews/')

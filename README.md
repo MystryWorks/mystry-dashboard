@@ -1,4 +1,4 @@
-# Minecraft Mystry Dashboard
+# Mystry Dashboard
 
 用浏览器管理本机上的多个 **Minecraft Java 服务端**：启停、实时控制台、文件与配置、一键部署和已有服务端导入。
 
@@ -71,7 +71,7 @@ Linux/macOS 将 `npm.cmd` 换成 `npm`。后端托管构建后的 Web 页面；�
 
 ## 数据与安全
 
-最终数据根优先使用 `MMD_DATA_DIR`，其次 `DATA_DIR`，默认是仓库或便携包下的 `data/`。文档中的 `DATA_DIR/...` 均表示最终解析后的数据根。
+最终数据根优先使用 `MYSTRY_DATA_DIR`，其次 `DATA_DIR`，默认是仓库或便携包下的 `data/`。文档中的 `DATA_DIR/...` 均表示最终解析后的数据根。
 
 | 路径 | 用途 |
 |---|---|

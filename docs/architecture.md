@@ -46,9 +46,9 @@ flowchart LR
 
 | 包名 | 路径 | 职责 |
 |------|------|------|
-| `@mmd/shared` | `packages/shared` | 共享类型与接口定义 |
-| `@mmd/server` | `apps/server` | API、进程、文件、部署 |
-| `@mmd/web` | `apps/web` | 管理面板 UI |
+| `@mystry/shared` | `packages/shared` | 共享类型与接口定义 |
+| `@mystry/server` | `apps/server` | API、进程、文件、部署 |
+| `@mystry/web` | `apps/web` | 管理面板 UI |
 
 根 `package.json` 通过 npm workspaces 聚合 `apps/*` 与 `packages/*`。
 
@@ -57,28 +57,28 @@ flowchart LR
 便携包不从源码目录运行。`scripts/portable/package-portable.mjs` 在目标平台原生组装以下布局：
 
 ```text
-minecraft-mystry-dashboard/
+mystry-dashboard/
 ├── runtime/                 # 官方 Node.js 固定版本
 ├── app/
 │   ├── server/dist/
 │   ├── web/dist/
 │   ├── shared/dist/
-│   ├── mmdctl.mjs
+│   ├── mystryctl.mjs
 │   └── node_modules/        # 仅生产依赖
 ├── config/
 ├── data/
 ├── logs/
-├── mmdctl.cmd
-├── mmdctl
+├── mystryctl.cmd
+├── mystryctl
 ├── manifest.json
 └── VERSION
 ```
 
-工作区 `@mmd/shared` 会被物理复制到 `app/node_modules/@mmd/shared`，发布包拒绝符号链接，避免 Windows ZIP 保留指向构建仓库的 junction。`config/`、`data/` 和 `logs/` 在发布产物中为空。
+工作区 `@mystry/shared` 会被物理复制到 `app/node_modules/@mystry/shared`，发布包拒绝符号链接，避免 Windows ZIP 保留指向构建仓库的 junction。`config/`、`data/` 和 `logs/` 在发布产物中为空。
 
-便携包的 `mmdctl.cmd` 和 `mmdctl` 只负责调用包内 Node；Linux / WSL 源码入口 `PanelManager.sh` 先完成 Node 版本、依赖和构建预检，再调用同一跨平台生命周期控制器 `scripts/portable/mmdctl.mjs`。后台启动会记录 PID、随机进程指纹、启动时间和健康地址，并通过 `LAUNCHER_TOKEN` 调用回环关闭接口。若 PID 被复用或健康检查不匹配，控制器不会直接强杀未知进程。
+便携包的 `mystryctl.cmd` 和 `mystryctl` 只负责调用包内 Node；Linux / WSL 源码入口 `PanelManager.sh` 先完成 Node 版本、依赖和构建预检，再调用同一跨平台生命周期控制器 `scripts/portable/mystryctl.mjs`。后台启动会记录 PID、随机进程指纹、启动时间和健康地址，并通过 `LAUNCHER_TOKEN` 调用回环关闭接口。若 PID 被复用或健康检查不匹配，控制器不会直接强杀未知进程。
 
-运行目录由 `MMD_HOME` 定位；配置和数据可分别通过 `MMD_CONFIG_PATH`、`MMD_DATA_DIR` 解耦。默认实例边界仍为便携根目录的 `data/instances/<id>`。
+运行目录由 `MYSTRY_HOME` 定位；配置和数据可分别通过 `MYSTRY_CONFIG_PATH`、`MYSTRY_DATA_DIR` 解耦。默认实例边界仍为便携根目录的 `data/instances/<id>`。
 
 ## 后端模块
 
@@ -233,4 +233,4 @@ HTTP 请求与上传还有总请求、连接、keep-alive 和上传空闲超时�
 
 `packages/shared/src/index.ts` 导出 `InstanceInfo`、`DeployCoreInput`、`TaskInfo`、`ConsoleMessage`、`NodeInfo` 等类型，以及请求体 JSON Schema（如 `createInstanceBodySchema`），供 Fastify AJV 与 TypeScript 契约共用，减少路由内双写漂移。
 
-构建顺序：**必须先构建 `@mmd/shared`**，再构建 server / web。独立类型检查：`npm run typecheck`。
+构建顺序：**必须先构建 `@mystry/shared`**，再构建 server / web。独立类型检查：`npm run typecheck`。

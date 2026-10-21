@@ -3,7 +3,7 @@ import path from 'node:path';
 import { readFile, statfs } from 'node:fs/promises';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import type { DashboardMetrics } from '@mmd/shared';
+import type { DashboardMetrics } from '@mystry/shared';
 
 const execute = promisify(execFile);
 type Target = { id: string; pid: number };

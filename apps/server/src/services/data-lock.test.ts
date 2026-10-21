@@ -9,11 +9,11 @@ import path from 'node:path';
 import test from 'node:test';
 
 function prepareTempDataRoot(t: test.TestContext): string {
-  const dataRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'mmd-data-lock-test-'));
+  const dataRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'mystry-data-lock-test-'));
   t.after(() => {
     fs.rmSync(dataRoot, { recursive: true, force: true });
   });
-  process.env.MMD_DATA_DIR = dataRoot;
+  process.env.MYSTRY_DATA_DIR = dataRoot;
   process.env.JWT_SECRET = 'a'.repeat(64);
   return dataRoot;
 }
@@ -37,14 +37,14 @@ test('R0-01: 锁目录应为 0700、owner.json 应为 0600', { skip: process.pla
   const { acquirePanelDataLock } = await import('./data-lock-service.js');
   const lock = acquirePanelDataLock(dataRoot);
   t.after(() => lock.release());
-  const lockDir = path.join(dataRoot, '.mmd-panel-lock');
+  const lockDir = path.join(dataRoot, '.mystry-panel-lock');
   assert.equal(fs.statSync(lockDir).mode & 0o777, 0o700);
   assert.equal(fs.statSync(path.join(lockDir, 'owner.json')).mode & 0o777, 0o600);
 });
 
 test('R0-01: 陈旧锁仅在原 PID 不存在时可 quarantine 并接管', async (t) => {
   const dataRoot = prepareTempDataRoot(t);
-  const lockDir = path.join(dataRoot, '.mmd-panel-lock');
+  const lockDir = path.join(dataRoot, '.mystry-panel-lock');
   fs.mkdirSync(lockDir, { recursive: true });
   fs.writeFileSync(
     path.join(lockDir, 'owner.json'),
@@ -61,7 +61,7 @@ test('R0-01: 陈旧锁仅在原 PID 不存在时可 quarantine 并接管', async
   const lock = acquirePanelDataLock(dataRoot);
   assert.ok(fs.existsSync(path.join(lockDir, 'owner.json')));
   assert.equal(lock.owner.pid, process.pid);
-  const quarantined = fs.readdirSync(dataRoot).some((name) => name.startsWith('.mmd-panel-lock.quarantine.'));
+  const quarantined = fs.readdirSync(dataRoot).some((name) => name.startsWith('.mystry-panel-lock.quarantine.'));
   assert.ok(quarantined, '陈旧锁应移入 quarantine 目录');
   lock.release();
 });

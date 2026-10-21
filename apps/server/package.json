@@ -1,5 +1,5 @@
 {
-  "name": "@mmd/server",
+  "name": "@mystry/server",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -18,7 +18,7 @@
     "@fastify/multipart": "^9.0.3",
     "@fastify/static": "^10.1.2",
     "@fastify/websocket": "^11.0.2",
-    "@mmd/shared": "*",
+    "@mystry/shared": "*",
     "bcryptjs": "^2.4.3",
     "dotenv": "^16.4.7",
     "fastify": "^5.2.1",

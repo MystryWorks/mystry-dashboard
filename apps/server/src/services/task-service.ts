@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import { nanoid } from 'nanoid';
-import type { TaskInfo } from '@mmd/shared';
+import type { TaskInfo } from '@mystry/shared';
 import { config } from '../config.js';
 import { getDb, type TaskRow } from '../db.js';
 import { nowIso } from '../utils/path.js';
@@ -209,7 +209,7 @@ function tryCleanInterruptedStaging(row: TaskRow): { cleaned: boolean; cleanupEr
 
 /**
  * 内存 worker 无法跨面板进程恢复；启动时把遗留任务收敛为失败终态。
- * 仅清理可证明位于 .mmd-staging 的半成品，绝不删除已注册实例或最终 instances 目录。
+ * 仅清理可证明位于 .mystry-staging 的半成品，绝不删除已注册实例或最终 instances 目录。
  */
 export function recoverInterruptedTasks(): InterruptedTaskRecovery {
   const rows = getDb()

@@ -10,7 +10,7 @@ import {
   type CoreType,
   type DetectedJvmConfig,
   type JvmPresetId,
-} from '@mmd/shared';
+} from '@mystry/shared';
 import { listNodes } from '../api';
 
 export type DetectedJvmChoice = 'detected' | 'recommended' | 'custom' | null;

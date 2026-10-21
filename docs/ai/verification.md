@@ -14,9 +14,9 @@ npm.cmd run windows:test
 npm.cmd run linux:test
 npm.cmd run typecheck
 npm.cmd run test:interaction
-npm.cmd run test:security -w @mmd/server
+npm.cmd run test:security -w @mystry/server
 npm.cmd run test:smoke
-npm.cmd run test:regression -w @mmd/server
+npm.cmd run test:regression -w @mystry/server
 npm.cmd run test:static
 npm.cmd run build
 npm.cmd run audit:production
@@ -31,7 +31,7 @@ npm.cmd run verify
 Beta 修复批次回归（已并入根 `verify`；需要单独聚焦执行时）：
 
 ```powershell
-npm.cmd run test:regression -w @mmd/server
+npm.cmd run test:regression -w @mystry/server
 ```
 
 Linux/macOS 和 CI 使用相同脚本名，但命令入口为 `npm run ...`。
@@ -41,7 +41,7 @@ Linux/macOS 和 CI 使用相同脚本名，但命令入口为 `npm run ...`。
 `test:smoke` 已并入 `verify`。它在系统临时目录启动当前源码的面板进程，不启动 Minecraft，也不读写仓库 `data/`。先构建共享包：
 
 ```powershell
-npm.cmd run build -w @mmd/shared
+npm.cmd run build -w @mystry/shared
 npm.cmd run test:smoke
 ```
 

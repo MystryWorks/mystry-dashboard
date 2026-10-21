@@ -63,8 +63,8 @@ function createZip(entries: readonly ZipTestEntry[]): Buffer {
 }
 
 test('ZIP 单一外层目录在 staging marker 存在时仍应被扁平化并导入', async (t) => {
-  const dataRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'mmd-import-service-test-'));
-  process.env.MMD_DATA_DIR = dataRoot;
+  const dataRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'mystry-import-service-test-'));
+  process.env.MYSTRY_DATA_DIR = dataRoot;
   t.after(async () => {
     try {
       const { closeDb } = await import('../db.js');
@@ -113,7 +113,7 @@ test('ZIP 单一外层目录在 staging marker 存在时仍应被扁平化并导
 });
 
 test('ZIP 预览与解压保留条目读取、大小校验及取消边界', async (t) => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'mmd-zip-boundaries-'));
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'mystry-zip-boundaries-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const { inspectZipJvmConfig, safeExtract } = await import('./import-service.js');
   const jvmArgs = '-Xms1G\n-Xmx2G\n';
@@ -195,8 +195,8 @@ test('ZIP 预览与解压保留条目读取、大小校验及取消边界', asyn
 });
 
 test('ZIP 外层目录内的伪造 staging marker 应被拒绝', async (t) => {
-  const dataRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'mmd-import-service-test-'));
-  process.env.MMD_DATA_DIR = dataRoot;
+  const dataRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'mystry-import-service-test-'));
+  process.env.MYSTRY_DATA_DIR = dataRoot;
   t.after(async () => {
     try {
       const { closeDb } = await import('../db.js');
@@ -234,7 +234,7 @@ test('ZIP 外层目录内的伪造 staging marker 应被拒绝', async (t) => {
   }
 
   assert.equal(completedTask?.status, 'failed');
-  assert.match(completedTask?.error ?? '', /ZIP 根目录存在重复路径：\.mmd-staging-marker\.json/);
+  assert.match(completedTask?.error ?? '', /ZIP 根目录存在重复路径：\.mystry-staging-marker\.json/);
   const instanceId = completedTask?.result?.instanceId;
   if (typeof instanceId === 'string') {
     assert.equal(fs.existsSync(defaultInstanceDir(instanceId)), false);

@@ -10,14 +10,14 @@ import readline from 'node:readline/promises';
 import { spawn, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
-const SERVICE_NAME = 'minecraft-mystry-dashboard';
+const SERVICE_NAME = 'mystry-dashboard';
 const SECRET_PATTERN = /^[0-9a-f]{64}$/i;
 const INTERNAL_FINALIZE_SETUP = '__finalize-setup';
 const scriptPath = fileURLToPath(import.meta.url);
 const scriptDir = path.dirname(scriptPath);
 
 function discoverHome() {
-  if (process.env.MMD_HOME?.trim()) return path.resolve(process.env.MMD_HOME.trim());
+  if (process.env.MYSTRY_HOME?.trim()) return path.resolve(process.env.MYSTRY_HOME.trim());
   const portableCandidate = path.resolve(scriptDir, '..');
   if (fs.existsSync(path.join(portableCandidate, 'app', 'server', 'dist', 'index.js'))) {
     return portableCandidate;
@@ -31,14 +31,14 @@ function resolveFromHome(value, homeDir) {
 
 const homeDir = discoverHome();
 const configPath = resolveFromHome(
-  process.env.MMD_CONFIG_PATH?.trim() || path.join('config', 'panel.env'),
+  process.env.MYSTRY_CONFIG_PATH?.trim() || path.join('config', 'panel.env'),
   homeDir,
 );
-const dataDir = resolveFromHome(process.env.MMD_DATA_DIR?.trim() || 'data', homeDir);
+const dataDir = resolveFromHome(process.env.MYSTRY_DATA_DIR?.trim() || 'data', homeDir);
 const logDir = path.join(homeDir, 'logs');
 const launcherDir = path.join(dataDir, 'launcher');
 const statePath = path.join(launcherDir, 'state.json');
-const lockPath = path.join(launcherDir, 'mmdctl.lock');
+const lockPath = path.join(launcherDir, 'mystryctl.lock');
 const stdoutLog = path.join(logDir, 'panel.stdout.log');
 const stderrLog = path.join(logDir, 'panel.stderr.log');
 const portableServerEntry = path.join(homeDir, 'app', 'server', 'dist', 'index.js');
@@ -48,7 +48,7 @@ const serverEntry = portableMode
   ? portableServerEntry
   : repositoryServerEntry;
 const managerLabel = portableMode ? '便携版' : '源码版';
-const managerCommand = portableMode ? 'mmdctl' : 'PanelManager.sh';
+const managerCommand = portableMode ? 'mystryctl' : 'PanelManager.sh';
 const bundledNode = process.platform === 'win32'
   ? path.join(homeDir, 'runtime', 'node.exe')
   : path.join(homeDir, 'runtime', 'bin', 'node');
@@ -158,7 +158,7 @@ async function ensureConfiguration() {
   const original = existed
     ? await fsp.readFile(configPath, 'utf8')
     : [
-        '# Minecraft Mystry Dashboard 配置',
+        '# Mystry Dashboard 配置',
         '# 本文件包含密钥，不要上传、分享或放入版本控制。',
         'HOST=127.0.0.1',
         'PORT=3000',
@@ -299,10 +299,10 @@ async function isPortOpen(port) {
 function childEnvironment(fingerprint) {
   return {
     ...process.env,
-    MMD_HOME: homeDir,
-    MMD_CONFIG_PATH: configPath,
-    MMD_DATA_DIR: dataDir,
-    MMD_PROCESS_FINGERPRINT: fingerprint,
+    MYSTRY_HOME: homeDir,
+    MYSTRY_CONFIG_PATH: configPath,
+    MYSTRY_DATA_DIR: dataDir,
+    MYSTRY_PROCESS_FINGERPRINT: fingerprint,
   };
 }
 
@@ -367,7 +367,7 @@ async function acquireManagerLock() {
       await fsp.unlink(lockPath).catch(() => {});
     }
   }
-  throw new Error('无法获取 mmdctl 运行锁。');
+  throw new Error('无法获取 mystryctl 运行锁。');
 }
 
 async function releaseCurrentManagerLock() {
@@ -420,7 +420,7 @@ async function waitForHealth(
 async function openBrowser(values) {
   const url = getConnection(values).url;
   console.log(`面板地址：${url}`);
-  if (process.env.MMD_NO_BROWSER === '1') return;
+  if (process.env.MYSTRY_NO_BROWSER === '1') return;
   const command = process.platform === 'win32'
     ? ['explorer.exe', [url]]
     : process.platform === 'darwin'
@@ -472,7 +472,7 @@ async function spawnSetupFinalizer(values) {
     ['--experimental-sqlite', scriptPath, INTERNAL_FINALIZE_SETUP],
     {
       cwd: homeDir,
-      env: { ...childEnvironment('setup-finalizer'), MMD_NO_BROWSER: '1' },
+      env: { ...childEnvironment('setup-finalizer'), MYSTRY_NO_BROWSER: '1' },
       detached: true,
       stdio: 'ignore',
       windowsHide: true,
@@ -535,7 +535,7 @@ async function startBackground() {
       await openBrowser(configuration.values);
       return;
     }
-    throw new Error('端口上已有无法由当前 mmdctl 指纹确认的面板，拒绝接管。');
+    throw new Error('端口上已有无法由当前 mystryctl 指纹确认的面板，拒绝接管。');
   }
   const connection = getConnection(configuration.values);
   if (await isPortOpen(connection.port)) {
@@ -550,7 +550,7 @@ async function startBackground() {
   const stderr = fs.openSync(stderrLog, 'a', 0o600);
   const child = spawn(
     nodeExecutable,
-    ['--experimental-sqlite', serverEntry, `--mmd-fingerprint=${nonce}`],
+    ['--experimental-sqlite', serverEntry, `--mystry-fingerprint=${nonce}`],
     {
       cwd: homeDir,
       env: childEnvironment(nonce),
@@ -597,7 +597,7 @@ async function startForeground() {
       await openBrowser(configuration.values);
       return;
     }
-    throw new Error('端口上已有无法由当前 mmdctl 指纹确认的面板，拒绝接管。');
+    throw new Error('端口上已有无法由当前 mystryctl 指纹确认的面板，拒绝接管。');
   }
   const connection = getConnection(configuration.values);
   if (await isPortOpen(connection.port)) {
@@ -609,7 +609,7 @@ async function startForeground() {
   const startedAt = new Date().toISOString();
   const child = spawn(
     nodeExecutable,
-    ['--experimental-sqlite', serverEntry, `--mmd-fingerprint=${nonce}`],
+    ['--experimental-sqlite', serverEntry, `--mystry-fingerprint=${nonce}`],
     {
       cwd: homeDir,
       env: childEnvironment(nonce),
@@ -759,7 +759,7 @@ async function showLogs() {
 
 function printHelp() {
   console.log([
-    `Minecraft Mystry Dashboard ${managerLabel}管理器`,
+    `Mystry Dashboard ${managerLabel}管理器`,
     '',
     `用法：${managerCommand} <command>`,
     '',
@@ -787,7 +787,7 @@ async function interactiveMenu() {
     && await getHealth(values, state.fingerprint),
   );
   console.log('============================================================');
-  console.log(`Minecraft Mystry Dashboard ${managerLabel}`);
+  console.log(`Mystry Dashboard ${managerLabel}`);
   console.log('============================================================');
   console.log(running ? '状态：运行中' : '状态：未运行');
   console.log('');

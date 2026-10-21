@@ -23,9 +23,9 @@ CPU 按整机逻辑核总容量归一至 0–100%；进程内存是驻留内存�
 
 | 方法 | 路径 | 认证 | 响应 |
 |------|------|------|------|
-| GET | `/api/health` | 否 | `{ ok: true, service: "minecraft-mystry-dashboard", processFingerprint?: string }` |
+| GET | `/api/health` | 否 | `{ ok: true, service: "mystry-dashboard", processFingerprint?: string }` |
 
-`processFingerprint` 仅在便携控制器启动服务时出现。它用于让 `mmdctl` 将状态文件、PID 与实际监听服务对应起来，不是认证密钥，也不能替代 `X-Launcher-Token`。
+`processFingerprint` 仅在便携控制器启动服务时出现。它用于让 `mystryctl` 将状态文件、PID 与实际监听服务对应起来，不是认证密钥，也不能替代 `X-Launcher-Token`。
 
 ## 认证 `/api/auth`
 
@@ -97,7 +97,7 @@ Java 状态响应准确结构为：
 | POST | `/api/instances/:id/restart` | 重启 |
 | POST | `/api/instances/:id/command` | Body：`{ command: string }`，发送控制台指令 |
 
-实例目录固定为最终数据根目录的 `instances/<id>`。最终数据根优先取 `MMD_DATA_DIR`，否则取 `DATA_DIR`；创建、部署、导入和启动都不会接受另一个实例目录，`jarFile` 也只能表示实例根目录内的相对文件。
+实例目录固定为最终数据根目录的 `instances/<id>`。最终数据根优先取 `MYSTRY_DATA_DIR`，否则取 `DATA_DIR`；创建、部署、导入和启动都不会接受另一个实例目录，`jarFile` 也只能表示实例根目录内的相对文件。
 
 ### 接管旧版实例
 
@@ -131,7 +131,7 @@ Authorization: Bearer <token>
 | `acceptEula` | boolean | 是否写入 `eula=true` |
 | `createdAt` / `updatedAt` | string | ISO 时间 |
 
-`jvmArgs` 保存与启动前都会经过 `@mmd/shared` 的同一套校验：必须各有一个 `Xms` / `Xmx`，拒绝未闭合引号、重复或冲突 GC、`Xms > Xmx`，也拒绝 `-jar`、classpath、模块启动、`@argfile` 和 `nogui` 等由面板负责的启动参数。请求省略 `jvmArgs` 时，创建、部署和导入仍使用兼容默认值 `-Xms1G -Xmx2G`。旧实例文本不会仅因读取而被改写，但非法旧值必须先修正才能保存或启动。
+`jvmArgs` 保存与启动前都会经过 `@mystry/shared` 的同一套校验：必须各有一个 `Xms` / `Xmx`，拒绝未闭合引号、重复或冲突 GC、`Xms > Xmx`，也拒绝 `-jar`、classpath、模块启动、`@argfile` 和 `nogui` 等由面板负责的启动参数。请求省略 `jvmArgs` 时，创建、部署和导入仍使用兼容默认值 `-Xms1G -Xmx2G`。旧实例文本不会仅因读取而被改写，但非法旧值必须先修正才能保存或启动。
 
 ## 文件与配置 `/api/instances/:id`
 

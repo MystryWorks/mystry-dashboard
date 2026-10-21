@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# Linux / WSL 源码管理入口：依赖与构建完成后交给 mmdctl 处理安全生命周期。
+# Linux / WSL 源码管理入口：依赖与构建完成后交给 mystryctl 处理安全生命周期。
 set -euo pipefail
 
 PROJECT_ROOT="$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
-CONTROLLER="$PROJECT_ROOT/scripts/portable/mmdctl.mjs"
+CONTROLLER="$PROJECT_ROOT/scripts/portable/mystryctl.mjs"
 
 fail() {
   printf '错误：%s\n' "$*" >&2

@@ -14,7 +14,7 @@ test('CPU 按整机容量归一且拒绝计数回退', () => {
 });
 
 test('并发请求共享采样，短期缓存不重复查询且缺失磁盘不伪装零空间', async () => {
-  const service = new MetricsService(`${os.tmpdir()}/mmd-nonexistent-metrics-${process.pid}`, () => []);
+  const service = new MetricsService(`${os.tmpdir()}/mystry-nonexistent-metrics-${process.pid}`, () => []);
   const first = service.get();
   assert.equal(first, service.get());
   const result = await first;
@@ -39,7 +39,7 @@ test('真实监测路由拒绝未认证请求，认证后返回资源快照', as
   process.env.JWT_SECRET = randomBytes(32).toString('hex');
   process.env.SETUP_TOKEN = randomBytes(32).toString('hex');
   process.env.LAUNCHER_TOKEN = randomBytes(32).toString('hex');
-  process.env.MMD_DATA_DIR = os.tmpdir();
+  process.env.MYSTRY_DATA_DIR = os.tmpdir();
   const { systemRoutes } = await import('../routes/system.js');
   const { registerAuthHooks } = await import('../routes/auth.js');
   const app = Fastify();

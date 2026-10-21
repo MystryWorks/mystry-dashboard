@@ -9,7 +9,7 @@ import { once, EventEmitter, getEventListeners } from 'node:events';
 import childProcess from 'node:child_process';
 import { syncBuiltinESMExports } from 'node:module';
 import { PassThrough } from 'node:stream';
-import type { DeployCoreInput } from '@mmd/shared';
+import type { DeployCoreInput } from '@mystry/shared';
 
 process.env.JWT_SECRET = randomBytes(32).toString('hex');
 process.env.SETUP_TOKEN = randomBytes(32).toString('hex');
@@ -34,10 +34,10 @@ test('Fabric 缓存键包含解析后的 loader 与 installer', async () => {
 });
 
 test('Forge 和 NeoForge JVM 参数文件可由 Java argfile 规则往返解析', async (t) => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mmd-user-jvm-args-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mystry-user-jvm-args-'));
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   const { writeUserJvmArgs } = await import('./core-depot.js');
-  const { parseJvmArgFile } = await import('@mmd/shared');
+  const { parseJvmArgFile } = await import('@mystry/shared');
   writeUserJvmArgs(dir, String.raw`-Xms1G -Xmx2G "-Dfolder=C:\Minecraft Server"`);
   assert.deepEqual(
     parseJvmArgFile(fs.readFileSync(path.join(dir, 'user_jvm_args.txt'), 'utf8')),
@@ -54,7 +54,7 @@ async function waitUntil(predicate: () => boolean): Promise<void> {
 }
 
 function tempDir(t: import('node:test').TestContext): string {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mmd-core-depot-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mystry-core-depot-'));
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   return dir;
 }
@@ -248,9 +248,9 @@ test('安装器取消：等待退出才释放；缺少 close 时强杀兜底；�
 });
 
 test('部署落地后关闭：五种核心均继续注册并完成任务', async (t) => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mmd-core-depot-'));
-  const originalDataDir = process.env.MMD_DATA_DIR;
-  process.env.MMD_DATA_DIR = dir;
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mystry-core-depot-'));
+  const originalDataDir = process.env.MYSTRY_DATA_DIR;
+  process.env.MYSTRY_DATA_DIR = dir;
   const { initDb, closeDb } = await import('../db.js');
   const { deployCore } = await import('./core-depot.js');
   const { getInstanceRow } = await import('./instance-service.js');
@@ -261,8 +261,8 @@ test('部署落地后关闭：五种核心均继续注册并完成任务', async
     resetTaskRuntimeForTests();
     closeDb();
     fs.rmSync(dir, { recursive: true, force: true });
-    if (originalDataDir === undefined) delete process.env.MMD_DATA_DIR;
-    else process.env.MMD_DATA_DIR = originalDataDir;
+    if (originalDataDir === undefined) delete process.env.MYSTRY_DATA_DIR;
+    else process.env.MYSTRY_DATA_DIR = originalDataDir;
   });
   t.mock.method(globalThis, 'fetch', async (url: string | URL | Request) => {
     const value = String(url);
@@ -303,14 +303,14 @@ test('部署落地后关闭：五种核心均继续注册并完成任务', async
     assert.equal(row.jar_file, 'server.jar');
     assert.ok(row.ownership_marker);
     assert.equal(fs.readFileSync(path.join(dir, 'instances', promotedId, 'eula.txt'), 'utf8'), 'eula=true\n');
-    assert.equal(fs.existsSync(path.join(dir, '.mmd-staging', task.id)), false);
+    assert.equal(fs.existsSync(path.join(dir, '.mystry-staging', task.id)), false);
   }
 });
 
 test('部署落地前失败或取消：清理 staging、不注册实例、不遗留最终目录', async (t) => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mmd-core-depot-'));
-  const originalDataDir = process.env.MMD_DATA_DIR;
-  process.env.MMD_DATA_DIR = dir;
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mystry-core-depot-'));
+  const originalDataDir = process.env.MYSTRY_DATA_DIR;
+  process.env.MYSTRY_DATA_DIR = dir;
   const { initDb, closeDb, getDb } = await import('../db.js');
   const { deployCore } = await import('./core-depot.js');
   const { getTask, shutdownTasks, resetTaskRuntimeForTests } = await import('./task-service.js');
@@ -320,8 +320,8 @@ test('部署落地前失败或取消：清理 staging、不注册实例、不遗
     resetTaskRuntimeForTests();
     closeDb();
     fs.rmSync(dir, { recursive: true, force: true });
-    if (originalDataDir === undefined) delete process.env.MMD_DATA_DIR;
-    else process.env.MMD_DATA_DIR = originalDataDir;
+    if (originalDataDir === undefined) delete process.env.MYSTRY_DATA_DIR;
+    else process.env.MYSTRY_DATA_DIR = originalDataDir;
   });
   t.mock.method(globalThis, 'fetch', async () => new Response('测试核心文件'));
   let closing: Promise<void> | undefined;
@@ -344,6 +344,6 @@ test('部署落地前失败或取消：清理 staging、不注册实例、不遗
     assert.match(getTask(task.id)!.error!, coreType === 'fabric' ? /任务已取消/ : /退出码 7/);
     assert.equal(getDb().prepare('SELECT count(*) AS count FROM instances').get()!.count, 0);
     assert.deepEqual(fs.readdirSync(path.join(dir, 'instances')), []);
-    assert.equal(fs.existsSync(path.join(dir, '.mmd-staging', task.id)), false);
+    assert.equal(fs.existsSync(path.join(dir, '.mystry-staging', task.id)), false);
   }
 });

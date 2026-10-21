@@ -1,6 +1,6 @@
 import { timingSafeEqual } from 'node:crypto';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
-import { loginBodySchema, setupBodySchema } from '@mmd/shared';
+import { loginBodySchema, setupBodySchema } from '@mystry/shared';
 import { needsSetup, setupAdmin, verifyLogin, getUserById } from '../services/auth-service.js';
 import { config } from '../config.js';
 import { createLoginFailureLimiter, createRateLimitHook } from '../services/security-service.js';

@@ -1,5 +1,5 @@
 import fs from 'node:fs';
-import { inspectJvmArgFile, type CoreType, type DetectedJvmConfig } from '@mmd/shared';
+import { inspectJvmArgFile, type CoreType, type DetectedJvmConfig } from '@mystry/shared';
 import { resolveSafePath } from '../utils/path.js';
 
 export const MAX_DETECTED_JVM_ARGS_BYTES = 64 * 1024;

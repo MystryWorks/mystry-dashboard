@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { promisify } from 'node:util';
-import type { JavaRuntimeInfo } from '@mmd/shared';
+import type { JavaRuntimeInfo } from '@mystry/shared';
 import { getDb, type JavaRuntimeRow } from '../db.js';
 import { nowIso } from '../utils/path.js';
 import { getMinecraftChildEnv } from '../utils/child-env.js';

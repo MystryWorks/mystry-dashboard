@@ -1,5 +1,5 @@
 import { Readable } from 'node:stream';
-import type { CoreType } from '@mmd/shared';
+import type { CoreType } from '@mystry/shared';
 import { config } from '../config.js';
 import { abortError, USER_AGENT } from './core-utils.js';
 

@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { nanoid } from 'nanoid';
-import type { ConfirmZipImportInput, ImportPreviewInfo, TaskInfo } from '@mmd/shared';
+import type { ConfirmZipImportInput, ImportPreviewInfo, TaskInfo } from '@mystry/shared';
 import { config } from '../config.js';
 import { importZipPackage } from './import-service.js';
 import { inspectZipJvmConfig } from './zip-service.js';

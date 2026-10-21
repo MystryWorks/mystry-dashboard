@@ -4,8 +4,8 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 
-const dataRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'mmd-import-preview-test-'));
-process.env.MMD_DATA_DIR = dataRoot;
+const dataRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'mystry-import-preview-test-'));
+process.env.MYSTRY_DATA_DIR = dataRoot;
 process.env.JWT_SECRET = 'a'.repeat(64);
 process.env.SETUP_TOKEN = 'b'.repeat(64);
 process.env.LAUNCHER_TOKEN = 'c'.repeat(64);
